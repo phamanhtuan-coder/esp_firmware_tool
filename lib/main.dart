@@ -1,31 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'di/service_locator.dart';
 import 'presentation/blocs/device/device_bloc.dart';
 import 'presentation/views/home_view.dart';
-import 'data/repositories/socket_repository.dart';
+import 'utils/app_theme.dart';
 
 void main() {
-  runApp(MyApp());
+  // Initialize dependency injection
+  setupServiceLocator();
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider(
-          create: (context) => DeviceBloc(
-            socketRepository: SocketRepository(
-              IO.io('http://your-fe-server', IO.OptionBuilder().setTransports(['websocket']).build()),
-            ),
-          ),
+        BlocProvider<DeviceBloc>(
+          create: (context) => serviceLocator<DeviceBloc>(),
         ),
       ],
       child: MaterialApp(
         title: 'ESP Firmware Tool',
-        theme: ThemeData(primarySwatch: Colors.blue),
-        home: HomeView(),
+        theme: AppTheme.lightTheme,
+        home: const HomeView(),
+        debugShowCheckedModeBanner: false,
       ),
     );
   }
