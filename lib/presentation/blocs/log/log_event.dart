@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+import '../../../data/models/log_entry.dart';
+
 abstract class LogEvent extends Equatable {
   const LogEvent();
 
@@ -7,24 +9,30 @@ abstract class LogEvent extends Equatable {
   List<Object?> get props => [];
 }
 
-class StartLogging extends LogEvent {
-  final String deviceId;
+class AddLogEvent extends LogEvent {
+  final LogEntry logEntry;
 
-  const StartLogging(this.deviceId);
-
-  @override
-  List<Object?> get props => [deviceId];
-}
-
-class StopLogging extends LogEvent {}
-
-class ClearLogs extends LogEvent {}
-
-class LogReceived extends LogEvent {
-  final String log;
-
-  const LogReceived(this.log);
+  const AddLogEvent(this.logEntry);
 
   @override
-  List<Object?> get props => [log];
+  List<Object?> get props => [logEntry];
 }
+
+class FilterLogEvent extends LogEvent {
+  final String? textFilter;
+  final String? deviceFilter;
+  final ProcessStep? stepFilter;
+  final bool clearFilters;
+
+  const FilterLogEvent({
+    this.textFilter,
+    this.deviceFilter,
+    this.stepFilter,
+    this.clearFilters = false,
+  });
+
+  @override
+  List<Object?> get props => [textFilter, deviceFilter, stepFilter, clearFilters];
+}
+
+class ClearLogsEvent extends LogEvent {}

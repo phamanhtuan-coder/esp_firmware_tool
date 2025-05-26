@@ -1,28 +1,39 @@
 import 'package:equatable/equatable.dart';
 
+import '../../../data/models/log_entry.dart';
+
 class LogState extends Equatable {
-  final List<String> logs;
-  final bool isLoading;
-  final String? error;
+  final List<LogEntry> logs;
+  final List<LogEntry> filteredLogs;
+  final String filter;
+  final String deviceFilter;
+  final ProcessStep? stepFilter;
 
   const LogState({
     this.logs = const [],
-    this.isLoading = false,
-    this.error,
+    this.filteredLogs = const [],
+    this.filter = '',
+    this.deviceFilter = '',
+    this.stepFilter,
   });
 
   LogState copyWith({
-    List<String>? logs,
-    bool? isLoading,
-    String? error,
+    List<LogEntry>? logs,
+    List<LogEntry>? filteredLogs,
+    String? filter,
+    String? deviceFilter,
+    ProcessStep? stepFilter,
+    bool clearStepFilter = false,
   }) {
     return LogState(
       logs: logs ?? this.logs,
-      isLoading: isLoading ?? this.isLoading,
-      error: error,  // Allow setting to null
+      filteredLogs: filteredLogs ?? this.filteredLogs,
+      filter: filter ?? this.filter,
+      deviceFilter: deviceFilter ?? this.deviceFilter,
+      stepFilter: clearStepFilter ? null : stepFilter ?? this.stepFilter,
     );
   }
 
   @override
-  List<Object?> get props => [logs, isLoading, error];
+  List<Object?> get props => [logs, filteredLogs, filter, deviceFilter, stepFilter];
 }

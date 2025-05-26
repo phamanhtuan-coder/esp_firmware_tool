@@ -1,146 +1,312 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:esp_firmware_tool/utils/app_colors.dart';
-import 'package:esp_firmware_tool/presentation/widgets/rounded_button.dart';
-import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
-import 'package:esp_firmware_tool/presentation/blocs/log/log_event.dart';
-import 'package:esp_firmware_tool/presentation/blocs/log/log_state.dart';
 
-class LogView extends StatefulWidget {
-  final String? deviceId;
-  const LogView({super.key, this.deviceId});
+import '../../../data/models/log_entry.dart';
+import '../../../utils/app_colors.dart';
+import '../../blocs/log/log_bloc.dart';
+import '../../blocs/log/log_event.dart';
+import '../../blocs/log/log_state.dart';
+import '../../widgets/rounded_button.dart';
 
-  @override
-  State<LogView> createState() => _LogViewState();
-}
-
-class _LogViewState extends State<LogView> {
-  final ScrollController _scrollController = ScrollController();
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.deviceId != null) {
-      context.read<LogBloc>().add(StartLogging(widget.deviceId!));
-    }
-  }
-
-  @override
-  void dispose() {
-    if (widget.deviceId != null) {
-      context.read<LogBloc>().add(StopLogging());
-    }
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _scrollToBottom() {
-    if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    }
-  }
+class LogView extends StatelessWidget {
+  const LogView({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.deviceId != null ? 'Device Logs' : 'System Logs'),
-        centerTitle: true,
+        title: const Text('Log Viewer'),
         actions: [
           IconButton(
             icon: const Icon(Icons.clear_all),
-            tooltip: 'Clear logs',
-            onPressed: () => context.read<LogBloc>().add(ClearLogs()),
-          ),
-          IconButton(
-            icon: const Icon(Icons.save),
-            tooltip: 'Export logs',
             onPressed: () {
-              // TODO: Implement log export
+              context.read<LogBloc>().add(ClearLogsEvent());
             },
+            tooltip: 'Clear all logs',
           ),
         ],
       ),
-      body: BlocBuilder<LogBloc, LogState>(
-        builder: (context, state) {
-          if (state.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (state.error != null) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline,
-                    size: 48, color: AppColors.error),
-                  const SizedBox(height: 16),
-                  Text(
-                    state.error!,
-                    style: TextStyle(color: AppColors.error),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return Column(
-            children: [
-              Expanded(
-                child: Container(
-                  margin: const EdgeInsets.all(16),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.black87,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade800),
-                  ),
-                  child: state.logs.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'No logs available',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        )
-                      : ListView.builder(
-                          controller: _scrollController,
-                          itemCount: state.logs.length,
-                          itemBuilder: (context, index) {
-                            WidgetsBinding.instance
-                                .addPostFrameCallback((_) => _scrollToBottom());
-                            return LogEntry(log: state.logs[index]);
-                          },
-                        ),
-                ),
-              ),
-            ],
-          );
-        },
+      body: Column(
+        children: [
+          _buildFilterBar(context),
+          Expanded(
+            child: _buildLogList(),
+          ),
+        ],
       ),
     );
   }
-}
 
-class LogEntry extends StatelessWidget {
-  final String log;
+  Widget _buildFilterBar(BuildContext context) {
+    return BlocBuilder<LogBloc, LogState>(
+      builder: (context, state) {
+        return Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      decoration: const InputDecoration(
+                        hintText: 'Search logs...',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) {
+                        context.read<LogBloc>().add(FilterLogEvent(textFilter: value));
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.filter_list),
+                    onPressed: () => _showFilterOptions(context),
+                    tooltip: 'Filter options',
+                  ),
+                ],
+              ),
+              if (state.deviceFilter.isNotEmpty || state.stepFilter != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Row(
+                    children: [
+                      if (state.deviceFilter.isNotEmpty)
+                        _buildFilterChip(
+                          context,
+                          'Device: ${state.deviceFilter}',
+                          () {
+                            context.read<LogBloc>().add(
+                                const FilterLogEvent(deviceFilter: ''));
+                          },
+                        ),
+                      if (state.stepFilter != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8.0),
+                          child: _buildFilterChip(
+                            context,
+                            'Step: ${_stepToString(state.stepFilter!)}',
+                            () {
+                              context.read<LogBloc>().add(
+                                  FilterLogEvent(
+                                      stepFilter: null,
+                                      clearFilters: false));
+                            },
+                          ),
+                        ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () {
+                          context.read<LogBloc>().add(
+                              const FilterLogEvent(clearFilters: true));
+                        },
+                        child: const Text('Clear All Filters'),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
-  const LogEntry({super.key, required this.log});
+  Widget _buildFilterChip(BuildContext context, String label, VoidCallback onRemove) {
+    return Chip(
+      label: Text(label),
+      deleteIcon: const Icon(Icons.close, size: 16),
+      onDeleted: onRemove,
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Text(
-        log,
-        style: const TextStyle(
-          color: Colors.white,
-          fontFamily: 'monospace',
-          fontSize: 13,
+  Widget _buildLogList() {
+    return BlocBuilder<LogBloc, LogState>(
+      builder: (context, state) {
+        if (state.filteredLogs.isEmpty) {
+          return const Center(
+            child: Text('No logs to display'),
+          );
+        }
+
+        return ListView.builder(
+          itemCount: state.filteredLogs.length,
+          itemBuilder: (context, index) {
+            final log = state.filteredLogs[state.filteredLogs.length - 1 - index]; // Reverse chronological
+            return _buildLogItem(log);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildLogItem(LogEntry log) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: ListTile(
+        leading: _buildLogLevelIndicator(log.level),
+        title: Text(log.message),
+        subtitle: Row(
+          children: [
+            Text(
+              _formatTimestamp(log.timestamp),
+              style: const TextStyle(fontSize: 12),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: _getStepColor(log.step),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                _stepToString(log.step),
+                style: const TextStyle(fontSize: 11, color: Colors.white),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.blueGrey,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                'Device: ${log.deviceId}',
+                style: const TextStyle(fontSize: 11, color: Colors.white),
+              ),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildLogLevelIndicator(LogLevel level) {
+    IconData icon;
+    Color color;
+
+    switch (level) {
+      case LogLevel.info:
+        icon = Icons.info_outline;
+        color = Colors.blue;
+        break;
+      case LogLevel.warning:
+        icon = Icons.warning_amber_outlined;
+        color = Colors.orange;
+        break;
+      case LogLevel.error:
+        icon = Icons.error_outline;
+        color = Colors.red;
+        break;
+      case LogLevel.success:
+        icon = Icons.check_circle_outline;
+        color = Colors.green;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color.withOpacity(0.1),
+      ),
+      child: Icon(icon, color: color),
+    );
+  }
+
+  String _formatTimestamp(DateTime timestamp) {
+    return '${timestamp.day}/${timestamp.month}/${timestamp.year} ${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}:${timestamp.second.toString().padLeft(2, '0')}';
+  }
+
+  Color _getStepColor(ProcessStep step) {
+    switch (step) {
+      case ProcessStep.usbCheck:
+        return Colors.blue;
+      case ProcessStep.compile:
+        return Colors.purple;
+      case ProcessStep.flash:
+        return Colors.teal;
+      case ProcessStep.error:
+        return Colors.red;
+      case ProcessStep.other:
+        return Colors.grey;
+    }
+  }
+
+  String _stepToString(ProcessStep step) {
+    switch (step) {
+      case ProcessStep.usbCheck:
+        return 'USB Check';
+      case ProcessStep.compile:
+        return 'Compile';
+      case ProcessStep.flash:
+        return 'Flash';
+      case ProcessStep.error:
+        return 'Error';
+      case ProcessStep.other:
+        return 'Other';
+    }
+  }
+
+  void _showFilterOptions(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Filter Logs'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Filter by device:'),
+            const SizedBox(height: 8),
+            TextField(
+              decoration: const InputDecoration(
+                hintText: 'Enter device ID',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (deviceId) {
+                context.read<LogBloc>().add(FilterLogEvent(deviceFilter: deviceId));
+              },
+            ),
+            const SizedBox(height: 16),
+            const Text('Filter by process step:'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: ProcessStep.values.map((step) {
+                return FilterChip(
+                  label: Text(_stepToString(step)),
+                  selected: context.read<LogBloc>().state.stepFilter == step,
+                  onSelected: (selected) {
+                    if (selected) {
+                      context.read<LogBloc>().add(FilterLogEvent(stepFilter: step));
+                    } else {
+                      context.read<LogBloc>().add(const FilterLogEvent(stepFilter: null));
+                    }
+                    Navigator.of(context).pop();
+                  },
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              context.read<LogBloc>().add(const FilterLogEvent(clearFilters: true));
+              Navigator.of(context).pop();
+            },
+            child: const Text('CLEAR FILTERS'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+            child: const Text('CLOSE'),
+          ),
+        ],
       ),
     );
   }

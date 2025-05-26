@@ -1,45 +1,66 @@
-import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:esp_firmware_tool/data/repositories/socket_repository.dart';
+
+import '../../../data/models/log_entry.dart';
 import 'log_event.dart';
 import 'log_state.dart';
 
 class LogBloc extends Bloc<LogEvent, LogState> {
-  final ISocketRepository socketRepository;
-  StreamSubscription? _logSubscription;
-
-  LogBloc({required this.socketRepository}) : super(LogState()) {
-    on<StartLogging>(_onStartLogging);
-    on<StopLogging>(_onStopLogging);
-    on<ClearLogs>(_onClearLogs);
-    on<LogReceived>(_onLogReceived);
+  LogBloc() : super(const LogState()) {
+    on<AddLogEvent>(_onAddLog);
+    on<FilterLogEvent>(_onFilterLog);
+    on<ClearLogsEvent>(_onClearLogs);
   }
 
-  void _onStartLogging(StartLogging event, Emitter<LogState> emit) {
-    _logSubscription?.cancel();
-    _logSubscription = socketRepository.getDeviceLogs(event.deviceId).listen(
-      (log) {
-        add(LogReceived(log));
-      },
+  void _onAddLog(AddLogEvent event, Emitter<LogState> emit) {
+    final updatedLogs = List<LogEntry>.from(state.logs)..add(event.logEntry);
+    final filteredLogs = _applyFilters(updatedLogs);
+
+    emit(state.copyWith(
+      logs: updatedLogs,
+      filteredLogs: filteredLogs,
+    ));
+  }
+
+  void _onFilterLog(FilterLogEvent event, Emitter<LogState> emit) {
+    if (event.clearFilters) {
+      emit(state.copyWith(
+        filter: '',
+        deviceFilter: '',
+        clearStepFilter: true,
+        filteredLogs: state.logs,
+      ));
+      return;
+    }
+
+    final updatedState = state.copyWith(
+      filter: event.textFilter ?? state.filter,
+      deviceFilter: event.deviceFilter ?? state.deviceFilter,
+      stepFilter: event.stepFilter,
     );
+
+    final filteredLogs = _applyFilters(state.logs);
+
+    emit(updatedState.copyWith(filteredLogs: filteredLogs));
   }
 
-  void _onStopLogging(StopLogging event, Emitter<LogState> emit) {
-    _logSubscription?.cancel();
+  void _onClearLogs(ClearLogsEvent event, Emitter<LogState> emit) {
+    emit(const LogState());
   }
 
-  void _onClearLogs(ClearLogs event, Emitter<LogState> emit) {
-    emit(state.copyWith(logs: []));
-  }
+  List<LogEntry> _applyFilters(List<LogEntry> logs) {
+    return logs.where((log) {
+      // Apply text filter
+      final textMatch = state.filter.isEmpty ||
+          log.message.toLowerCase().contains(state.filter.toLowerCase());
 
-  void _onLogReceived(LogReceived event, Emitter<LogState> emit) {
-    final updatedLogs = List<String>.from(state.logs)..add(event.log);
-    emit(state.copyWith(logs: updatedLogs));
-  }
+      // Apply device filter
+      final deviceMatch = state.deviceFilter.isEmpty ||
+          log.deviceId.toLowerCase().contains(state.deviceFilter.toLowerCase());
 
-  @override
-  Future<void> close() {
-    _logSubscription?.cancel();
-    return super.close();
+      // Apply step filter
+      final stepMatch = state.stepFilter == null || log.step == state.stepFilter;
+
+      return textMatch && deviceMatch && stepMatch;
+    }).toList();
   }
 }
