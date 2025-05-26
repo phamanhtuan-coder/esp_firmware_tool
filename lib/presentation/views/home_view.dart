@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../utils/app_colors.dart';
-import '../../utils/enums.dart';
-import '../blocs/device/device_bloc.dart';
-import '../widgets/status_text.dart';
-import '../widgets/rounded_button.dart';
-import '../widgets/file_picker_button.dart';
-import 'device_list_view.dart';
-import 'log_view.dart';
+import 'package:esp_firmware_tool/utils/app_colors.dart';
+import 'package:esp_firmware_tool/utils/enums.dart';
+import 'package:esp_firmware_tool/presentation/blocs/device/device_bloc.dart';
+import 'package:esp_firmware_tool/presentation/blocs/device/device_event.dart';
+import 'package:esp_firmware_tool/presentation/blocs/device/device_state.dart';
+import 'package:esp_firmware_tool/presentation/widgets/status_text.dart';
+import 'package:esp_firmware_tool/presentation/widgets/rounded_button.dart';
+import 'package:esp_firmware_tool/presentation/widgets/file_picker_button.dart';
+import 'package:esp_firmware_tool/presentation/views/device_list_view.dart';
+import 'package:esp_firmware_tool/presentation/views/log_view.dart';
 
 class HomeView extends StatefulWidget {
   const HomeView({super.key});
@@ -18,10 +20,11 @@ class HomeView extends StatefulWidget {
 
 class _HomeViewState extends State<HomeView> {
   int _selectedIndex = 0;
+
   final List<Widget> _pages = [
     const HomeContent(),
     const DeviceListView(),
-    const LogView(),
+    const LogView(), // System-wide logs
   ];
 
   void _onItemTapped(int index) {
@@ -89,10 +92,11 @@ class HomeContent extends StatelessWidget {
               final status = state.status;
               Color statusColor;
               switch (status) {
-                case DeviceStatus.processing:
+                case DeviceStatus.compiling:
+                case DeviceStatus.flashing:
                   statusColor = AppColors.primary;
                   break;
-                case DeviceStatus.completed:
+                case DeviceStatus.done:
                   statusColor = AppColors.success;
                   break;
                 case DeviceStatus.error:
@@ -116,11 +120,11 @@ class HomeContent extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       RoundedButton(
-                        label: status == DeviceStatus.processing ? 'Stop Process' : 'Start Process',
-                        color: status == DeviceStatus.processing ? AppColors.error : AppColors.primary,
-                        enabled: status != DeviceStatus.loading,
+                        label: status == DeviceStatus.compiling || status == DeviceStatus.flashing ? 'Stop Process' : 'Start Process',
+                        color: status == DeviceStatus.compiling || status == DeviceStatus.flashing ? AppColors.error : AppColors.primary,
+                        enabled: true, // Always enable the button since DeviceStatus.loading doesn't exist
                         onPressed: () {
-                          if (status == DeviceStatus.processing) {
+                          if (status == DeviceStatus.compiling || status == DeviceStatus.flashing) {
                             context.read<DeviceBloc>().add(StopProcess());
                           } else {
                             context.read<DeviceBloc>().add(StartProcess());

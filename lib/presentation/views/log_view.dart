@@ -1,35 +1,35 @@
 import 'package:flutter/material.dart';
-import '../../utils/app_colors.dart';
-import '../widgets/rounded_button.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:esp_firmware_tool/utils/app_colors.dart';
+import 'package:esp_firmware_tool/presentation/widgets/rounded_button.dart';
+import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
+import 'package:esp_firmware_tool/presentation/blocs/log/log_event.dart';
+import 'package:esp_firmware_tool/presentation/blocs/log/log_state.dart';
 
 class LogView extends StatefulWidget {
-  const LogView({super.key});
+  final String? deviceId;
+  const LogView({super.key, this.deviceId});
 
   @override
   State<LogView> createState() => _LogViewState();
 }
 
 class _LogViewState extends State<LogView> {
-  final List<LogEntry> _logs = [];
   final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    // Sample logs for UI preview
-    _logs.addAll([
-      LogEntry(message: 'Application started', type: LogType.info, timestamp: DateTime.now()),
-      LogEntry(message: 'Connecting to device...', type: LogType.info, timestamp: DateTime.now().add(const Duration(seconds: 1))),
-      LogEntry(message: 'Device connected: ESP32-123456', type: LogType.success, timestamp: DateTime.now().add(const Duration(seconds: 2))),
-      LogEntry(message: 'Reading firmware version...', type: LogType.info, timestamp: DateTime.now().add(const Duration(seconds: 3))),
-      LogEntry(message: 'Firmware version: v1.2.3', type: LogType.info, timestamp: DateTime.now().add(const Duration(seconds: 4))),
-    ]);
-
-    // In real app, subscribe to log stream from a service
+    if (widget.deviceId != null) {
+      context.read<LogBloc>().add(StartLogging(widget.deviceId!));
+    }
   }
 
   @override
   void dispose() {
+    if (widget.deviceId != null) {
+      context.read<LogBloc>().add(StopLogging());
+    }
     _scrollController.dispose();
     super.dispose();
   }
@@ -44,150 +44,104 @@ class _LogViewState extends State<LogView> {
     }
   }
 
-  void _clearLogs() {
-    setState(() {
-      _logs.clear();
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Console Log'),
+        title: Text(widget.deviceId != null ? 'Device Logs' : 'System Logs'),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.clear_all),
+            tooltip: 'Clear logs',
+            onPressed: () => context.read<LogBloc>().add(ClearLogs()),
+          ),
           IconButton(
             icon: const Icon(Icons.save),
             tooltip: 'Export logs',
             onPressed: () {
-              // TODO: Implement log export functionality
+              // TODO: Implement log export
             },
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.black87,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade800),
+      body: BlocBuilder<LogBloc, LogState>(
+        builder: (context, state) {
+          if (state.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (state.error != null) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline,
+                    size: 48, color: AppColors.error),
+                  const SizedBox(height: 16),
+                  Text(
+                    state.error!,
+                    style: TextStyle(color: AppColors.error),
+                  ),
+                ],
               ),
-              child: _logs.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No logs available',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    )
-                  : ListView.builder(
-                      controller: _scrollController,
-                      itemCount: _logs.length,
-                      itemBuilder: (context, index) {
-                        final log = _logs[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: RichText(
-                            text: TextSpan(
-                              children: [
-                                TextSpan(
-                                  text: '[${log.formattedTime}] ',
-                                  style: TextStyle(
-                                    color: Colors.grey.shade400,
-                                    fontFamily: 'monospace',
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                TextSpan(
-                                  text: '${log.typeLabel}: ',
-                                  style: TextStyle(
-                                    color: log.typeColor,
-                                    fontFamily: 'monospace',
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                TextSpan(
-                                  text: log.message,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontFamily: 'monospace',
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
+            );
+          }
+
+          return Column(
+            children: [
+              Expanded(
+                child: Container(
+                  margin: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black87,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade800),
+                  ),
+                  child: state.logs.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No logs available',
+                            style: TextStyle(color: Colors.grey),
                           ),
-                        );
-                      },
-                    ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                RoundedButton(
-                  label: 'Clear Logs',
-                  color: AppColors.error,
-                  onPressed: _clearLogs,
+                        )
+                      : ListView.builder(
+                          controller: _scrollController,
+                          itemCount: state.logs.length,
+                          itemBuilder: (context, index) {
+                            WidgetsBinding.instance
+                                .addPostFrameCallback((_) => _scrollToBottom());
+                            return LogEntry(log: state.logs[index]);
+                          },
+                        ),
                 ),
-              ],
-            ),
-          ),
-        ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
-enum LogType { info, success, warning, error }
+class LogEntry extends StatelessWidget {
+  final String log;
 
-class LogEntry {
-  final String message;
-  final LogType type;
-  final DateTime timestamp;
+  const LogEntry({super.key, required this.log});
 
-  LogEntry({
-    required this.message,
-    required this.type,
-    required this.timestamp,
-  });
-
-  String get formattedTime {
-    return '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}:${timestamp.second.toString().padLeft(2, '0')}';
-  }
-
-  String get typeLabel {
-    switch (type) {
-      case LogType.info:
-        return 'INFO';
-      case LogType.success:
-        return 'SUCCESS';
-      case LogType.warning:
-        return 'WARNING';
-      case LogType.error:
-        return 'ERROR';
-    }
-  }
-
-  Color get typeColor {
-    switch (type) {
-      case LogType.info:
-        return Colors.blue;
-      case LogType.success:
-        return Colors.green;
-      case LogType.warning:
-        return Colors.orange;
-      case LogType.error:
-        return Colors.red;
-    }
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text(
+        log,
+        style: const TextStyle(
+          color: Colors.white,
+          fontFamily: 'monospace',
+          fontSize: 13,
+        ),
+      ),
+    );
   }
 }

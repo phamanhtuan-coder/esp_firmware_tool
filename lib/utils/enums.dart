@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:esp_firmware_tool/utils/app_colors.dart';
 
-enum DeviceStatus { connected, compiling, flashing, done, error }
+enum DeviceStatus {
+  connected,
+  compiling,
+  flashing,
+  done,
+  error;
 
-extension DeviceStatusExtension on DeviceStatus {
   String get label {
     switch (this) {
       case DeviceStatus.connected:
@@ -21,15 +26,30 @@ extension DeviceStatusExtension on DeviceStatus {
   Color get color {
     switch (this) {
       case DeviceStatus.connected:
-        return Colors.blue;
+        return AppColors.connected;
       case DeviceStatus.compiling:
-        return Colors.orange;
+        return AppColors.compiling;
       case DeviceStatus.flashing:
-        return Colors.purple;
+        return AppColors.flashing;
       case DeviceStatus.done:
-        return Colors.green;
+        return AppColors.done;
       case DeviceStatus.error:
-        return Colors.red;
+        return AppColors.error;
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case DeviceStatus.connected:
+        return Icons.check_circle_outline;
+      case DeviceStatus.compiling:
+        return Icons.memory;
+      case DeviceStatus.flashing:
+        return Icons.flash_on;
+      case DeviceStatus.done:
+        return Icons.check_circle;
+      case DeviceStatus.error:
+        return Icons.error_outline;
     }
   }
 }
