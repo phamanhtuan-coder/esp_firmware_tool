@@ -5,8 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../data/models/log_entry.dart';
-import '../../../utils/app_colors.dart';
-
 
 class LogView extends StatelessWidget {
   final String deviceId;
@@ -211,7 +209,7 @@ class LogView extends StatelessWidget {
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: color.withOpacity(0.1),
+        color: color.withAlpha(25),
       ),
       child: Icon(icon, color: color),
     );
