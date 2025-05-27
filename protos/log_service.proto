@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package esp_firmware;
+
+service LogService {
+  rpc StreamLogs(LogRequest) returns (stream LogResponse) {}
+}
+
+message LogRequest {
+  bool enable = 1;
+}
+
+message LogResponse {
+  string message = 1;
+  string timestamp = 2;
+  string level = 3; // info, warning, error, success
+  string step = 4; // usbCheck, compile, flash, error, other
+  string deviceId = 5;
+}
