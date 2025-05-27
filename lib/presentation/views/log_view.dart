@@ -1,12 +1,12 @@
+import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
+import 'package:esp_firmware_tool/presentation/blocs/log/log_event.dart';
+import 'package:esp_firmware_tool/presentation/blocs/log/log_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../data/models/log_entry.dart';
 import '../../../utils/app_colors.dart';
-import '../../blocs/log/log_bloc.dart';
-import '../../blocs/log/log_event.dart';
-import '../../blocs/log/log_state.dart';
-import '../../widgets/rounded_button.dart';
+
 
 class LogView extends StatelessWidget {
   const LogView({Key? key}) : super(key: key);
