@@ -1,21 +1,19 @@
-
 import 'dart:async';
 
 import 'package:esp_firmware_tool/data/models/log_entry.dart';
-import 'package:grpc/grpc.dart' show ChannelCredentials;
-import 'package:grpc/grpc_connection_interface.dart';
+import '../generated/log_service.pb.dart' as pb;
+import '../generated/log_service.pbgrpc.dart' as grpc;
+import 'package:grpc/grpc.dart';
 
-
-// Note: These imports will work after running the generate_grpc script
-// We're defining the service now and will update paths if needed
+// Note: Using explicit prefixes to avoid class name conflicts
 
 class LogService {
   static const String _host = 'localhost';
   static const int _port = 50051;
 
   ClientChannel? _channel;
-  LogServiceClient? _client;
-  StreamSubscription<LogResponse>? _logSubscription;
+  grpc.LogServiceClient? _client;
+  StreamSubscription<pb.LogResponse>? _logSubscription;
   final _logStreamController = StreamController<LogEntry>.broadcast();
 
   Stream<LogEntry> get logStream => _logStreamController.stream;
@@ -29,13 +27,13 @@ class LogService {
       ),
     );
 
-    _client = LogServiceClient(_channel!);
+    _client = grpc.LogServiceClient(_channel!);
     _startLogStream();
   }
 
   Future<void> _startLogStream() async {
     try {
-      final request = LogRequest()..enable = true;
+      final request = pb.LogRequest()..enable = true;
       final response = _client!.streamLogs(request);
 
       _logSubscription = response.listen(

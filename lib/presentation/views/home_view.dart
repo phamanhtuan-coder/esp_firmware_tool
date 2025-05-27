@@ -24,7 +24,7 @@ class _HomeViewState extends State<HomeView> {
   final List<Widget> _pages = [
     const HomeContent(),
     const DeviceListView(),
-    const LogView(), // System-wide logs
+    const LogView(deviceId: 'system'), // System-wide logs
   ];
 
   void _onItemTapped(int index) {

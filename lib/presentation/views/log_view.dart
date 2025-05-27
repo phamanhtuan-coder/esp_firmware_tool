@@ -9,7 +9,9 @@ import '../../../utils/app_colors.dart';
 
 
 class LogView extends StatelessWidget {
-  const LogView({Key? key}) : super(key: key);
+  final String deviceId;
+
+  const LogView({Key? key, required this.deviceId}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
