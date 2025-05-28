@@ -10,6 +10,7 @@ import 'package:esp_firmware_tool/presentation/widgets/rounded_button.dart';
 import 'package:esp_firmware_tool/presentation/widgets/file_picker_button.dart';
 import 'package:esp_firmware_tool/presentation/views/device_list_view.dart';
 import 'package:esp_firmware_tool/presentation/views/log_view.dart';
+import 'package:esp_firmware_tool/presentation/views/settings_view.dart';
 
 class HomeView extends StatefulWidget {
   const HomeView({super.key});
@@ -25,6 +26,7 @@ class _HomeViewState extends State<HomeView> {
     const HomeContent(),
     const DeviceListView(),
     const LogView(deviceId: 'system'), // System-wide logs
+    const SettingsView(),
   ];
 
   void _onItemTapped(int index) {
@@ -55,6 +57,11 @@ class _HomeViewState extends State<HomeView> {
             icon: Icon(Icons.terminal_outlined),
             selectedIcon: Icon(Icons.terminal),
             label: 'Logs',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings),
+            label: 'Settings',
           ),
         ],
       ),

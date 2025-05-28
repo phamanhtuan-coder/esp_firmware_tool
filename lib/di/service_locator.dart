@@ -4,6 +4,7 @@ import 'package:esp_firmware_tool/data/repositories/socket_repository.dart';
 import 'package:esp_firmware_tool/data/services/log_service.dart';
 import 'package:esp_firmware_tool/presentation/blocs/device/device_bloc.dart';
 import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
+import 'package:esp_firmware_tool/presentation/blocs/settings/settings_bloc.dart';
 import 'package:esp_firmware_tool/utils/app_config.dart';
 
 final GetIt serviceLocator = GetIt.instance;
@@ -33,4 +34,6 @@ void setupServiceLocator() {
 
   serviceLocator.registerFactory<LogBloc>(
       () => LogBloc(logService: serviceLocator<LogService>()));
+
+  serviceLocator.registerFactory<SettingsBloc>(() => SettingsBloc());
 }
