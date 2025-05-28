@@ -25,7 +25,7 @@
 #define DEFAULT_WIFI_SSID "{{DEFAULT_SSID}}"
 #define DEFAULT_WIFI_PASSWORD "{{DEFAULT_PASSWORD}}"
 #define SERVER_HOST "{{SERVER_HOST}}"
-#define SERVER_PORT {{SERVER_PORT}}
+#define SERVER_PORT 3000  // Default port, will be replaced by build tool
 
 // Version management
 #define EEPROM_VERSION_ADDR 167
@@ -52,7 +52,7 @@ const unsigned int udpPort = 4210;
 char incomingPacket[255];
 
 // NeoPixel Configuration
-#define LED_PIN D6
+#define LED_PIN 12  // GPIO12 (was D6)
 #define NUMPIXELS 24
 Adafruit_NeoPixel strip(NUMPIXELS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -274,6 +274,12 @@ void handleUDPMessage() {
 /**************************************************************
  * Socket.IO Functions
  **************************************************************/
+// Function declarations
+void onConnectEvent(const char* payload, size_t length);
+void onDisconnectEvent(const char* payload, size_t length);
+void onCommandEvent(const char* payload, size_t length);
+
+// Handle Socket.IO events with the correct function signature
 void onSocketEvent(const char* event, const char* payload, size_t length) {
     Serial.printf("[IO] event: %s, payload: %s\n", event, payload);
 
@@ -330,12 +336,27 @@ void onSocketEvent(const char* event, const char* payload, size_t length) {
     }
 }
 
+// Handler for connect events with signature expected by SocketIoClient
+void onConnectEvent(const char* payload, size_t length) {
+    onSocketEvent("connect", payload, length);
+}
+
+// Handler for disconnect events with signature expected by SocketIoClient
+void onDisconnectEvent(const char* payload, size_t length) {
+    onSocketEvent("disconnect", payload, length);
+}
+
+// Handler for command events with signature expected by SocketIoClient
+void onCommandEvent(const char* payload, size_t length) {
+    onSocketEvent("command", payload, length);
+}
+
 void startSocketIO() {
     String url = IO_PATH + "?deviceId=" + String(DEVICE_ID) + "&uuid=" + String(DEVICE_UUID);
     socketIO.beginSSL(SERVER_HOST, SERVER_PORT, url.c_str());
-    socketIO.on("connect", onSocketEvent);
-    socketIO.on("disconnect", onSocketEvent);
-    socketIO.on("command", onSocketEvent);
+    socketIO.on("connect", onConnectEvent);
+    socketIO.on("disconnect", onDisconnectEvent);
+    socketIO.on("command", onCommandEvent);
 
     Serial.println("[IO] Connecting to Socket.IO server...");
     Serial.println("[IO] Server: " + String(SERVER_HOST) + ":" + String(SERVER_PORT));

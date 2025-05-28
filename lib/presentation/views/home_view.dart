@@ -1,6 +1,7 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:esp_firmware_tool/utils/app_colors.dart';
 import 'package:esp_firmware_tool/presentation/blocs/device/device_bloc.dart';
 import 'package:esp_firmware_tool/presentation/blocs/device/device_event.dart';
@@ -88,18 +89,7 @@ class _HomeContentState extends State<HomeContent> {
     context.read<DeviceBloc>().add(SetSerialNumberEvent(value));
   }
 
-  void _selectTemplate() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['ino'],
-    );
 
-    if (result != null && result.files.single.path != null) {
-      if (context.mounted) {
-        context.read<DeviceBloc>().add(SelectTemplateEvent(result.files.single.path!));
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -115,6 +105,21 @@ class _HomeContentState extends State<HomeContent> {
                 statusColor = AppColors.primary;
               } else if (state.error != null) {
                 statusColor = AppColors.error;
+
+                // Log the error to the console for debugging
+                log('ERROR: ${state.error}', name: 'HomeView', error: state.error);
+
+                // Print to standard output for immediate visibility
+                print('ERROR: ${state.error}');
+
+                // If there's a specific pattern related to template detection problems
+                if (state.error!.contains('Template file not found') ||
+                    state.error!.contains('Compilation failed') ||
+                    state.error!.contains('led_template.ino')) {
+                  log('TEMPLATE ERROR DETECTED: This might be related to the LED template detection issue.',
+                      name: 'HomeView');
+                  print('TEMPLATE ERROR DETECTED: This might be related to the LED template detection issue.');
+                }
               } else if (state.isConnected) {
                 statusColor = AppColors.success;
               }
