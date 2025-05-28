@@ -3,6 +3,7 @@ import 'package:esp_firmware_tool/utils/app_colors.dart';
 
 enum DeviceStatus {
   connected,
+  checking,
   compiling,
   flashing,
   done,
@@ -12,6 +13,8 @@ enum DeviceStatus {
     switch (this) {
       case DeviceStatus.connected:
         return 'Connected';
+      case DeviceStatus.checking:
+        return 'Checking Connection';
       case DeviceStatus.compiling:
         return 'Compiling';
       case DeviceStatus.flashing:
@@ -27,6 +30,8 @@ enum DeviceStatus {
     switch (this) {
       case DeviceStatus.connected:
         return AppColors.connected;
+      case DeviceStatus.checking:
+        return AppColors.compiling; // Reuse compiling color for checking
       case DeviceStatus.compiling:
         return AppColors.compiling;
       case DeviceStatus.flashing:
@@ -42,6 +47,8 @@ enum DeviceStatus {
     switch (this) {
       case DeviceStatus.connected:
         return Icons.check_circle_outline;
+      case DeviceStatus.checking:
+        return Icons.search;
       case DeviceStatus.compiling:
         return Icons.memory;
       case DeviceStatus.flashing:

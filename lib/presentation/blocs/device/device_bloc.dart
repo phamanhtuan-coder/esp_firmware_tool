@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:esp_firmware_tool/data/repositories/socket_repository.dart';
 import 'package:esp_firmware_tool/utils/enums.dart';
+import 'package:esp_firmware_tool/data/models/device.dart';
 import 'package:esp_firmware_tool/presentation/blocs/device/device_event.dart';
 import 'package:esp_firmware_tool/presentation/blocs/device/device_state.dart';
 
@@ -18,6 +19,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     on<UpdateStatus>(_onUpdateStatus);
     on<SelectTemplate>(_onSelectTemplate);
     on<ViewDeviceLogs>(_onViewDeviceLogs);
+    on<CheckUsbConnection>(_onCheckUsbConnection); // Add handler for new event
 
     // Initialize connection and start listening to device updates
     _initialize();
@@ -108,6 +110,56 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     _deviceLogsSubscription = socketRepository.getDeviceLogs(event.deviceId).listen((log) {
       // Handle logs in the LogView
     });
+  }
+
+  Future<void> _onCheckUsbConnection(CheckUsbConnection event, Emitter<DeviceState> emit) async {
+    try {
+      emit(state.copyWith(status: DeviceStatus.checking));
+
+      final result = await socketRepository.checkUsbConnection(event.serialNumber);
+
+      if (result['success'] == true) {
+        // Device found, create a Device object from the result
+        if (result.containsKey('device')) {
+          final deviceData = result['device'] as Map<String, dynamic>;
+          final device = Device.fromJson(deviceData);
+
+          // Add the found device to the devices list if not already present
+          final updatedDevices = List<Device>.from(state.devices);
+          final existingDeviceIndex = updatedDevices.indexWhere((d) => d.id == device.id);
+
+          if (existingDeviceIndex >= 0) {
+            updatedDevices[existingDeviceIndex] = device;
+          } else {
+            updatedDevices.add(device);
+          }
+
+          emit(state.copyWith(
+            devices: updatedDevices,
+            status: DeviceStatus.connected,
+            selectedDeviceId: device.id,
+            error: null,
+          ));
+        } else {
+          emit(state.copyWith(
+            status: DeviceStatus.connected,
+            error: null,
+          ));
+        }
+      } else {
+        // Device not found or error occurred
+        final errorMessage = result['error'] as String? ?? 'Device not found';
+        emit(state.copyWith(
+          status: DeviceStatus.error,
+          error: errorMessage,
+        ));
+      }
+    } catch (e) {
+      emit(state.copyWith(
+        status: DeviceStatus.error,
+        error: 'Failed to check USB connection: ${e.toString()}',
+      ));
+    }
   }
 
   @override

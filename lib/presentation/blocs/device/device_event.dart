@@ -69,6 +69,14 @@ class DeviceDisconnected extends DeviceEvent {
   List<Object?> get props => [deviceId];
 }
 
+// USB Connection Check
+class CheckUsbConnection extends DeviceEvent {
+  final String serialNumber;
+  const CheckUsbConnection(this.serialNumber);
+  @override
+  List<Object?> get props => [serialNumber];
+}
+
 // Error Events
 class DeviceError extends DeviceEvent {
   final String deviceId;

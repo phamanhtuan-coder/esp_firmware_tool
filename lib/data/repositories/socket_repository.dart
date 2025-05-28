@@ -12,6 +12,7 @@ abstract class ISocketRepository {
   Future<void> startProcess(String? templatePath);
   Future<void> stopProcess();
   Future<void> flashDevice(String deviceId, String firmwarePath);
+  Future<Map<String, dynamic>> checkUsbConnection(String serialNumber);
 }
 
 class SocketRepository implements ISocketRepository {
@@ -19,6 +20,9 @@ class SocketRepository implements ISocketRepository {
   final _devicesController = StreamController<List<Device>>.broadcast();
   final _statusController = StreamController<String>.broadcast();
   final _deviceLogsController = StreamController<String>.broadcast();
+
+  // Completer for USB connection check results
+  Completer<Map<String, dynamic>>? _usbConnectionCompleter;
 
   SocketRepository(this.socket) {
     _setupSocketListeners();
@@ -30,6 +34,7 @@ class SocketRepository implements ISocketRepository {
       ..on('status', _handleStatusEvent)
       ..on('device_log', _handleDeviceLogEvent)
       ..on('device_status', _handleDeviceStatusEvent)
+      ..on('usb_connection_result', _handleUsbConnectionResult)
       ..on('error', _handleErrorEvent);
   }
 
@@ -62,6 +67,16 @@ class SocketRepository implements ISocketRepository {
       final status = data['status'] as String?;
       if (deviceId != null && status != null) {
         _statusController.add('Device $deviceId: $status');
+      }
+    }
+  }
+
+  void _handleUsbConnectionResult(dynamic data) {
+    if (_usbConnectionCompleter != null && !_usbConnectionCompleter!.isCompleted) {
+      if (data is Map<String, dynamic>) {
+        _usbConnectionCompleter!.complete(data);
+      } else {
+        _usbConnectionCompleter!.completeError('Invalid response format');
       }
     }
   }
@@ -119,5 +134,20 @@ class SocketRepository implements ISocketRepository {
       'deviceId': deviceId,
       'firmwarePath': firmwarePath
     });
+  }
+
+  @override
+  Future<Map<String, dynamic>> checkUsbConnection(String serialNumber) {
+    _usbConnectionCompleter = Completer<Map<String, dynamic>>();
+    socket.emit('check_usb_connection', {'serialNumber': serialNumber});
+
+    // Set a timeout for the operation
+    Future.delayed(const Duration(seconds: 5), () {
+      if (_usbConnectionCompleter != null && !_usbConnectionCompleter!.isCompleted) {
+        _usbConnectionCompleter!.completeError('USB connection check timed out');
+      }
+    });
+
+    return _usbConnectionCompleter!.future;
   }
 }
