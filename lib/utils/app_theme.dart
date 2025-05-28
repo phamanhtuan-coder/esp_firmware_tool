@@ -71,7 +71,7 @@ class AppTheme {
       color: AppColors.cardBackground,
       shadowColor: Colors.black26,
     ),
-    
+
     appBarTheme: AppBarTheme(
       backgroundColor: AppColors.background,
       elevation: 0,

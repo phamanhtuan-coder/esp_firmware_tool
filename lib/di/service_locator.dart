@@ -1,13 +1,11 @@
 import 'package:get_it/get_it.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
-import 'package:esp_firmware_tool/data/repositories/socket_repository.dart';
 import 'package:esp_firmware_tool/data/services/log_service.dart';
 import 'package:esp_firmware_tool/data/services/arduino_cli_service.dart';
 import 'package:esp_firmware_tool/data/services/usb_service.dart';
+import 'package:esp_firmware_tool/data/services/template_service.dart'; // Add this import
 import 'package:esp_firmware_tool/presentation/blocs/device/device_bloc.dart';
 import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
 import 'package:esp_firmware_tool/presentation/blocs/settings/settings_bloc.dart';
-import 'package:esp_firmware_tool/utils/app_config.dart';
 
 final GetIt serviceLocator = GetIt.instance;
 
@@ -16,20 +14,8 @@ void setupServiceLocator() {
   serviceLocator.registerLazySingleton<ArduinoCliService>(() => ArduinoCliService());
   serviceLocator.registerLazySingleton<USBService>(() => USBService());
 
-  // Register Socket.IO client with configuration from AppConfig
-  serviceLocator.registerLazySingleton<IO.Socket>(() => IO.io(
-        AppConfig.socketUrl,
-        IO.OptionBuilder()
-          .setTransports(['websocket'])
-          .enableAutoConnect()
-          .setTimeout(AppConfig.socketTimeout)
-          .setReconnectionAttempts(AppConfig.socketReconnectAttempts)
-          .build()
-      ));
-
-  // Register repositories
-  serviceLocator.registerLazySingleton<ISocketRepository>(
-      () => SocketRepository(serviceLocator<IO.Socket>()));
+  // Register TemplateService
+  serviceLocator.registerLazySingleton<TemplateService>(() => TemplateService());
 
   // Register services
   serviceLocator.registerLazySingleton<LogService>(() => LogService());

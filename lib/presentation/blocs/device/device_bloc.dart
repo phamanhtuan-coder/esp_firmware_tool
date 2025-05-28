@@ -2,15 +2,22 @@ import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:esp_firmware_tool/data/services/arduino_cli_service.dart';
 import 'package:esp_firmware_tool/data/services/usb_service.dart';
+import 'package:esp_firmware_tool/data/services/template_service.dart';
 import 'package:esp_firmware_tool/presentation/blocs/device/device_event.dart';
 import 'package:esp_firmware_tool/presentation/blocs/device/device_state.dart';
 
 class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   final ArduinoCliService _arduinoCliService;
   final USBService _usbService;
+  final TemplateService _templateService;
   StreamSubscription? _portSubscription;
 
-  DeviceBloc(this._arduinoCliService, this._usbService) : super(const DeviceState()) {
+  DeviceBloc(
+    this._arduinoCliService,
+    this._usbService,
+    [TemplateService? templateService]
+  ) : _templateService = templateService ?? TemplateService(),
+      super(const DeviceState()) {
     _portSubscription = _usbService.portUpdates.listen((ports) {
       add(ScanPortsEvent());
     });
@@ -71,13 +78,28 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
       return;
     }
 
+    if (state.serialNumber == null || state.serialNumber!.isEmpty) {
+      emit(state.copyWith(error: 'No serial number provided'));
+      return;
+    }
+
     emit(state.copyWith(
       isCompiling: true,
-      status: 'Compiling firmware...',
+      status: 'Processing template...',
     ));
 
     try {
-      final compiledPath = await _arduinoCliService.compileFirmware(state.selectedTemplate!);
+      // Process the template first to replace placeholders
+      final processedTemplatePath = await _templateService.prepareTemplate(
+        serialNumber: state.serialNumber!,
+        // You can add more parameters here if needed
+      );
+
+      emit(state.copyWith(status: 'Compiling firmware...'));
+
+      // Use the processed template for compilation
+      final compiledPath = await _arduinoCliService.compileFirmware(processedTemplatePath);
+
       emit(state.copyWith(
         isCompiling: false,
         status: 'Compilation successful',
@@ -99,6 +121,10 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
           isFlashing: false,
           status: success ? 'Flashing successful' : 'Flashing failed',
           error: success ? null : 'Failed to flash firmware',
+        ));
+      } else {
+        emit(state.copyWith(
+          status: 'Compilation successful, but no port selected for flashing',
         ));
       }
     } catch (e) {
