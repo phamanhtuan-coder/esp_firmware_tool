@@ -1,7 +1,5 @@
-///
 //  Generated code. Do not modify.
 //  source: log_service.proto
-//
 // @dart = 2.12
 // ignore_for_file: annotate_overrides,camel_case_types,unnecessary_const,non_constant_identifier_names,library_prefixes,unused_import,unused_shown_name,return_of_invalid_type,unnecessary_this,prefer_final_fields
 
@@ -31,11 +29,11 @@ class LogRequest extends $pb.GeneratedMessage {
   factory LogRequest({
     $core.bool? enable,
   }) {
-    final _result = create();
+    final result = create();
     if (enable != null) {
-      _result.enable = enable;
+      result.enable = enable;
     }
-    return _result;
+    return result;
   }
 
   factory LogRequest.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) =>
@@ -81,23 +79,23 @@ class LogResponse extends $pb.GeneratedMessage {
     $core.String? step,
     $core.String? deviceId,
   }) {
-    final _result = create();
+    final result = create();
     if (message != null) {
-      _result.message = message;
+      result.message = message;
     }
     if (timestamp != null) {
-      _result.timestamp = timestamp;
+      result.timestamp = timestamp;
     }
     if (level != null) {
-      _result.level = level;
+      result.level = level;
     }
     if (step != null) {
-      _result.step = step;
+      result.step = step;
     }
     if (deviceId != null) {
-      _result.deviceId = deviceId;
+      result.deviceId = deviceId;
     }
-    return _result;
+    return result;
   }
 
   factory LogResponse.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) =>

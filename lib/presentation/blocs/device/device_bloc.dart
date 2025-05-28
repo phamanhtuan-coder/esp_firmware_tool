@@ -3,14 +3,15 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:esp_firmware_tool/data/services/arduino_cli_service.dart';
 import 'package:esp_firmware_tool/data/services/usb_service.dart';
 import 'package:esp_firmware_tool/data/services/template_service.dart';
+import 'package:esp_firmware_tool/data/models/log_entry.dart';  // Import for ProcessStep enum
 import 'package:esp_firmware_tool/presentation/blocs/device/device_event.dart';
 import 'package:esp_firmware_tool/presentation/blocs/device/device_state.dart';
 
 class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   final ArduinoCliService _arduinoCliService;
-  final USBService _usbService;
+  final UsbService _usbService;
   final TemplateService _templateService;
-  StreamSubscription? _portSubscription;
+  StreamSubscription? _deviceSubscription;
 
   DeviceBloc(
     this._arduinoCliService,
@@ -18,8 +19,21 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     [TemplateService? templateService]
   ) : _templateService = templateService ?? TemplateService(),
       super(const DeviceState()) {
-    _portSubscription = _usbService.portUpdates.listen((ports) {
-      add(ScanPortsEvent());
+
+    // Listen to USB device events
+    _deviceSubscription = _usbService.deviceStream.listen((deviceEvent) {
+      if (deviceEvent.connected) {
+        // A new device was connected
+        add(ScanUsbPortsEvent());
+      } else {
+        // A device was disconnected
+        if (state.selectedPort == deviceEvent.port) {
+          // If the disconnected device was selected, reset state
+          add(StopProcessEvent());
+        }
+        // Rescan ports
+        add(ScanUsbPortsEvent());
+      }
     });
 
     on<ScanPortsEvent>(_onScanPorts);
@@ -90,15 +104,41 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 
     try {
       // Process the template first to replace placeholders
-      final processedTemplatePath = await _templateService.prepareTemplate(
-        serialNumber: state.serialNumber!,
-        // You can add more parameters here if needed
+      final processedTemplatePath = await _templateService.prepareFirmwareTemplate(
+        state.selectedTemplate!,
+        state.serialNumber!,
+        'device-${state.serialNumber}',
       );
+
+      if (processedTemplatePath == null) {
+        emit(state.copyWith(
+          isCompiling: false,
+          error: 'Failed to prepare template',
+        ));
+        return;
+      }
 
       emit(state.copyWith(status: 'Compiling firmware...'));
 
-      // Use the processed template for compilation
-      final compiledPath = await _arduinoCliService.compileFirmware(processedTemplatePath);
+      // Use the Arduino CLI service to compile and flash the firmware
+      final port = state.selectedPort!;
+      final boardFqbn = _arduinoCliService.getBoardFqbn(state.deviceType ?? 'esp32');
+
+      // Compile the firmware
+      final compileResult = await _arduinoCliService.runProcess(
+        'arduino-cli',
+        ['compile', '--fqbn', boardFqbn, processedTemplatePath],
+        step: ProcessStep.compile,
+        deviceId: 'device-${state.serialNumber}',
+      );
+
+      if (compileResult != 0) {
+        emit(state.copyWith(
+          isCompiling: false,
+          error: 'Compilation failed with code: $compileResult',
+        ));
+        return;
+      }
 
       emit(state.copyWith(
         isCompiling: false,
@@ -112,27 +152,36 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
           status: 'Flashing firmware...',
         ));
 
-        final success = await _usbService.flashFirmware(
-          compiledPath,
-          state.selectedPort!,
+        final uploadResult = await _arduinoCliService.runProcess(
+          'arduino-cli',
+          ['upload', '--fqbn', boardFqbn, '--port', port, processedTemplatePath],
+          step: ProcessStep.flash,
+          deviceId: 'device-${state.serialNumber}',
         );
+
+        if (uploadResult != 0) {
+          emit(state.copyWith(
+            isFlashing: false,
+            error: 'Flash failed with code: $uploadResult',
+          ));
+          return;
+        }
 
         emit(state.copyWith(
           isFlashing: false,
-          status: success ? 'Flashing successful' : 'Flashing failed',
-          error: success ? null : 'Failed to flash firmware',
+          status: 'Flash successful',
+          error: null,
         ));
       } else {
         emit(state.copyWith(
-          status: 'Compilation successful, but no port selected for flashing',
+          error: 'No port selected for flashing',
         ));
       }
     } catch (e) {
       emit(state.copyWith(
         isCompiling: false,
         isFlashing: false,
-        error: e.toString(),
-        status: 'Process failed',
+        error: 'Error: ${e.toString()}',
       ));
     }
   }
@@ -170,7 +219,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 
   @override
   Future<void> close() {
-    _portSubscription?.cancel();
+    _deviceSubscription?.cancel();
     return super.close();
   }
 }

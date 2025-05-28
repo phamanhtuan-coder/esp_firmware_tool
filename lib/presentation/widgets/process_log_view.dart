@@ -11,11 +11,11 @@ class ProcessLogView extends StatefulWidget {
   final bool autoScroll;
 
   const ProcessLogView({
-    Key? key,
+    super.key,
     required this.processId,
     this.maxLines = 10,
     this.autoScroll = true,
-  }) : super(key: key);
+  });
 
   @override
   State<ProcessLogView> createState() => _ProcessLogViewState();

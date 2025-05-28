@@ -8,6 +8,7 @@ class DeviceState extends Equatable {
   final bool isFlashing;
   final bool isScanning;
   final String? serialNumber;
+  final String? deviceType;
   final String? selectedTemplate;
   final String? error;
   final DateTime? lastScanTime;
@@ -21,6 +22,7 @@ class DeviceState extends Equatable {
     this.isFlashing = false,
     this.isScanning = false,
     this.serialNumber,
+    this.deviceType,
     this.selectedTemplate,
     this.error,
     this.lastScanTime,
@@ -35,6 +37,7 @@ class DeviceState extends Equatable {
     bool? isFlashing,
     bool? isScanning,
     String? serialNumber,
+    String? deviceType,
     String? selectedTemplate,
     String? error,
     DateTime? lastScanTime,
@@ -48,6 +51,7 @@ class DeviceState extends Equatable {
       isFlashing: isFlashing ?? this.isFlashing,
       isScanning: isScanning ?? this.isScanning,
       serialNumber: serialNumber ?? this.serialNumber,
+      deviceType: deviceType ?? this.deviceType,
       selectedTemplate: selectedTemplate ?? this.selectedTemplate,
       error: error,
       lastScanTime: lastScanTime ?? this.lastScanTime,
@@ -64,6 +68,7 @@ class DeviceState extends Equatable {
         isFlashing,
         isScanning,
         serialNumber,
+        deviceType,
         selectedTemplate,
         error,
         lastScanTime,

@@ -6,7 +6,7 @@ import '../widgets/rounded_button.dart';
 import '../../utils/app_colors.dart';
 
 class SettingsView extends StatefulWidget {
-  const SettingsView({Key? key}) : super(key: key);
+  const SettingsView({super.key});
 
   @override
   State<SettingsView> createState() => _SettingsViewState();
