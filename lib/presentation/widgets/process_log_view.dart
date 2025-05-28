@@ -56,7 +56,7 @@ class _ProcessLogViewState extends State<ProcessLogView> {
       },
       listener: (context, state) {
         // Scroll to bottom when log entries change
-        WidgetsBinding.instance!.addPostFrameCallback((_) => _scrollToBottom());
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
       },
       builder: (context, state) {
         // Filter logs for this process ID if needed

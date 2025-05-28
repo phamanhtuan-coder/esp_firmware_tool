@@ -5,7 +5,18 @@ class RoundedButton extends StatelessWidget {
   final VoidCallback onPressed;
   final Color color;
   final bool enabled;
-  const RoundedButton({super.key, required this.label, required this.onPressed, required this.color, this.enabled = true});
+  final IconData? icon;
+  final bool isLoading;
+
+  const RoundedButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    required this.color,
+    this.enabled = true,
+    this.icon,
+    this.isLoading = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +29,25 @@ class RoundedButton extends StatelessWidget {
         ),
         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
       ),
-      child: Text(label, style: const TextStyle(fontSize: 16,color: Colors.white)),
+      child: isLoading
+        ? const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              color: Colors.white,
+              strokeWidth: 2,
+            ),
+          )
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, color: Colors.white),
+                const SizedBox(width: 8),
+              ],
+              Text(label, style: const TextStyle(fontSize: 16, color: Colors.white)),
+            ],
+          ),
     );
   }
 }

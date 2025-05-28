@@ -1,31 +1,34 @@
 class Firmware {
-  final String id;
   final String name;
-  final String version;
   final String path;
+  final String compiledBinaryPath;
+  final FirmwareStatus status;
 
   Firmware({
-    required this.id,
     required this.name,
-    required this.version,
     required this.path,
+    this.compiledBinaryPath = '',
+    this.status = FirmwareStatus.notCompiled,
   });
 
-  factory Firmware.fromJson(Map<String, dynamic> json) {
+  Firmware copyWith({
+    String? name,
+    String? path,
+    String? compiledBinaryPath,
+    FirmwareStatus? status,
+  }) {
     return Firmware(
-      id: json['id'],
-      name: json['name'],
-      version: json['version'],
-      path: json['path'],
+      name: name ?? this.name,
+      path: path ?? this.path,
+      compiledBinaryPath: compiledBinaryPath ?? this.compiledBinaryPath,
+      status: status ?? this.status,
     );
   }
+}
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'version': version,
-      'path': path,
-    };
-  }
+enum FirmwareStatus {
+  notCompiled,
+  compiling,
+  compiled,
+  error,
 }

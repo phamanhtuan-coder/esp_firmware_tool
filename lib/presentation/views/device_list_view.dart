@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:esp_firmware_tool/data/models/device.dart';
 import 'package:esp_firmware_tool/utils/app_colors.dart';
-import 'package:esp_firmware_tool/utils/enums.dart';
 import 'package:esp_firmware_tool/presentation/blocs/device/device_bloc.dart';
 import 'package:esp_firmware_tool/presentation/blocs/device/device_event.dart';
 import 'package:esp_firmware_tool/presentation/blocs/device/device_state.dart';
@@ -19,14 +17,14 @@ class _DeviceListViewState extends State<DeviceListView> {
   @override
   void initState() {
     super.initState();
-    context.read<DeviceBloc>().add(FetchDevices());
+    context.read<DeviceBloc>().add(ScanUsbPortsEvent());
   }
 
-  void _viewDeviceLogs(Device device) {
+  void _viewDeviceLogs(String portName) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => LogView(deviceId: device.id),
+        builder: (context) => LogView(deviceId: portName),
       ),
     );
   }
@@ -35,20 +33,31 @@ class _DeviceListViewState extends State<DeviceListView> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Connected Devices'),
+        title: const Text('Available Ports'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              context.read<DeviceBloc>().add(ScanUsbPortsEvent());
+            },
+          ),
+        ],
       ),
       body: BlocBuilder<DeviceBloc, DeviceState>(
         builder: (context, state) {
-          if (state.devices.isEmpty) {
+          if (state.isScanning) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (state.availablePorts.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.devices_other,
-                      size: 64, color: AppColors.idle),
+                  Icon(Icons.usb, size: 64, color: AppColors.idle),
                   const SizedBox(height: 16),
                   Text(
-                    'No devices connected',
+                    'No USB devices detected',
                     style: TextStyle(
                       fontSize: 18,
                       color: AppColors.idle,
@@ -57,10 +66,10 @@ class _DeviceListViewState extends State<DeviceListView> {
                   const SizedBox(height: 24),
                   OutlinedButton.icon(
                     onPressed: () {
-                      context.read<DeviceBloc>().add(FetchDevices());
+                      context.read<DeviceBloc>().add(ScanUsbPortsEvent());
                     },
                     icon: const Icon(Icons.refresh),
-                    label: const Text('Refresh'),
+                    label: const Text('Scan Again'),
                   ),
                 ],
               ),
@@ -69,16 +78,20 @@ class _DeviceListViewState extends State<DeviceListView> {
 
           return RefreshIndicator(
             onRefresh: () async {
-              context.read<DeviceBloc>().add(FetchDevices());
+              context.read<DeviceBloc>().add(ScanUsbPortsEvent());
             },
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: state.devices.length,
+              itemCount: state.availablePorts.length,
               itemBuilder: (context, index) {
-                final device = state.devices[index];
-                return DeviceCard(
-                  device: device,
-                  onLogView: () => _viewDeviceLogs(device),
+                final port = state.availablePorts[index];
+                return PortListItem(
+                  portName: port,
+                  isSelected: state.selectedPort == port,
+                  onPortSelected: () {
+                    context.read<DeviceBloc>().add(SelectUsbPortEvent(port));
+                  },
+                  onViewLogs: () => _viewDeviceLogs(port),
                 );
               },
             ),
@@ -89,144 +102,34 @@ class _DeviceListViewState extends State<DeviceListView> {
   }
 }
 
-class DeviceCard extends StatelessWidget {
-  final Device device;
-  final VoidCallback onLogView;
+class PortListItem extends StatelessWidget {
+  final String portName;
+  final bool isSelected;
+  final VoidCallback onPortSelected;
+  final VoidCallback onViewLogs;
 
-  const DeviceCard({
+  const PortListItem({
     super.key,
-    required this.device,
-    required this.onLogView,
+    required this.portName,
+    required this.isSelected,
+    required this.onPortSelected,
+    required this.onViewLogs,
   });
-
-  DeviceStatus _getDeviceStatus() {
-    switch (device.status.toLowerCase()) {
-      case 'connected':
-        return DeviceStatus.connected;
-      case 'compiling':
-        return DeviceStatus.compiling;
-      case 'flashing':
-        return DeviceStatus.flashing;
-      case 'done':
-        return DeviceStatus.done;
-      default:
-        return DeviceStatus.error;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    final status = _getDeviceStatus();
-
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(status.icon, color: status.color),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    device.name,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: status.color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    status.label,
-                    style: TextStyle(
-                      color: status.color,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const Divider(height: 24),
-            DeviceInfoRow(
-              icon: Icons.usb,
-              label: 'Port',
-              value: device.usbPort ?? 'Unknown',
-            ),
-            const SizedBox(height: 8),
-            DeviceInfoRow(
-              icon: Icons.numbers,
-              label: 'Serial',
-              value: device.serialNumber ?? 'Unknown',
-            ),
-            if (device.firmwareVersion != null) ...[
-              const SizedBox(height: 8),
-              DeviceInfoRow(
-                icon: Icons.memory,
-                label: 'Firmware',
-                value: device.firmwareVersion!,
-              ),
-            ],
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: onLogView,
-                  icon: const Icon(Icons.description),
-                  label: const Text('View Logs'),
-                ),
-              ],
-            ),
-          ],
+      color: isSelected ? Colors.blue.shade50 : null,
+      child: ListTile(
+        leading: const Icon(Icons.usb),
+        title: Text(portName),
+        subtitle: Text(isSelected ? 'Selected' : 'Available'),
+        trailing: IconButton(
+          icon: const Icon(Icons.remove_red_eye),
+          onPressed: onViewLogs,
         ),
+        onTap: onPortSelected,
       ),
-    );
-  }
-}
-
-class DeviceInfoRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const DeviceInfoRow({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: AppColors.idle),
-        const SizedBox(width: 8),
-        Text(
-          '$label:',
-          style: const TextStyle(
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            value,
-            style: TextStyle(color: AppColors.idle),
-          ),
-        ),
-      ],
     );
   }
 }

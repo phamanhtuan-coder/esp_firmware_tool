@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:esp_firmware_tool/utils/app_colors.dart';
-import 'package:esp_firmware_tool/utils/enums.dart';
 import 'package:esp_firmware_tool/presentation/blocs/device/device_bloc.dart';
 import 'package:esp_firmware_tool/presentation/blocs/device/device_event.dart';
 import 'package:esp_firmware_tool/presentation/blocs/device/device_state.dart';
 import 'package:esp_firmware_tool/presentation/widgets/status_text.dart';
 import 'package:esp_firmware_tool/presentation/widgets/rounded_button.dart';
 import 'package:esp_firmware_tool/presentation/widgets/file_picker_button.dart';
-import 'package:esp_firmware_tool/presentation/widgets/process_log_view.dart';
 import 'package:esp_firmware_tool/presentation/views/device_list_view.dart';
 import 'package:esp_firmware_tool/presentation/views/log_view.dart';
 import 'package:esp_firmware_tool/presentation/views/settings_view.dart';
+import 'package:intl/intl.dart';
 
 class HomeView extends StatefulWidget {
   const HomeView({super.key});
@@ -55,8 +55,8 @@ class _HomeViewState extends State<HomeView> {
             label: 'Devices',
           ),
           NavigationDestination(
-            icon: Icon(Icons.terminal_outlined),
-            selectedIcon: Icon(Icons.terminal),
+            icon: Icon(Icons.receipt_outlined),
+            selectedIcon: Icon(Icons.receipt),
             label: 'Logs',
           ),
           NavigationDestination(
@@ -70,55 +70,53 @@ class _HomeViewState extends State<HomeView> {
   }
 }
 
-class HomeContent extends StatelessWidget {
+class HomeContent extends StatefulWidget {
   const HomeContent({super.key});
 
+  @override
+  State<HomeContent> createState() => _HomeContentState();
+}
+
+class _HomeContentState extends State<HomeContent> {
+  final TextEditingController serialController = TextEditingController();
+
   String _formatTimestamp(DateTime timestamp) {
-    return '${timestamp.hour}:${timestamp.minute}:${timestamp.second}';
+    return DateFormat('HH:mm:ss').format(timestamp);
+  }
+
+  void _setSerialNumber(String value) {
+    context.read<DeviceBloc>().add(SetSerialNumberEvent(value));
+  }
+
+  void _selectTemplate() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['ino'],
+    );
+
+    if (result != null && result.files.single.path != null) {
+      if (context.mounted) {
+        context.read<DeviceBloc>().add(SelectTemplateEvent(result.files.single.path!));
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final TextEditingController serialController = TextEditingController();
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('ESP Firmware Tool'),
-        centerTitle: true,
-      ),
-      body: Center(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 500),
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black12,
-                blurRadius: 16,
-                offset: Offset(0, 8),
-              ),
-            ],
-          ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
           child: BlocBuilder<DeviceBloc, DeviceState>(
             builder: (context, state) {
-              final status = state.status;
-              Color statusColor;
-              switch (status) {
-                case DeviceStatus.compiling:
-                case DeviceStatus.flashing:
-                case DeviceStatus.checking:
-                  statusColor = AppColors.primary;
-                  break;
-                case DeviceStatus.done:
-                  statusColor = AppColors.success;
-                  break;
-                case DeviceStatus.error:
-                  statusColor = AppColors.error;
-                  break;
-                default:
-                  statusColor = AppColors.idle;
+              // Status color based on state
+              Color statusColor = AppColors.idle;
+              if (state.isCompiling || state.isFlashing) {
+                statusColor = AppColors.primary;
+              } else if (state.error != null) {
+                statusColor = AppColors.error;
+              } else if (state.isConnected) {
+                statusColor = AppColors.success;
               }
 
               // Update the serial controller if we have a value in the state
@@ -135,7 +133,12 @@ class HomeContent extends StatelessWidget {
                     style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 24),
-                  StatusText(status: status.label, color: statusColor),
+
+                  // Status indicator
+                  StatusText(
+                    status: state.status ?? 'Ready',
+                    color: statusColor
+                  ),
 
                   // Error message
                   if (state.error != null)
@@ -161,9 +164,7 @@ class HomeContent extends StatelessWidget {
                             hintText: 'Enter serial number',
                             border: OutlineInputBorder(),
                           ),
-                          onChanged: (value) {
-                            context.read<DeviceBloc>().add(SetSerialNumber(value));
-                          },
+                          onChanged: _setSerialNumber,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -189,7 +190,7 @@ class HomeContent extends StatelessWidget {
                     label: 'Select Template',
                     onFilePicked: (path) {
                       if (path != null) {
-                        context.read<DeviceBloc>().add(SelectTemplate(path));
+                        context.read<DeviceBloc>().add(SelectTemplateEvent(path));
                       }
                     },
                   ),
@@ -238,7 +239,7 @@ class HomeContent extends StatelessWidget {
                             onPressed: state.isScanning
                                 ? null
                                 : () {
-                                    context.read<DeviceBloc>().add(const ScanUsbPorts());
+                                    context.read<DeviceBloc>().add(ScanUsbPortsEvent());
                                   },
                           ),
                         ],
@@ -280,7 +281,7 @@ class HomeContent extends StatelessWidget {
                               }).toList(),
                               onChanged: (newValue) {
                                 if (newValue != null) {
-                                  context.read<DeviceBloc>().add(SelectUsbPort(newValue));
+                                  context.read<DeviceBloc>().add(SelectUsbPortEvent(newValue));
                                 }
                               },
                             ),
@@ -335,33 +336,35 @@ class HomeContent extends StatelessWidget {
                     ],
                   ),
 
-                  const SizedBox(height: 24),
+                  const Spacer(),
 
-                  // Start/Stop Process Button
+                  // Action Button
                   RoundedButton(
-                    label: status == DeviceStatus.compiling || status == DeviceStatus.flashing
-                        ? 'Stop Process'
-                        : 'Start Process',
-                    color: status == DeviceStatus.compiling || status == DeviceStatus.flashing
-                        ? AppColors.error
-                        : AppColors.primary,
-                    enabled: state.serialNumber != null &&
-                             state.serialNumber!.isNotEmpty &&
-                             state.selectedTemplate != null &&
-                             !(status == DeviceStatus.checking),
+                    label: state.isCompiling || state.isFlashing ? 'Stop' : 'Start',
+                    icon: state.isCompiling || state.isFlashing
+                        ? Icons.stop
+                        : Icons.play_arrow,
+                    isLoading: state.isCompiling || state.isFlashing,
+                    color: state.isCompiling || state.isFlashing
+                        ? Colors.red
+                        : Colors.green,
                     onPressed: () {
-                      if (status == DeviceStatus.compiling || status == DeviceStatus.flashing) {
-                        context.read<DeviceBloc>().add(StopProcess());
+                      if (state.isCompiling || state.isFlashing) {
+                        context.read<DeviceBloc>().add(StopProcessEvent());
+                      } else if (state.serialNumber != null &&
+                                state.selectedTemplate != null) {
+                        context.read<DeviceBloc>().add(StartProcessEvent());
                       } else {
-                        context.read<DeviceBloc>().add(StartProcess());
+                        // Show a snackbar if missing required fields
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please enter serial number and select a template'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
                       }
                     },
                   ),
-
-                  const SizedBox(height: 24),
-
-                  // Process Log View
-                  const ProcessLogView(processId: 'main_process', maxLines: 6),
                 ],
               );
             },
@@ -369,5 +372,11 @@ class HomeContent extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    serialController.dispose();
+    super.dispose();
   }
 }

@@ -1,75 +1,72 @@
 import 'package:equatable/equatable.dart';
-import 'package:esp_firmware_tool/data/models/device.dart';
-import 'package:esp_firmware_tool/utils/enums.dart';
 
 class DeviceState extends Equatable {
-  final List<Device> devices;
-  final DeviceStatus status;
-  final String? error;
-  final String? selectedTemplate;
-  final String? selectedDeviceId;
-  final String? serialNumber;
   final List<String> availablePorts;
   final String? selectedPort;
-  final bool isScanning; // Track if a port scan is in progress
-  final DateTime? lastScanTime; // When the last scan was completed
+  final bool isConnected;
+  final bool isCompiling;
+  final bool isFlashing;
+  final bool isScanning;
+  final String? serialNumber;
+  final String? selectedTemplate;
+  final String? error;
+  final DateTime? lastScanTime;
+  final String? status;
 
   const DeviceState({
-    this.devices = const [],
-    this.status = DeviceStatus.connected,
-    this.error,
-    this.selectedTemplate,
-    this.selectedDeviceId,
-    this.serialNumber,
     this.availablePorts = const [],
     this.selectedPort,
+    this.isConnected = false,
+    this.isCompiling = false,
+    this.isFlashing = false,
     this.isScanning = false,
+    this.serialNumber,
+    this.selectedTemplate,
+    this.error,
     this.lastScanTime,
+    this.status,
   });
 
-  Device? get selectedDevice => selectedDeviceId != null
-    ? devices.firstWhere(
-        (d) => d.id == selectedDeviceId,
-        orElse: () => Device(id: '', name: '', status: ''))
-    : null;
-
   DeviceState copyWith({
-    List<Device>? devices,
-    DeviceStatus? status,
-    String? error,
-    String? selectedTemplate,
-    String? selectedDeviceId,
-    String? serialNumber,
     List<String>? availablePorts,
     String? selectedPort,
+    bool? isConnected,
+    bool? isCompiling,
+    bool? isFlashing,
     bool? isScanning,
+    String? serialNumber,
+    String? selectedTemplate,
+    String? error,
     DateTime? lastScanTime,
+    String? status,
   }) {
     return DeviceState(
-      devices: devices ?? this.devices,
-      status: status ?? this.status,
-      error: error,  // Allow setting to null
-      selectedTemplate: selectedTemplate ?? this.selectedTemplate,
-      selectedDeviceId: selectedDeviceId ?? this.selectedDeviceId,
-      serialNumber: serialNumber ?? this.serialNumber,
       availablePorts: availablePorts ?? this.availablePorts,
       selectedPort: selectedPort ?? this.selectedPort,
+      isConnected: isConnected ?? this.isConnected,
+      isCompiling: isCompiling ?? this.isCompiling,
+      isFlashing: isFlashing ?? this.isFlashing,
       isScanning: isScanning ?? this.isScanning,
+      serialNumber: serialNumber ?? this.serialNumber,
+      selectedTemplate: selectedTemplate ?? this.selectedTemplate,
+      error: error,
       lastScanTime: lastScanTime ?? this.lastScanTime,
+      status: status ?? this.status,
     );
   }
 
   @override
   List<Object?> get props => [
-    devices,
-    status,
-    error,
-    selectedTemplate,
-    selectedDeviceId,
-    serialNumber,
-    availablePorts,
-    selectedPort,
-    isScanning,
-    lastScanTime,
-  ];
+        availablePorts,
+        selectedPort,
+        isConnected,
+        isCompiling,
+        isFlashing,
+        isScanning,
+        serialNumber,
+        selectedTemplate,
+        error,
+        lastScanTime,
+        status,
+      ];
 }
