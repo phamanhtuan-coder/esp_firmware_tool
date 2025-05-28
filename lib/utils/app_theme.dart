@@ -8,12 +8,35 @@ class AppTheme {
     primaryColor: AppColors.primary,
     scaffoldBackgroundColor: AppColors.background,
 
+    // Enhanced Text Theme
+    textTheme: TextTheme(
+      displayLarge: TextStyle(
+        fontSize: 32,
+        fontWeight: FontWeight.bold,
+        color: AppColors.primary,
+      ),
+      displayMedium: TextStyle(
+        fontSize: 24,
+        fontWeight: FontWeight.w600,
+        color: AppColors.primary,
+      ),
+      bodyLarge: TextStyle(
+        fontSize: 16,
+        color: Colors.black87,
+      ),
+      bodyMedium: TextStyle(
+        fontSize: 14,
+        color: Colors.black54,
+      ),
+    ),
+
     colorScheme: ColorScheme.light(
       primary: AppColors.primary,
       secondary: AppColors.accent,
       background: AppColors.background,
     ),
 
+    // Enhanced Button Themes with consistent styling
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         shape: RoundedRectangleBorder(
@@ -24,6 +47,8 @@ class AppTheme {
           fontWeight: FontWeight.bold,
           fontSize: 16,
         ),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
       ),
     ),
 
@@ -34,17 +59,19 @@ class AppTheme {
         ),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         side: BorderSide(color: AppColors.primary),
+        foregroundColor: AppColors.primary,
       ),
     ),
 
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
       color: AppColors.cardBackground,
+      shadowColor: Colors.black26,
     ),
-
+    
     appBarTheme: AppBarTheme(
       backgroundColor: AppColors.background,
       elevation: 0,
@@ -54,6 +81,7 @@ class AppTheme {
         fontSize: 20,
         fontWeight: FontWeight.bold,
       ),
+      iconTheme: IconThemeData(color: AppColors.primary),
     ),
 
     navigationBarTheme: NavigationBarThemeData(
@@ -61,7 +89,11 @@ class AppTheme {
       backgroundColor: AppColors.cardBackground,
       indicatorColor: AppColors.primary.withOpacity(0.12),
       labelTextStyle: MaterialStateProperty.all(
-        TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          color: AppColors.primary,
+        ),
       ),
     ),
   );
