@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
-import 'package:esp_firmware_tool/presentation/blocs/log/log_event.dart';
-import 'package:esp_firmware_tool/presentation/blocs/log/log_state.dart';
 import 'package:esp_firmware_tool/utils/app_colors.dart';
 
 class ProcessLogView extends StatefulWidget {
