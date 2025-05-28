@@ -8,6 +8,11 @@ class DeviceState extends Equatable {
   final String? error;
   final String? selectedTemplate;
   final String? selectedDeviceId;
+  final String? serialNumber;
+  final List<String> availablePorts;
+  final String? selectedPort;
+  final bool isScanning; // Track if a port scan is in progress
+  final DateTime? lastScanTime; // When the last scan was completed
 
   const DeviceState({
     this.devices = const [],
@@ -15,6 +20,11 @@ class DeviceState extends Equatable {
     this.error,
     this.selectedTemplate,
     this.selectedDeviceId,
+    this.serialNumber,
+    this.availablePorts = const [],
+    this.selectedPort,
+    this.isScanning = false,
+    this.lastScanTime,
   });
 
   Device? get selectedDevice => selectedDeviceId != null
@@ -29,6 +39,11 @@ class DeviceState extends Equatable {
     String? error,
     String? selectedTemplate,
     String? selectedDeviceId,
+    String? serialNumber,
+    List<String>? availablePorts,
+    String? selectedPort,
+    bool? isScanning,
+    DateTime? lastScanTime,
   }) {
     return DeviceState(
       devices: devices ?? this.devices,
@@ -36,6 +51,11 @@ class DeviceState extends Equatable {
       error: error,  // Allow setting to null
       selectedTemplate: selectedTemplate ?? this.selectedTemplate,
       selectedDeviceId: selectedDeviceId ?? this.selectedDeviceId,
+      serialNumber: serialNumber ?? this.serialNumber,
+      availablePorts: availablePorts ?? this.availablePorts,
+      selectedPort: selectedPort ?? this.selectedPort,
+      isScanning: isScanning ?? this.isScanning,
+      lastScanTime: lastScanTime ?? this.lastScanTime,
     );
   }
 
@@ -46,5 +66,10 @@ class DeviceState extends Equatable {
     error,
     selectedTemplate,
     selectedDeviceId,
+    serialNumber,
+    availablePorts,
+    selectedPort,
+    isScanning,
+    lastScanTime,
   ];
 }

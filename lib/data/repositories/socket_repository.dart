@@ -9,10 +9,11 @@ abstract class ISocketRepository {
   Stream<List<Device>> getDevices();
   Stream<String> getStatus();
   Stream<String> getDeviceLogs(String deviceId);
-  Future<void> startProcess(String? templatePath);
+  Future<void> startProcess(String? templatePath, {String? serialNumber, String? port});
   Future<void> stopProcess();
   Future<void> flashDevice(String deviceId, String firmwarePath);
   Future<Map<String, dynamic>> checkUsbConnection(String serialNumber);
+  Future<Map<String, dynamic>> scanUsbPorts(); // New method for scanning USB ports
 }
 
 class SocketRepository implements ISocketRepository {
@@ -21,8 +22,9 @@ class SocketRepository implements ISocketRepository {
   final _statusController = StreamController<String>.broadcast();
   final _deviceLogsController = StreamController<String>.broadcast();
 
-  // Completer for USB connection check results
+  // Completers for async operations
   Completer<Map<String, dynamic>>? _usbConnectionCompleter;
+  Completer<Map<String, dynamic>>? _scanPortsCompleter; // New completer for port scanning
 
   SocketRepository(this.socket) {
     _setupSocketListeners();
@@ -35,6 +37,7 @@ class SocketRepository implements ISocketRepository {
       ..on('device_log', _handleDeviceLogEvent)
       ..on('device_status', _handleDeviceStatusEvent)
       ..on('usb_connection_result', _handleUsbConnectionResult)
+      ..on('usb_ports_result', _handleUsbPortsResult) // New event handler
       ..on('error', _handleErrorEvent);
   }
 
@@ -81,6 +84,16 @@ class SocketRepository implements ISocketRepository {
     }
   }
 
+  void _handleUsbPortsResult(dynamic data) {
+    if (_scanPortsCompleter != null && !_scanPortsCompleter!.isCompleted) {
+      if (data is Map<String, dynamic>) {
+        _scanPortsCompleter!.complete(data);
+      } else {
+        _scanPortsCompleter!.completeError('Invalid response format');
+      }
+    }
+  }
+
   void _handleErrorEvent(dynamic error) {
     final errorMessage = error is String ? error : 'An unknown error occurred';
     _statusController.add(AppConfig.errorOccurred + ': $errorMessage');
@@ -119,8 +132,12 @@ class SocketRepository implements ISocketRepository {
   }
 
   @override
-  Future<void> startProcess(String? templatePath) async {
-    socket.emit('start_process', {'templatePath': templatePath});
+  Future<void> startProcess(String? templatePath, {String? serialNumber, String? port}) async {
+    socket.emit('start_process', {
+      'templatePath': templatePath,
+      'serialNumber': serialNumber,
+      'port': port
+    });
   }
 
   @override
@@ -149,5 +166,20 @@ class SocketRepository implements ISocketRepository {
     });
 
     return _usbConnectionCompleter!.future;
+  }
+
+  @override
+  Future<Map<String, dynamic>> scanUsbPorts() {
+    _scanPortsCompleter = Completer<Map<String, dynamic>>();
+    socket.emit('scan_usb_ports');
+
+    // Set a timeout for the operation
+    Future.delayed(const Duration(seconds: 5), () {
+      if (_scanPortsCompleter != null && !_scanPortsCompleter!.isCompleted) {
+        _scanPortsCompleter!.completeError('USB port scan timed out');
+      }
+    });
+
+    return _scanPortsCompleter!.future;
   }
 }

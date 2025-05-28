@@ -77,6 +77,29 @@ class CheckUsbConnection extends DeviceEvent {
   List<Object?> get props => [serialNumber];
 }
 
+// Serial Number Input
+class SetSerialNumber extends DeviceEvent {
+  final String serialNumber;
+  const SetSerialNumber(this.serialNumber);
+  @override
+  List<Object?> get props => [serialNumber];
+}
+
+// USB Port Management
+class ScanUsbPorts extends DeviceEvent {
+  final bool silent; // If true, won't show loading indicators
+  const ScanUsbPorts({this.silent = false});
+  @override
+  List<Object?> get props => [silent];
+}
+
+class SelectUsbPort extends DeviceEvent {
+  final String port;
+  const SelectUsbPort(this.port);
+  @override
+  List<Object?> get props => [port];
+}
+
 // Error Events
 class DeviceError extends DeviceEvent {
   final String deviceId;

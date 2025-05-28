@@ -12,6 +12,10 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   StreamSubscription? _statusSubscription;
   StreamSubscription? _deviceLogsSubscription;
 
+  // Timer for continuous USB port scanning
+  Timer? _usbScanTimer;
+  final Duration _scanInterval = const Duration(seconds: 10); // Scan every 10 seconds
+
   DeviceBloc({required this.socketRepository}) : super(const DeviceState()) {
     on<StartProcess>(_onStartProcess);
     on<StopProcess>(_onStopProcess);
@@ -19,7 +23,10 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     on<UpdateStatus>(_onUpdateStatus);
     on<SelectTemplate>(_onSelectTemplate);
     on<ViewDeviceLogs>(_onViewDeviceLogs);
-    on<CheckUsbConnection>(_onCheckUsbConnection); // Add handler for new event
+    on<CheckUsbConnection>(_onCheckUsbConnection);
+    on<SetSerialNumber>(_onSetSerialNumber);
+    on<ScanUsbPorts>(_onScanUsbPorts);
+    on<SelectUsbPort>(_onSelectUsbPort);
 
     // Initialize connection and start listening to device updates
     _initialize();
@@ -35,12 +42,141 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 
     // Start fetching devices
     add(FetchDevices());
+
+    // Initial USB port scan when the app starts
+    add(const ScanUsbPorts());
+
+    // Start the timer for continuous USB scanning
+    _startUsbScanTimer();
+  }
+
+  void _startUsbScanTimer() {
+    // Cancel any existing timer
+    _usbScanTimer?.cancel();
+
+    // Create a new periodic timer
+    _usbScanTimer = Timer.periodic(_scanInterval, (_) {
+      add(const ScanUsbPorts()); // Use silent mode to avoid showing loading indicators for background scans
+    });
+  }
+
+  void _onSetSerialNumber(SetSerialNumber event, Emitter<DeviceState> emit) {
+    emit(state.copyWith(serialNumber: event.serialNumber));
+    // When a serial number is set, try to scan USB ports
+    add(const ScanUsbPorts());
+  }
+
+  Future<void> _onScanUsbPorts(ScanUsbPorts event, Emitter<DeviceState> emit) async {
+    try {
+      // Only update status to checking if not in silent mode
+      if (!event.silent) {
+        emit(state.copyWith(status: DeviceStatus.checking, isScanning: true));
+      } else {
+        emit(state.copyWith(isScanning: true));
+      }
+
+      // Call the repository to scan for USB ports
+      final result = await socketRepository.scanUsbPorts()
+        .timeout(
+          const Duration(seconds: 3),
+          onTimeout: () => {
+            'success': true,
+            'ports': state.availablePorts,
+            'message': 'Using cached ports (scan timed out)'
+          },
+        );
+
+      if (result['success'] == true) {
+        final ports = (result['ports'] as List<dynamic>).map((e) => e.toString()).toList();
+        String? selectedPort = state.selectedPort;
+
+        // If we have a current selection, try to keep it if it's still valid
+        if (selectedPort != null && !ports.contains(selectedPort) && ports.isNotEmpty) {
+          selectedPort = ports[0]; // Fall back to first available port if current selection is no longer valid
+        } else if (selectedPort == null && ports.isNotEmpty) {
+          selectedPort = ports[0]; // Select first port by default if none was selected before
+        }
+
+        emit(state.copyWith(
+          availablePorts: ports,
+          selectedPort: selectedPort,
+          status: !event.silent ? DeviceStatus.connected : state.status, // Only update status if not silent
+          isScanning: false,
+          error: null,
+          lastScanTime: DateTime.now(),
+        ));
+      } else {
+        final errorMessage = result['error'] as String? ?? 'Failed to scan USB ports';
+
+        if (!event.silent) {
+          emit(state.copyWith(
+            status: DeviceStatus.error,
+            isScanning: false,
+            error: errorMessage,
+            lastScanTime: DateTime.now(),
+          ));
+        } else {
+          emit(state.copyWith(
+            isScanning: false,
+            lastScanTime: DateTime.now(),
+          ));
+        }
+      }
+    } catch (e) {
+      if (!event.silent) {
+        emit(state.copyWith(
+          status: DeviceStatus.error,
+          isScanning: false,
+          error: 'Failed to scan USB ports: ${e.toString()}',
+          lastScanTime: DateTime.now(),
+        ));
+      } else {
+        emit(state.copyWith(
+          isScanning: false,
+          lastScanTime: DateTime.now(),
+        ));
+      }
+    }
+  }
+
+  void _onSelectUsbPort(SelectUsbPort event, Emitter<DeviceState> emit) {
+    emit(state.copyWith(selectedPort: event.port));
   }
 
   Future<void> _onStartProcess(StartProcess event, Emitter<DeviceState> emit) async {
+    // Check if we have all the necessary information
+    if (state.serialNumber == null || state.serialNumber!.isEmpty) {
+      emit(state.copyWith(
+        status: DeviceStatus.error,
+        error: 'Please enter a device serial number',
+      ));
+      return;
+    }
+
+    if (state.selectedTemplate == null || state.selectedTemplate!.isEmpty) {
+      emit(state.copyWith(
+        status: DeviceStatus.error,
+        error: 'Please select a template file',
+      ));
+      return;
+    }
+
+    if (state.selectedPort == null || state.selectedPort!.isEmpty) {
+      emit(state.copyWith(
+        status: DeviceStatus.error,
+        error: 'No USB port selected or available',
+      ));
+      return;
+    }
+
     emit(state.copyWith(status: DeviceStatus.compiling));
     try {
-      await socketRepository.startProcess(state.selectedTemplate);
+      // Now include the serial number and port information when starting the process
+      await socketRepository.startProcess(
+        state.selectedTemplate,
+        serialNumber: state.serialNumber,
+        port: state.selectedPort,
+      );
     } catch (e) {
       emit(state.copyWith(
         status: DeviceStatus.error,
@@ -167,6 +303,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     _devicesSubscription?.cancel();
     _statusSubscription?.cancel();
     _deviceLogsSubscription?.cancel();
+    _usbScanTimer?.cancel();
     socketRepository.disconnect();
     return super.close();
   }
