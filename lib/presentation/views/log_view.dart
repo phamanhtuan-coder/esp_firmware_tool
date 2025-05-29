@@ -15,10 +15,11 @@ class LogView extends StatefulWidget {
   State<LogView> createState() => _LogViewState();
 }
 
-class _LogViewState extends State<LogView> {
+class _LogViewState extends State<LogView> with SingleTickerProviderStateMixin {
   final TextEditingController _serialController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  late TabController _tabController;
   String? _selectedBatch;
   String? _selectedDevice;
   String? _selectedFirmwareVersion;
@@ -31,6 +32,7 @@ class _LogViewState extends State<LogView> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     context.read<LogBloc>().add(LoadInitialDataEvent());
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 50) {
@@ -44,6 +46,7 @@ class _LogViewState extends State<LogView> {
     _serialController.dispose();
     _searchController.dispose();
     _scrollController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -319,6 +322,7 @@ class _LogViewState extends State<LogView> {
                 Container(
                   color: _isDarkTheme ? Colors.grey[700] : Colors.grey[200],
                   child: TabBar(
+                    controller: _tabController,
                     tabs: const [
                       Tab(text: 'Console Log'),
                       Tab(text: 'Serial Monitor'),
@@ -330,6 +334,7 @@ class _LogViewState extends State<LogView> {
                 ),
                 Expanded(
                   child: TabBarView(
+                    controller: _tabController,
                     children: [
                       _buildConsoleLog(state),
                       const Center(child: Text('No serial data to display', style: TextStyle(color: Colors.grey))),
