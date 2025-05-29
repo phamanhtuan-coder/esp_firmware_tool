@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
+import 'package:esp_firmware_tool/utils/app_colors.dart';
 
 class FirmwareControlPanel extends StatelessWidget {
   final bool isDarkTheme;
@@ -49,7 +50,7 @@ class FirmwareControlPanel extends StatelessWidget {
                       decoration: InputDecoration(
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        fillColor: isDarkTheme ? Colors.grey[700] : Colors.white,
+                        fillColor: isDarkTheme ? AppColors.idle : AppColors.cardBackground,
                         filled: true,
                       ),
                       items: const [
@@ -68,7 +69,7 @@ class FirmwareControlPanel extends StatelessWidget {
                 icon: const Icon(Icons.search, size: 16),
                 label: const Text('Find in file'),
                 style: TextButton.styleFrom(
-                  backgroundColor: isDarkTheme ? Colors.grey[700] : Colors.grey[200],
+                  backgroundColor: isDarkTheme ? AppColors.idle : AppColors.dividerColor,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 onPressed: onLocalFileSearch,
@@ -86,7 +87,7 @@ class FirmwareControlPanel extends StatelessWidget {
                     hintText: 'Nhập hoặc quét mã serial',
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    fillColor: isDarkTheme ? Colors.grey[700] : Colors.white,
+                    fillColor: isDarkTheme ? AppColors.idle : AppColors.cardBackground,
                     filled: true,
                   ),
                   onSubmitted: onSerialSubmitted,
@@ -97,7 +98,7 @@ class FirmwareControlPanel extends StatelessWidget {
                 icon: const Icon(Icons.qr_code, size: 16),
                 label: const Text('Quét QR'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue[600],
+                  backgroundColor: AppColors.connected,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
@@ -119,7 +120,7 @@ class FirmwareControlPanel extends StatelessWidget {
                       decoration: InputDecoration(
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        fillColor: isDarkTheme ? Colors.grey[700] : Colors.white,
+                        fillColor: isDarkTheme ? AppColors.idle : AppColors.cardBackground,
                         filled: true,
                       ),
                       items: availablePorts.map((port) => DropdownMenuItem(
@@ -137,7 +138,7 @@ class FirmwareControlPanel extends StatelessWidget {
                 icon: const Icon(Icons.refresh, size: 16),
                 label: const Text(''),
                 style: TextButton.styleFrom(
-                  backgroundColor: isDarkTheme ? Colors.grey[700] : Colors.grey[200],
+                  backgroundColor: isDarkTheme ? AppColors.idle : AppColors.dividerColor,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 onPressed: onUsbPortRefresh,

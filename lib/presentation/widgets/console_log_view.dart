@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:esp_firmware_tool/data/models/log_entry.dart';
+import 'package:esp_firmware_tool/utils/app_colors.dart';
 
 class ConsoleLogView extends StatelessWidget {
   final List<LogEntry> logs;
@@ -24,7 +25,7 @@ class ConsoleLogView extends StatelessWidget {
                 final log = logs[index];
                 return Text(
                   '[${log.timestamp.toIso8601String()}] ${log.message}',
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 14),
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 14, color: AppColors.text),
                 );
               },
             ),

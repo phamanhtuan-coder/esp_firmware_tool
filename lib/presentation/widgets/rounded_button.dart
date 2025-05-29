@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:esp_firmware_tool/utils/app_colors.dart';
 
 class RoundedButton extends StatelessWidget {
   final String label;
@@ -30,11 +31,11 @@ class RoundedButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
       ),
       child: isLoading
-        ? const SizedBox(
+        ? SizedBox(
             width: 20,
             height: 20,
             child: CircularProgressIndicator(
-              color: Colors.white,
+              color: AppColors.background,
               strokeWidth: 2,
             ),
           )
@@ -42,10 +43,10 @@ class RoundedButton extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (icon != null) ...[
-                Icon(icon, color: Colors.white),
+                Icon(icon, color: AppColors.background, size: 20),
                 const SizedBox(width: 8),
               ],
-              Text(label, style: const TextStyle(fontSize: 16, color: Colors.white)),
+              Text(label, style: const TextStyle(fontSize: 16, color: AppColors.background, fontWeight: FontWeight.bold)),
             ],
           ),
     );

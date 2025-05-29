@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:esp_firmware_tool/utils/app_colors.dart';
 
 class WarningDialog extends StatelessWidget {
   final bool isDarkTheme;
@@ -40,7 +41,7 @@ class WarningDialog extends StatelessWidget {
                 Text(
                   title,
                   style: TextStyle(
-                    color: isDarkTheme ? Colors.yellow[500] : Colors.yellow[600],
+                    color: isDarkTheme ? AppColors.warning : AppColors.warning,
                     fontSize: 18,
                     fontWeight: FontWeight.w500,
                   ),
@@ -58,7 +59,7 @@ class WarningDialog extends StatelessWidget {
                     ElevatedButton(
                       onPressed: onContinue,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.yellow[600],
+                        backgroundColor: AppColors.warning,
                         foregroundColor: Colors.white,
                       ),
                       child: const Text('Tiếp tục'),

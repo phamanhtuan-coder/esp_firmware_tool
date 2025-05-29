@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
+import 'package:esp_firmware_tool/utils/app_colors.dart';
 
 class SearchBar extends StatelessWidget {
   final TextEditingController controller;
@@ -18,7 +19,7 @@ class SearchBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(8),
-      color: isDarkTheme ? Colors.grey[850] : Colors.white,
+      color: isDarkTheme ? AppColors.idle : Colors.white,
       child: Row(
         children: [
           Expanded(
@@ -28,7 +29,7 @@ class SearchBar extends StatelessWidget {
                 hintText: 'Find in logs...',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                fillColor: isDarkTheme ? Colors.grey[700] : Colors.grey[100],
+                fillColor: isDarkTheme ? AppColors.idle : AppColors.dividerColor,
                 filled: true,
               ),
               onChanged: (value) => context.read<LogBloc>().add(FilterLogEvent()),

@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
 import 'package:esp_firmware_tool/data/models/device.dart';
 import 'package:esp_firmware_tool/data/models/batch.dart';
+import 'package:esp_firmware_tool/utils/app_colors.dart';
 
 class BatchSelectionPanel extends StatelessWidget {
   final List<Batch> batches;
@@ -31,9 +32,9 @@ class BatchSelectionPanel extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: isDarkTheme ? Colors.grey[800] : Colors.white,
+        color: isDarkTheme ? AppColors.idle : AppColors.cardBackground,
         borderRadius: BorderRadius.circular(8),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8)],
+        boxShadow: [BoxShadow(color: AppColors.shadowColor, blurRadius: 8)],
       ),
       child: Column(
         children: [
@@ -82,9 +83,9 @@ class BatchSelectionPanel extends StatelessWidget {
                           subtitle: Text(
                             device.status == 'defective' ? 'Hư hỏng' : device.status == 'processing' ? 'Đang xử lý' : 'Chờ xử lý',
                             style: TextStyle(
-                              color: device.status == 'defective' ? Colors.red
-                                  : device.status == 'processing' ? Colors.blue
-                                  : Colors.yellow,
+                              color: device.status == 'defective' ? AppColors.error
+                                  : device.status == 'processing' ? AppColors.connected
+                                  : AppColors.warning,
                             ),
                           ),
                           trailing: IconButton(
@@ -120,7 +121,7 @@ class BatchSelectionPanel extends StatelessWidget {
           children: [
             const Text('Serial Number'),
             const SizedBox(height: 4),
-            Container(padding: const EdgeInsets.all(8), color: isDarkTheme ? Colors.grey[700] : Colors.grey[100], child: Text(device.serial)),
+            Container(padding: const EdgeInsets.all(8), color: isDarkTheme ? AppColors.idle : AppColors.dividerColor, child: Text(device.serial)),
             const SizedBox(height: 8),
             const Text('Lý do lỗi *'),
             const SizedBox(height: 4),

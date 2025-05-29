@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
+import 'package:esp_firmware_tool/utils/app_colors.dart';
+import 'package:esp_firmware_tool/utils/app_theme.dart';
 
 class ActionButtons extends StatelessWidget {
   final bool isDarkTheme;
@@ -35,7 +37,7 @@ class ActionButtons extends StatelessWidget {
             icon: const Icon(Icons.clear),
             label: const Text('Clear Log'),
             style: TextButton.styleFrom(
-              backgroundColor: isDarkTheme ? Colors.grey[700] : Colors.grey[200],
+              backgroundColor: isDarkTheme ? AppColors.idle : AppColors.dividerColor,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: onClearLogs,
@@ -54,8 +56,8 @@ class ActionButtons extends StatelessWidget {
             label: Text(isFlashing ? 'Flashing...' : 'Flash Firmware'),
             style: ElevatedButton.styleFrom(
               backgroundColor: isFlashing || selectedPort == null || selectedFirmwareVersion == null
-                  ? Colors.grey
-                  : Colors.green[600],
+                  ? AppColors.idle
+                  : AppColors.done,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
