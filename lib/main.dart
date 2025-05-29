@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:esp_firmware_tool/di/service_locator.dart';
 import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
-import 'package:esp_firmware_tool/presentation/views/log_view.dart';
+import 'package:esp_firmware_tool/presentation/views/home_view.dart';
 import 'package:esp_firmware_tool/utils/app_routes.dart';
 import 'package:esp_firmware_tool/utils/app_theme.dart';
 import 'presentation/views/login_view.dart';
@@ -42,7 +42,7 @@ class MyApp extends StatelessWidget {
         theme: AppTheme.lightTheme,
         home: const LoginView(),
         routes: {
-          AppRoutes.logs: (context) => const LogView(),
+          AppRoutes.home: (context) => const HomeView(),
         },
         debugShowCheckedModeBanner: false,
       ),
