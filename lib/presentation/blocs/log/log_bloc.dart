@@ -76,6 +76,12 @@ class AddLogEvent extends LogEvent {
   @override
   List<Object?> get props => [log];
 }
+class SelectLocalFileEvent extends LogEvent {
+  final String filePath;
+  const SelectLocalFileEvent(this.filePath);
+  @override
+  List<Object?> get props => [filePath];
+}
 
 class LogState extends Equatable {
   final List<Batch> batches;
@@ -88,6 +94,7 @@ class LogState extends Equatable {
   final bool isFlashing;
   final String? status;
   final String? error;
+  final String? localFilePath; // Thêm tham số mới
 
   const LogState({
     this.batches = const [],
@@ -100,6 +107,7 @@ class LogState extends Equatable {
     this.isFlashing = false,
     this.status,
     this.error,
+    this.localFilePath,
   });
 
   LogState copyWith({
@@ -113,6 +121,7 @@ class LogState extends Equatable {
     bool? isFlashing,
     String? status,
     String? error,
+    String? localFilePath,
   }) {
     return LogState(
       batches: batches ?? this.batches,
@@ -125,6 +134,7 @@ class LogState extends Equatable {
       isFlashing: isFlashing ?? this.isFlashing,
       status: status ?? this.status,
       error: error ?? this.error,
+      localFilePath: localFilePath ?? this.localFilePath,
     );
   }
 
@@ -140,6 +150,7 @@ class LogState extends Equatable {
     isFlashing,
     status,
     error,
+    localFilePath,
   ];
 }
 
@@ -162,6 +173,7 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     on<SelectSerialEvent>(_onSelectSerial);
     on<AutoScrollEvent>(_onAutoScroll);
     on<AddLogEvent>(_onAddLog);
+    on<SelectLocalFileEvent>(_onSelectLocalFile); // Thêm handler mới
   }
 
   Future<void> _onLoadInitialData(LoadInitialDataEvent event, Emitter<LogState> emit) async {
@@ -173,7 +185,7 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     ));
   }
 
-  void _onSelectBatch(SelectBatchEvent event, Emitter<LogState> emit) async {
+  Future<void> _onSelectBatch(SelectBatchEvent event, Emitter<LogState> emit) async {
     final serials = await _batchService.fetchSerialsForBatch(event.batchId);
     final devices = serials.map((serial) => Device(id: serial.hashCode, batchId: int.parse(event.batchId), serial: serial)).toList();
     emit(state.copyWith(selectedBatchId: event.batchId, devices: devices));
@@ -236,4 +248,18 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     final updatedLogs = List<LogEntry>.from(state.filteredLogs)..add(event.log);
     emit(state.copyWith(filteredLogs: updatedLogs));
   }
-}
+
+  void _onSelectLocalFile(SelectLocalFileEvent event, Emitter<LogState> emit) {
+    emit(state.copyWith(
+      localFilePath: event.filePath,
+      status: 'Selected local file: ${event.filePath}',
+    ));
+    final logEntry = LogEntry(
+      message: 'Selected local file: ${event.filePath}',
+      timestamp: DateTime.now(),
+      level: LogLevel.info,
+      step: ProcessStep.firmwareDownload,
+      origin: 'system',
+    );
+    add(AddLogEvent(logEntry)); // Gọi AddLogEvent với LogEntry
+  }}
