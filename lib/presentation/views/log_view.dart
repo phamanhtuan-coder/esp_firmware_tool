@@ -1,12 +1,12 @@
+import 'package:esp_firmware_tool/data/models/device.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:esp_firmware_tool/data/models/log_entry.dart';
 import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
 import 'package:esp_firmware_tool/utils/app_colors.dart';
 import 'package:esp_firmware_tool/utils/app_config.dart';
-import 'package:esp_firmware_tool/presentation/widgets/rounded_button.dart';
-import 'package:esp_firmware_tool/presentation/widgets/status_text.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:esp_firmware_tool/data/models/batch.dart'; // Thêm model Batch
 
 class LogView extends StatefulWidget {
   const LogView({super.key});
@@ -17,432 +17,506 @@ class LogView extends StatefulWidget {
 
 class _LogViewState extends State<LogView> {
   final TextEditingController _serialController = TextEditingController();
-  final FocusNode _inputFocusNode = FocusNode();
+  final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  bool _autoScroll = true;
-  bool _isDarkTheme = false;
-  String? _selectedFirmwareVersion;
-  String? _selectedDeviceType = 'esp32';
-  String? _selectedPort;
   String? _selectedBatch;
-  List<Map<String, dynamic>> _batches = [];
+  String? _selectedDevice;
+  String? _selectedFirmwareVersion;
+  String? _selectedPort;
+  bool _isDarkTheme = false;
+  bool _isSearching = false;
+  bool _localFileWarning = false;
+  double _zoomLevel = 1.0;
 
   @override
   void initState() {
     super.initState();
-    _loadBatches();
-    context.read<LogBloc>().add(FilterLogEvent(deviceFilter: ''));
+    context.read<LogBloc>().add(LoadInitialDataEvent());
     _scrollController.addListener(() {
-      if (_scrollController.position.pixels < _scrollController.position.maxScrollExtent) {
-        setState(() => _autoScroll = false);
-      } else {
-        setState(() => _autoScroll = true);
+      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 50) {
+        context.read<LogBloc>().add(AutoScrollEvent());
       }
     });
-  }
-
-  void _loadBatches() async {
-    final batches = await context.read<LogBloc>().logService.fetchBatches();
-    setState(() => _batches = batches);
   }
 
   @override
   void dispose() {
     _serialController.dispose();
-    _inputFocusNode.dispose();
+    _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _isDarkTheme ? Colors.grey[900] : AppColors.background,
-      appBar: AppBar(
-        backgroundColor: _isDarkTheme ? Colors.grey[850] : AppColors.primary,
+    return BlocProvider(
+      create: (context) => LogBloc()..add(LoadInitialDataEvent()),
+      child: BlocBuilder<LogBloc, LogState>(
+        builder: (context, state) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: _isDarkTheme ? ThemeData.dark() : ThemeData.light(),
+            home: Scaffold(
+              backgroundColor: _isDarkTheme ? Colors.grey[900] : Colors.grey[50],
+              appBar: _buildHeader(),
+              body: Row(
+                children: [
+                  Expanded(child: _buildBatchPanel(state)),
+                  Expanded(child: _buildFirmwarePanel(state)),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildHeader() {
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(60),
+      child: AppBar(
+        backgroundColor: _isDarkTheme ? Colors.blue[800] : Colors.blue[600],
         title: const Text('Firmware Deployment Tool', style: TextStyle(color: Colors.white)),
         actions: [
-          IconButton(
-            icon: Icon(_isDarkTheme ? Icons.light_mode : Icons.dark_mode, color: Colors.white),
-            onPressed: () => setState(() => _isDarkTheme = !_isDarkTheme),
-            tooltip: 'Toggle Theme',
-          ),
-          IconButton(
-            icon: const Icon(Icons.clear_all, color: Colors.white),
-            onPressed: () => context.read<LogBloc>().add(ClearLogsEvent()),
-            tooltip: 'Clear Logs',
-          ),
-          IconButton(
-            icon: const Icon(Icons.fullscreen, color: Colors.white),
-            onPressed: () async {
-              final isFullScreen = await windowManager.isFullScreen();
-              await windowManager.setFullScreen(!isFullScreen);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Full screen mode ${isFullScreen ? 'disabled' : 'enabled'}'),
-                  duration: const Duration(seconds: 1),
+          Text('${(_zoomLevel * 100).toInt()}%', style: const TextStyle(color: Colors.white)),
+          IconButton(icon: const Icon(Icons.zoom_out), onPressed: () => setState(() => _zoomLevel = (_zoomLevel - 0.1).clamp(0.7, 1.5))),
+          IconButton(icon: const Icon(Icons.zoom_in), onPressed: () => setState(() => _zoomLevel = (_zoomLevel + 0.1).clamp(0.7, 1.5))),
+          IconButton(icon: const Icon(Icons.fullscreen), onPressed: () async {
+            final isFullScreen = await windowManager.isFullScreen();
+            await windowManager.setFullScreen(!isFullScreen);
+          }),
+          IconButton(icon: Icon(_isDarkTheme ? Icons.wb_sunny : Icons.nights_stay), onPressed: () => setState(() => _isDarkTheme = !_isDarkTheme)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBatchPanel(LogState state) {
+    return Container(
+      margin: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: _isDarkTheme ? Colors.grey[800] : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8)],
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Chọn lô (Batch)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 4),
+                DropdownButtonFormField<String>(
+                  value: _selectedBatch,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    fillColor: _isDarkTheme ? Colors.grey[700] : Colors.white,
+                    filled: true,
+                  ),
+                  items: state.batches.map((batch) => DropdownMenuItem(
+                    value: batch.id.toString(),
+                    child: Text(batch.name),
+                  )).toList(),
+                  onChanged: (value) {
+                    setState(() => _selectedBatch = value);
+                    context.read<LogBloc>().add(SelectBatchEvent(value!));
+                  },
+                  hint: const Text('-- Chọn lô --'),
                 ),
-              );
-            },
-            tooltip: 'Toggle Full Screen',
+              ],
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Danh sách thiết bị trong lô', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: _selectedBatch != null && state.devices.isNotEmpty
+                        ? ListView.builder(
+                      itemCount: state.devices.length,
+                      itemBuilder: (context, index) {
+                        final device = state.devices[index];
+                        return ListTile(
+                          leading: Text('${index + 1}'),
+                          title: Text(device.serial),
+                          subtitle: Text(
+                            device.status == 'defective' ? 'Hư hỏng' : device.status == 'processing' ? 'Đang xử lý' : 'Chờ xử lý',
+                            style: TextStyle(
+                              color: device.status == 'defective' ? Colors.red
+                                  : device.status == 'processing' ? Colors.blue
+                                  : Colors.yellow,
+                            ),
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.error, color: Colors.red),
+                            onPressed: device.status == 'defective' ? null : () => _showErrorDialog(device),
+                          ),
+                          selected: _selectedDevice == device.id.toString(),
+                          selectedTileColor: _isDarkTheme ? Colors.blue[900]!.withOpacity(0.2) : Colors.blue[50],
+                          onTap: () {
+                            setState(() => _selectedDevice = device.id.toString());
+                            context.read<LogBloc>().add(SelectDeviceEvent(device.id.toString()));
+                          },
+                        );
+                      },
+                    )
+                        : const Center(child: Text('Vui lòng chọn lô để xem danh sách thiết bị', style: TextStyle(color: Colors.grey))),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildControlPanel(),
-            SizedBox(
-              height: MediaQuery.of(context).size.height * 0.6,
-              child: _buildLogPanel(),
-            ),
-            _buildSerialInput(),
-          ],
-        ),
-      ),
     );
   }
 
-  Widget _buildControlPanel() {
+  Widget _buildFirmwarePanel(LogState state) {
     return Container(
-      padding: const EdgeInsets.all(AppConfig.defaultPadding),
+      margin: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: _isDarkTheme ? Colors.grey[850] : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: AppColors.shadowColor, blurRadius: 8)],
+        color: _isDarkTheme ? Colors.grey[800] : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8)],
       ),
-      margin: const EdgeInsets.all(AppConfig.defaultPadding),
-      child: BlocBuilder<LogBloc, LogState>(
-        builder: (context, state) {
-          final statusColor = state.isFlashing
-              ? AppColors.flashing
-              : state.error != null
-              ? AppColors.error
-              : AppColors.done;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildDropdown(
-                label: 'Batch',
-                value: _selectedBatch,
-                items: _batches.map((batch) => batch['id'].toString()).toList(),
-                onChanged: (value) {
-                  setState(() => _selectedBatch = value);
-                  context.read<LogBloc>().add(SelectBatchEvent(value!));
-                },
-              ),
-              const SizedBox(height: AppConfig.defaultPadding),
-              if (state.batchSerials.isNotEmpty) _buildSerialList(state.batchSerials, state.serialNumber),
-              const SizedBox(height: AppConfig.defaultPadding),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildDropdown(
-                      label: 'Firmware Version',
-                      value: _selectedFirmwareVersion,
-                      items: const ['v1.0.0', 'v1.1.0', 'v2.0.0'],
-                      onChanged: (value) => setState(() => _selectedFirmwareVersion = value),
-                    ),
-                  ),
-                  const SizedBox(width: AppConfig.defaultPadding),
-                  Expanded(
-                    child: _buildDropdown(
-                      label: 'USB Port',
-                      value: _selectedPort,
-                      items: state.availablePorts,
-                      onChanged: (value) {
-                        setState(() => _selectedPort = value);
-                        context.read<LogBloc>().add(SelectUsbPortEvent(value!));
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton.icon(
-                    icon: Icon(Icons.refresh, size: 16, color: Colors.white),
-                    label: state.isScanning
-                        ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation(Colors.white),
-                      ),
-                    )
-                        : const Text('Refresh', style: TextStyle(color: Colors.white)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                    onPressed: state.isScanning ? null : () => context.read<LogBloc>().add(ScanUsbPortsEvent()),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppConfig.defaultPadding),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  StatusText(status: state.status ?? 'Ready', color: statusColor),
-                  const SizedBox(width: AppConfig.defaultPadding),
-                  RoundedButton(
-                    label: state.isFlashing ? 'Stop' : 'Flash Firmware',
-                    icon: state.isFlashing ? Icons.stop : Icons.flash_on,
-                    isLoading: state.isFlashing,
-                    color: state.isFlashing ? Colors.red : AppColors.success,
-                    onPressed: () {
-                      if (state.isFlashing) {
-                        context.read<LogBloc>().add(StopProcessEvent());
-                      } else if (state.serialNumber != null &&
-                          _selectedFirmwareVersion != null &&
-                          _selectedDeviceType != null &&
-                          _selectedPort != null) {
-                        context.read<LogBloc>().add(InitiateFlashEvent(
-                          deviceId: state.serialNumber!,
-                          firmwareVersion: _selectedFirmwareVersion!,
-                          deviceSerial: state.serialNumber!,
-                          deviceType: _selectedDeviceType!,
-                        ));
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please select batch, serial, device type, firmware version, and port')),
-                        );
-                      }
-                    },
-                  ),
-                  if (state.error != null)
-                    RoundedButton(
-                      label: 'Retry',
-                      icon: Icons.refresh,
-                      color: AppColors.primary,
-                      onPressed: () {
-                        if (state.serialNumber != null &&
-                            _selectedFirmwareVersion != null &&
-                            _selectedDeviceType != null &&
-                            _selectedPort != null) {
-                          context.read<LogBloc>().add(InitiateFlashEvent(
-                            deviceId: state.serialNumber!,
-                            firmwareVersion: _selectedFirmwareVersion!,
-                            deviceSerial: state.serialNumber!,
-                            deviceType: _selectedDeviceType!,
-                          ));
-                        }
-                      },
-                    ),
-                  RoundedButton(
-                    label: 'Mark Defective',
-                    icon: Icons.error,
-                    color: AppColors.error,
-                    onPressed: () {
-                      if (state.serialNumber != null) {
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Confirm Mark Defective'),
-                            content: Text('Mark device ${state.serialNumber} as defective?'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('Cancel'),
-                              ),
-                              TextButton(
-                                onPressed: () {
-                                  context.read<LogBloc>().add(MarkDeviceDefectiveEvent(state.serialNumber!));
-                                  Navigator.pop(context);
-                                },
-                                child: const Text('Confirm', style: TextStyle(color: AppColors.error)),
-                              ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Phiên bản Firmware', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                          const SizedBox(height: 4),
+                          DropdownButtonFormField<String>(
+                            value: _selectedFirmwareVersion,
+                            decoration: InputDecoration(
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              fillColor: _isDarkTheme ? Colors.grey[700] : Colors.white,
+                              filled: true,
+                            ),
+                            items: const [
+                              DropdownMenuItem(value: 'v1.0.0', child: Text('v1.0.0')),
+                              DropdownMenuItem(value: 'v1.1.0', child: Text('v1.1.0')),
+                              DropdownMenuItem(value: 'v2.0.0-beta', child: Text('v2.0.0-beta')),
                             ],
+                            onChanged: (value) => setState(() => _selectedFirmwareVersion = value),
+                            hint: const Text('-- Chọn phiên bản --'),
                           ),
-                        );
-                      }
-                    },
-                  ),
-                ],
-              ),
-              if (state.error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    state.error!,
-                    style: TextStyle(color: AppColors.error, fontSize: 14),
-                    textAlign: TextAlign.center,
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      icon: const Icon(Icons.search, size: 16),
+                      label: const Text('Find in file'),
+                      style: TextButton.styleFrom(
+                        backgroundColor: _isDarkTheme ? Colors.grey[700] : Colors.grey[200],
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () => setState(() => _localFileWarning = true),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _serialController,
+                        decoration: InputDecoration(
+                          labelText: 'Serial Number',
+                          hintText: 'Nhập hoặc quét mã serial',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          fillColor: _isDarkTheme ? Colors.grey[700] : Colors.white,
+                          filled: true,
+                        ),
+                        onSubmitted: (value) {
+                          if (value.isNotEmpty) context.read<LogBloc>().add(SelectSerialEvent(value));
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.qr_code, size: 16),
+                      label: const Text('Quét QR'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue[600],
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () {
+                        final scannedSerial = 'SN-${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}';
+                        _serialController.text = scannedSerial;
+                        context.read<LogBloc>().add(SelectSerialEvent(scannedSerial));
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Cổng COM (USB)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                          const SizedBox(height: 4),
+                          DropdownButtonFormField<String>(
+                            value: _selectedPort,
+                            decoration: InputDecoration(
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              fillColor: _isDarkTheme ? Colors.grey[700] : Colors.white,
+                              filled: true,
+                            ),
+                            items: state.availablePorts.map((port) => DropdownMenuItem(
+                              value: port,
+                              child: Text(port),
+                            )).toList(),
+                            onChanged: (value) {
+                              setState(() => _selectedPort = value);
+                              context.read<LogBloc>().add(SelectUsbPortEvent(value!));
+                            },
+                            hint: const Text('-- Chọn cổng COM --'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text(''),
+                      style: TextButton.styleFrom(
+                        backgroundColor: _isDarkTheme ? Colors.grey[700] : Colors.grey[200],
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () => context.read<LogBloc>().add(ScanUsbPortsEvent()),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Column(
+              children: [
+                Container(
+                  color: _isDarkTheme ? Colors.grey[700] : Colors.grey[200],
+                  child: TabBar(
+                    tabs: const [
+                      Tab(text: 'Console Log'),
+                      Tab(text: 'Serial Monitor'),
+                    ],
+                    labelColor: Colors.blue,
+                    unselectedLabelColor: Colors.grey,
+                    indicatorColor: Colors.blue,
                   ),
                 ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildSerialList(List<String> serials, String? selectedSerial) {
-    return Container(
-      height: 150,
-      decoration: BoxDecoration(
-        border: Border.all(color: _isDarkTheme ? Colors.grey[700]! : Colors.grey[300]!),
-        borderRadius: BorderRadius.circular(12),
-        color: _isDarkTheme ? Colors.grey[800] : Colors.grey[100],
-      ),
-      child: ListView.builder(
-        itemCount: serials.length,
-        itemBuilder: (context, index) {
-          final serial = serials[index];
-          return ListTile(
-            title: Text(serial, style: TextStyle(color: _isDarkTheme ? Colors.white : Colors.black)),
-            selected: serial == selectedSerial,
-            selectedTileColor: AppColors.primary.withOpacity(0.2),
-            onTap: () => context.read<LogBloc>().add(SelectSerialEvent(serial)),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildSerialInput() {
-    return BlocBuilder<LogBloc, LogState>(
-      buildWhen: (previous, current) =>
-      current.activeInputRequest != previous.activeInputRequest || current.serialNumber != previous.serialNumber,
-      builder: (context, state) {
-        return Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: _isDarkTheme ? Colors.grey[850] : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-            boxShadow: [BoxShadow(color: AppColors.shadowColor, blurRadius: 8, offset: const Offset(0, -2))],
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _serialController,
-                  focusNode: _inputFocusNode,
-                  style: TextStyle(color: _isDarkTheme ? Colors.white : Colors.black),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    fillColor: _isDarkTheme ? Colors.grey[900] : Colors.grey[100],
-                    filled: true,
-                    hintText: 'Enter or scan serial number',
-                    hintStyle: TextStyle(color: _isDarkTheme ? Colors.grey[400] : Colors.grey[600]),
-                    prefixIcon: Icon(Icons.qr_code, color: _isDarkTheme ? Colors.grey[400] : Colors.grey[600]),
+                Expanded(
+                  child: TabBarView(
+                    children: [
+                      _buildConsoleLog(state),
+                      const Center(child: Text('No serial data to display', style: TextStyle(color: Colors.grey))),
+                    ],
                   ),
-                  onChanged: (value) => context.read<LogBloc>().add(UpdateSerialNumberEvent(value)),
-                  onSubmitted: (value) {
-                    if (value.isNotEmpty) {
-                      context.read<LogBloc>().add(SelectSerialEvent(value));
-                    }
+                ),
+                if (_isSearching) _buildSearchBar(),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                TextButton.icon(
+                  icon: const Icon(Icons.clear),
+                  label: const Text('Clear Log'),
+                  style: TextButton.styleFrom(
+                    backgroundColor: _isDarkTheme ? Colors.grey[700] : Colors.grey[200],
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => context.read<LogBloc>().add(ClearLogsEvent()),
+                ),
+                ElevatedButton.icon(
+                  icon: state.isFlashing
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)))
+                      : const Icon(Icons.flash_on, size: 16),
+                  label: Text(state.isFlashing ? 'Flashing...' : 'Flash Firmware'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: state.isFlashing || _selectedPort == null || _selectedFirmwareVersion == null
+                        ? Colors.grey
+                        : Colors.green[600],
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: state.isFlashing || _selectedPort == null || _selectedFirmwareVersion == null || _selectedDevice == null
+                      ? null
+                      : () {
+                    context.read<LogBloc>().add(InitiateFlashEvent(
+                      deviceId: _selectedDevice!,
+                      firmwareVersion: _selectedFirmwareVersion!,
+                      deviceSerial: _serialController.text,
+                      deviceType: 'esp32',
+                    ));
                   },
                 ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: () async {
-                  // Simulate QR code scanning (replace with actual QR scan integration)
-                  final scannedSerial = 'SN-${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}';
-                  _serialController.text = scannedSerial;
-                  context.read<LogBloc>().add(SelectSerialEvent(scannedSerial));
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-                child: const Text('Scan QR', style: TextStyle(color: Colors.white)),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildLogPanel() {
-    return Container(
-      margin: const EdgeInsets.all(AppConfig.defaultPadding),
-      decoration: BoxDecoration(
-        color: _isDarkTheme ? Colors.grey[850] : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: AppColors.shadowColor, blurRadius: 8)],
-      ),
-      child: _buildLogList(),
-    );
-  }
-
-  Widget _buildLogList() {
-    return BlocConsumer<LogBloc, LogState>(
-      listener: (context, state) {
-        if (_autoScroll && state.filteredLogs.isNotEmpty) {
-          Future.delayed(const Duration(milliseconds: 50), () {
-            if (_scrollController.hasClients) {
-              _scrollController.animateTo(
-                _scrollController.position.maxScrollExtent,
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOut,
-              );
-            }
-          });
-        }
-      },
-      builder: (context, state) {
-        final filteredLogs =
-        state.filteredLogs.where((log) => log.deviceId == state.serialNumber || log.deviceId.isEmpty).toList();
-        if (filteredLogs.isEmpty) {
-          return Center(
-            child: Text(
-              'No logs to display',
-              style: TextStyle(color: _isDarkTheme ? Colors.grey[400] : Colors.grey[600]),
+              ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConsoleLog(LogState state) {
+    final filteredLogs = state.filteredLogs.where((log) => log.deviceId == state.serialNumber || log.deviceId.isEmpty).toList();
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: filteredLogs.isEmpty
+          ? const Center(child: Text('No logs to display', style: TextStyle(color: Colors.grey)))
+          : ListView.builder(
+        controller: _scrollController,
+        itemCount: filteredLogs.length,
+        itemBuilder: (context, index) {
+          final log = filteredLogs[index];
+          return Text(
+            '[${log.timestamp.toIso8601String()}] ${log.message}',
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 14),
           );
-        }
-        return ListView.builder(
-          controller: _scrollController,
-          itemCount: filteredLogs.length,
-          itemBuilder: (context, index) {
-            final log = filteredLogs[index];
-            return _buildLogItem(log);
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildLogItem(LogEntry log) {
-    final color = log.level == LogLevel.error
-        ? AppColors.error
-        : log.level == LogLevel.warning
-        ? AppColors.warning
-        : AppColors.text;
-    return ListTile(
-      title: Text(
-        '[${log.timestamp.toIso8601String()}] ${log.message}',
-        style: TextStyle(color: color, fontSize: 14),
-      ),
-      subtitle: Text(
-        'Device: ${log.deviceId.isEmpty ? 'N/A' : log.deviceId}, Step: ${log.step}, Origin: ${log.origin}',
-        style: TextStyle(color: _isDarkTheme ? Colors.grey[400] : Colors.grey[600], fontSize: 12),
+        },
       ),
     );
   }
 
-  Widget _buildDropdown({
-    required String label,
-    required String? value,
-    required List<String> items,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return DropdownButtonFormField<String>(
-      value: value,
-      decoration: InputDecoration(
-        labelText: label,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        fillColor: _isDarkTheme ? Colors.grey[900] : Colors.grey[100],
-        filled: true,
+  Widget _buildSearchBar() {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      color: _isDarkTheme ? Colors.grey[850] : Colors.white,
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Find in logs...',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                fillColor: _isDarkTheme ? Colors.grey[700] : Colors.grey[100],
+                filled: true,
+              ),
+              onChanged: (value) => context.read<LogBloc>().add(FilterLogEvent()),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () {
+              setState(() => _isSearching = false);
+              _searchController.clear();
+              context.read<LogBloc>().add(FilterLogEvent());
+            },
+          ),
+        ],
       ),
-      style: TextStyle(color: _isDarkTheme ? Colors.white : Colors.black),
-      dropdownColor: _isDarkTheme ? Colors.grey[800] : Colors.white,
-      items: items.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
-      onChanged: onChanged,
+    );
+  }
+
+  Widget _buildLocalFileWarning() {
+    return Stack(
+      children: [
+        Positioned.fill(child: GestureDetector(onTap: () => setState(() => _localFileWarning = false), child: Container(color: Colors.black.withOpacity(0.5)))),
+        Center(
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _isDarkTheme ? Colors.grey[800] : Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Cảnh báo', style: TextStyle(color: _isDarkTheme ? Colors.yellow[500] : Colors.yellow[600], fontSize: 18, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 8),
+                const Text('Tính năng chọn file local có thể gây ra lỗi không mong muốn. Bạn có chắc chắn muốn tiếp tục?'),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(onPressed: () => setState(() => _localFileWarning = false), child: const Text('Hủy')),
+                    ElevatedButton(
+                      onPressed: () => setState(() => _localFileWarning = false),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.yellow[600], foregroundColor: Colors.white),
+                      child: const Text('Tiếp tục'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showErrorDialog(Device device) {
+    String reason = '';
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Báo cáo lỗi thiết bị'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Serial Number'),
+            const SizedBox(height: 4),
+            Container(padding: const EdgeInsets.all(8), color: _isDarkTheme ? Colors.grey[700] : Colors.grey[100], child: Text(device.serial)),
+            const SizedBox(height: 8),
+            const Text('Lý do lỗi *'),
+            const SizedBox(height: 4),
+            TextField(
+              onChanged: (value) => reason = value,
+              decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'Nhập lý do lỗi'),
+              maxLines: 3,
+            ),
+            const SizedBox(height: 8),
+            const Text('Ảnh minh chứng (tùy chọn)'),
+            const SizedBox(height: 4),
+            TextField(
+              decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'Chọn file ảnh'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy')),
+          TextButton(
+            onPressed: reason.isNotEmpty
+                ? () {
+              context.read<LogBloc>().add(MarkDeviceDefectiveEvent(device.id.toString(), reason: reason));
+              Navigator.pop(context);
+            }
+                : null,
+            child: const Text('Báo lỗi', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
   }
 }

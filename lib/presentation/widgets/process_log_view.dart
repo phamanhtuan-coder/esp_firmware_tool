@@ -26,7 +26,7 @@ class _ProcessLogViewState extends State<ProcessLogView> {
   void initState() {
     super.initState();
     // Set up filtering for logs related to this process
-    context.read<LogBloc>().add(FilterLogEvent(deviceFilter: widget.processId));
+    context.read<LogBloc>().add(FilterLogEvent());
   }
 
   @override

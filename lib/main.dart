@@ -15,6 +15,7 @@ void main() async {
   // Configure window to start maximized with standard controls
   WindowOptions windowOptions = const WindowOptions(
     titleBarStyle: TitleBarStyle.normal, // Preserve standard window controls
+    size: Size(1920, 1080), // Initial size, will be maximized later
   );
   await windowManager.waitUntilReadyToShow(windowOptions, () async {
     await windowManager.maximize(); // Start in maximized mode
