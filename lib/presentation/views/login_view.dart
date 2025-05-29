@@ -33,7 +33,7 @@ class _LoginViewState extends State<LoginView> {
     }
     setState(() => _isLoading = true);
     context.read<LogBloc>().add(LoadInitialDataEvent());
-    Navigator.pushReplacementNamed(context, AppRoutes.logs);
+    Navigator.pushReplacementNamed(context, AppRoutes.home);
     setState(() => _isLoading = false);
   }
 
