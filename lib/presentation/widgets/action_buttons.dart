@@ -27,6 +27,10 @@ class ActionButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final logState = context.watch<LogBloc>().state;
+    final hasLocalFile = logState.localFilePath != null;
+    final isFlashEnabled = selectedPort != null && (hasLocalFile || selectedFirmwareVersion != null);
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(
@@ -57,24 +61,22 @@ class ActionButtons extends StatelessWidget {
                 : const Icon(Icons.flash_on, size: 16),
             label: Text(isFlashing ? 'Flashing...' : 'Flash Firmware'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: isFlashing || selectedPort == null || selectedFirmwareVersion == null
-                  ? AppColors.idle
-                  : AppColors.done,
+              backgroundColor: isFlashEnabled ? AppColors.done : AppColors.idle,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            onPressed: isFlashing || selectedPort == null || selectedFirmwareVersion == null || selectedDevice == null
+            onPressed: isFlashing || !isFlashEnabled || selectedDevice == null
                 ? null
                 : () {
               context.read<LogBloc>().add(InitiateFlashEvent(
                 deviceId: selectedDevice!,
-                firmwareVersion: selectedFirmwareVersion!,
+                firmwareVersion: selectedFirmwareVersion ?? '',
                 deviceSerial: deviceSerial,
                 deviceType: 'esp32',
               ));
               onInitiateFlash(
                 selectedDevice!,
-                selectedFirmwareVersion!,
+                selectedFirmwareVersion ?? '',
                 deviceSerial,
                 'esp32',
               );

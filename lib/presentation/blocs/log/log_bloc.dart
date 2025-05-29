@@ -83,6 +83,9 @@ class SelectLocalFileEvent extends LogEvent {
   List<Object?> get props => [filePath];
 }
 
+class ClearLocalFileEvent extends LogEvent {}
+
+
 class LogState extends Equatable {
   final List<Batch> batches;
   final List<Device> devices;
@@ -173,7 +176,10 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     on<SelectSerialEvent>(_onSelectSerial);
     on<AutoScrollEvent>(_onAutoScroll);
     on<AddLogEvent>(_onAddLog);
-    on<SelectLocalFileEvent>(_onSelectLocalFile); // Thêm handler mới
+    on<SelectLocalFileEvent>(_onSelectLocalFile);
+    on<ClearLocalFileEvent>((event, emit) { // Thêm handler cho ClearLocalFileEvent
+      emit(state.copyWith(localFilePath: null));
+    });
   }
 
   Future<void> _onLoadInitialData(LoadInitialDataEvent event, Emitter<LogState> emit) async {
@@ -261,5 +267,7 @@ class LogBloc extends Bloc<LogEvent, LogState> {
       step: ProcessStep.firmwareDownload,
       origin: 'system',
     );
-    add(AddLogEvent(logEntry)); // Gọi AddLogEvent với LogEntry
-  }}
+    add(AddLogEvent(logEntry));
+  }
+
+}

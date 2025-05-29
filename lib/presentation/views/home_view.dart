@@ -341,8 +341,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   }
 
   // Xử lý flash firmware
-  void _flashFirmware(String deviceId, String firmwareVersion,
-      String serialNumber, String deviceType) async {
+  void _flashFirmware(String deviceId, String firmwareVersion, String serialNumber, String deviceType) async {
     final port = await _arduinoCliService.getPortForDevice(serialNumber);
     if (port == null) {
       _logService.addLog(
@@ -356,11 +355,8 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     }
 
     String? preparedPath;
-    final logState = context
-        .read<LogBloc>()
-        .state;
+    final logState = context.read<LogBloc>().state;
 
-    // Kiểm tra nếu có localFilePath
     if (logState.localFilePath != null) {
       _logService.addLog(
         message: 'Using local firmware file: ${logState.localFilePath}',
@@ -386,22 +382,8 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         );
         return;
       }
-    } else {
-      // Kiểm tra firmwareVersion chỉ khi không có local file
-      if (firmwareVersion.isEmpty) {
-        _logService.addLog(
-          message: 'No firmware version selected',
-          level: LogLevel.error,
-          step: ProcessStep.firmwareDownload,
-          deviceId: serialNumber,
-          origin: 'system',
-        );
-        return;
-      }
-
-      // Lấy firmware template từ batch
-      final firmwareData = await _batchService.fetchBatchFirmware(
-          _selectedBatch ?? '');
+    } else if (firmwareVersion.isNotEmpty) {
+      final firmwareData = await _batchService.fetchBatchFirmware(_selectedBatch ?? '');
       if (firmwareData.isEmpty) {
         _logService.addLog(
           message: 'No firmware data found for batch $_selectedBatch',
@@ -448,12 +430,19 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         );
         return;
       }
+    } else {
+      _logService.addLog(
+        message: 'No firmware version or local file selected',
+        level: LogLevel.error,
+        step: ProcessStep.firmwareDownload,
+        deviceId: serialNumber,
+        origin: 'system',
+      );
+      return;
     }
 
-    // Biên dịch và flash firmware
     final fqbn = _arduinoCliService.getBoardFqbn(deviceType);
-    final success = await _batchService.compileAndFlash(
-        preparedPath, port, fqbn, serialNumber);
+    final success = await _batchService.compileAndFlash(preparedPath, port, fqbn, serialNumber);
 
     if (success) {
       _batchService.markDeviceProcessed(serialNumber, true);

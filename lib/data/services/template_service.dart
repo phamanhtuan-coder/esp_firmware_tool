@@ -150,10 +150,7 @@ class TemplateService {
       final compileFile = File(compilePath);
       await compileFile.writeAsString(templateContent);
       print('Template prepared for device $serialNumber');
-
-      // Xóa file tạm sau khi sử dụng
-      compileFile.delete(); // Thêm để dọn dẹp
-      return compilePath;
+      return compilePath; // Không xóa file tạm
     } catch (e) {
       print('Error preparing template: $e');
       return null;
