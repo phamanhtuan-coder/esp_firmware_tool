@@ -73,31 +73,53 @@ class BatchSelectionPanel extends StatelessWidget {
                   const SizedBox(height: 8),
                   Expanded(
                     child: selectedBatch != null && devices.isNotEmpty
-                        ? ListView.builder(
-                      itemCount: devices.length,
-                      itemBuilder: (context, index) {
-                        final device = devices[index];
-                        return ListTile(
-                          leading: Text('${index + 1}'),
-                          title: Text(device.serial),
-                          subtitle: Text(
-                            device.status == 'defective' ? 'Hư hỏng' : device.status == 'processing' ? 'Đang xử lý' : 'Chờ xử lý',
-                            style: TextStyle(
-                              color: device.status == 'defective' ? AppColors.error
-                                  : device.status == 'processing' ? AppColors.connected
-                                  : AppColors.warning,
+                        ? Container(
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: isDarkTheme ? Colors.grey[700]! : Colors.grey[300]!,
+                                width: 1,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                          ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.error, color: Colors.red),
-                            onPressed: device.status == 'defective' ? null : () => _showErrorDialog(context, device),
-                          ),
-                          selected: selectedDevice == device.id.toString(),
-                          selectedTileColor: isDarkTheme ? Colors.blue[900]!.withOpacity(0.2) : Colors.blue[50],
-                          onTap: () => onDeviceSelected(device.id.toString()),
-                        );
-                      },
-                    )
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: ListView.builder(
+                                itemCount: devices.length,
+                                itemBuilder: (context, index) {
+                                  final device = devices[index];
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        bottom: BorderSide(
+                                          color: isDarkTheme ? Colors.grey[700]! : Colors.grey[300]!,
+                                          width: index != devices.length - 1 ? 1 : 0,
+                                        ),
+                                      ),
+                                    ),
+                                    child: ListTile(
+                                      leading: Text('${index + 1}'),
+                                      title: Text(device.serial),
+                                      subtitle: Text(
+                                        device.status == 'defective' ? 'Hư hỏng' : device.status == 'processing' ? 'Đang xử lý' : 'Chờ xử lý',
+                                        style: TextStyle(
+                                          color: device.status == 'defective' ? AppColors.error
+                                              : device.status == 'processing' ? AppColors.connected
+                                              : AppColors.warning,
+                                        ),
+                                      ),
+                                      trailing: IconButton(
+                                        icon: const Icon(Icons.error, color: Colors.red),
+                                        onPressed: device.status == 'defective' ? null : () => _showErrorDialog(context, device),
+                                      ),
+                                      selected: selectedDevice == device.id.toString(),
+                                      selectedTileColor: isDarkTheme ? Colors.blue[900]!.withOpacity(0.2) : Colors.blue[50],
+                                      onTap: () => onDeviceSelected(device.id.toString()),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          )
                         : const Center(child: Text('Vui lòng chọn lô để xem danh sách thiết bị', style: TextStyle(color: Colors.grey))),
                   ),
                 ],
