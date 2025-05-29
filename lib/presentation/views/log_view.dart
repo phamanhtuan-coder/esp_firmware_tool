@@ -33,7 +33,6 @@ class _LogViewState extends State<LogView> with SingleTickerProviderStateMixin {
   bool _isDarkTheme = false;
   bool _isSearching = false;
   bool _localFileWarning = false;
-  double _zoomLevel = 1.0;
 
   @override
   void initState() {
@@ -70,8 +69,6 @@ class _LogViewState extends State<LogView> with SingleTickerProviderStateMixin {
               backgroundColor: _isDarkTheme ? Colors.grey[900] : Colors.grey[50],
               appBar: AppHeader(
                 isDarkTheme: _isDarkTheme,
-                zoomLevel: _zoomLevel,
-                onZoomChanged: (value) => setState(() => _zoomLevel = value),
                 onThemeToggled: () => setState(() => _isDarkTheme = !_isDarkTheme),
               ),
               body: Stack(

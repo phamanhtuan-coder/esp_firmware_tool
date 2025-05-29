@@ -38,8 +38,10 @@ class FirmwareControlPanel extends StatelessWidget {
       child: Column(
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
+                flex: 3,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -49,7 +51,7 @@ class FirmwareControlPanel extends StatelessWidget {
                       value: selectedFirmwareVersion,
                       decoration: InputDecoration(
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                         fillColor: isDarkTheme ? AppColors.idle : AppColors.cardBackground,
                         filled: true,
                       ),
@@ -65,51 +67,70 @@ class FirmwareControlPanel extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              TextButton.icon(
-                icon: const Icon(Icons.search, size: 16),
-                label: const Text('Find in file'),
-                style: TextButton.styleFrom(
-                  backgroundColor: isDarkTheme ? AppColors.idle : AppColors.dividerColor,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.search, size: 20),
+                  label: const Text('Find in file'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.connected,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  ),
+                  onPressed: onLocalFileSearch,
                 ),
-                onPressed: onLocalFileSearch,
               ),
             ],
           ),
           const SizedBox(height: 16),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: TextField(
-                  controller: serialController,
-                  decoration: InputDecoration(
-                    labelText: 'Serial Number',
-                    hintText: 'Nhập hoặc quét mã serial',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    fillColor: isDarkTheme ? AppColors.idle : AppColors.cardBackground,
-                    filled: true,
-                  ),
-                  onSubmitted: onSerialSubmitted,
+                flex: 3,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Serial Number', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: serialController,
+                      decoration: InputDecoration(
+                        hintText: 'Nhập hoặc quét mã serial',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                        fillColor: isDarkTheme ? AppColors.idle : AppColors.cardBackground,
+                        filled: true,
+                      ),
+                      onSubmitted: onSerialSubmitted,
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(width: 8),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.qr_code, size: 16),
-                label: const Text('Quét QR'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.connected,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.qr_code, size: 16),
+                  label: const Text('Quét QR'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.connected,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: onQrCodeScan,
                 ),
-                onPressed: onQrCodeScan,
               ),
             ],
           ),
           const SizedBox(height: 16),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
+                flex: 3,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -119,7 +140,7 @@ class FirmwareControlPanel extends StatelessWidget {
                       value: selectedPort,
                       decoration: InputDecoration(
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                         fillColor: isDarkTheme ? AppColors.idle : AppColors.cardBackground,
                         filled: true,
                       ),
@@ -134,14 +155,20 @@ class FirmwareControlPanel extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              TextButton.icon(
-                icon: const Icon(Icons.refresh, size: 16),
-                label: const Text(''),
-                style: TextButton.styleFrom(
-                  backgroundColor: isDarkTheme ? AppColors.idle : AppColors.dividerColor,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.refresh, size: 20),
+                  label: const Text('Refresh'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.connected,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  ),
+                  onPressed: onUsbPortRefresh,
                 ),
-                onPressed: onUsbPortRefresh,
               ),
             ],
           ),
