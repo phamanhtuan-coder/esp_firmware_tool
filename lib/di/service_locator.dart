@@ -12,10 +12,5 @@ void setupServiceLocator() {
   serviceLocator.registerLazySingleton<UsbService>(() => UsbService());
   serviceLocator.registerLazySingleton<TemplateService>(() => TemplateService());
   serviceLocator.registerLazySingleton<LogService>(() => LogService());
-  serviceLocator.registerFactory<LogBloc>(() => LogBloc(
-  // logService: serviceLocator<LogService>(),
-  // arduinoCliService: serviceLocator<ArduinoCliService>(),
-  // templateService: serviceLocator<TemplateService>(),
-  // usbService: serviceLocator<UsbService>(),
-  ));
+  serviceLocator.registerFactory<LogBloc>(() => LogBloc());
 }

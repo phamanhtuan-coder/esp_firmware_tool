@@ -1,5 +1,15 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart' hide SearchBar;
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:esp_firmware_tool/data/models/device.dart';
 import 'package:esp_firmware_tool/data/models/batch.dart';
+import 'package:esp_firmware_tool/data/models/log_entry.dart';
+import 'package:esp_firmware_tool/data/services/arduino_cli_service.dart';
+import 'package:esp_firmware_tool/data/services/log_service.dart';
+import 'package:esp_firmware_tool/data/services/template_service.dart';
+import 'package:esp_firmware_tool/data/services/usb_service.dart';
+import 'package:esp_firmware_tool/di/service_locator.dart';
 import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
 import 'package:esp_firmware_tool/presentation/widgets/action_buttons.dart';
 import 'package:esp_firmware_tool/presentation/widgets/app_header.dart';
@@ -9,9 +19,6 @@ import 'package:esp_firmware_tool/presentation/widgets/firmware_control_panel.da
 import 'package:esp_firmware_tool/presentation/widgets/search_bar.dart';
 import 'package:esp_firmware_tool/presentation/widgets/warning_dialog.dart';
 import 'package:esp_firmware_tool/utils/app_colors.dart';
-import 'package:esp_firmware_tool/utils/app_config.dart';
-import 'package:flutter/material.dart' hide SearchBar;
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:window_manager/window_manager.dart';
 
 class HomeView extends StatefulWidget {
@@ -34,15 +41,38 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   bool _isSearching = false;
   bool _localFileWarning = false;
 
+  // Dịch vụ từ service locator
+  final LogService _logService = serviceLocator<LogService>();
+  final UsbService _usbService = serviceLocator<UsbService>();
+  final ArduinoCliService _arduinoCliService = serviceLocator<ArduinoCliService>();
+  final TemplateService _templateService = serviceLocator<TemplateService>();
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     context.read<LogBloc>().add(LoadInitialDataEvent());
+    _initializeServices();
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 50) {
         context.read<LogBloc>().add(AutoScrollEvent());
       }
+    });
+  }
+
+  // Khởi tạo các dịch vụ
+  Future<void> _initializeServices() async {
+    await _logService.initialize();
+    _usbService.deviceStream.listen((event) {
+      context.read<LogBloc>().add(ScanUsbPortsEvent());
+      if (event.connected) {
+        _logService.registerUsbConnection(event.deviceId, event.port);
+      } else {
+        _logService.registerUsbDisconnection(event.deviceId);
+      }
+    });
+    _logService.logStream.listen((log) {
+      context.read<LogBloc>().add(FilterLogEvent(filter: _searchController.text));
     });
   }
 
@@ -52,6 +82,8 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     _searchController.dispose();
     _scrollController.dispose();
     _tabController.dispose();
+    _usbService.dispose();
+    _logService.dispose();
     super.dispose();
   }
 
@@ -108,16 +140,35 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                 context.read<LogBloc>().add(SelectUsbPortEvent(value!));
                               },
                               onLocalFileSearch: () => setState(() => _localFileWarning = true),
-                              onUsbPortRefresh: () => context.read<LogBloc>().add(ScanUsbPortsEvent()),
+                              onUsbPortRefresh: () {
+                                context.read<LogBloc>().add(ScanUsbPortsEvent());
+                                _usbService.getAvailablePorts();
+                              },
                               onSerialSubmitted: (value) {
-                                if (value.isNotEmpty) context.read<LogBloc>().add(SelectSerialEvent(value));
+                                if (value.isNotEmpty) {
+                                  context.read<LogBloc>().add(SelectSerialEvent(value));
+                                  _startSerialMonitor(value);
+                                }
                               },
                               onQrCodeScan: () {
                                 final scannedSerial = 'SN-${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}';
                                 _serialController.text = scannedSerial;
                                 context.read<LogBloc>().add(SelectSerialEvent(scannedSerial));
+                                _startSerialMonitor(scannedSerial);
                               },
-                              availablePorts: state.availablePorts,
+                              availablePorts: _usbService.getAvailablePorts(),
+                            ),
+                            ActionButtons(
+                              isDarkTheme: _isDarkTheme,
+                              onClearLogs: () {
+                                context.read<LogBloc>().add(ClearLogsEvent());
+                              },
+                              onInitiateFlash: _flashFirmware,
+                              isFlashing: state.isFlashing,
+                              selectedPort: _selectedPort,
+                              selectedFirmwareVersion: _selectedFirmwareVersion,
+                              selectedDevice: _selectedDevice,
+                              deviceSerial: _serialController.text,
                             ),
                             Expanded(
                               child: Column(
@@ -139,38 +190,52 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                     child: TabBarView(
                                       controller: _tabController,
                                       children: [
-                                        Column(
-                                          children: [
-                                            Expanded(
-                                              child: ConsoleLogView(
-                                                logs: state.filteredLogs.where((log) => log.deviceId == state.serialNumber || log.deviceId.isEmpty).toList(),
-                                                scrollController: _scrollController,
-                                              ),
+                                        // Console Log
+                                        StreamBuilder<List<LogEntry>>(
+                                          stream: _logService.logStream.transform(
+                                            StreamTransformer<LogEntry, List<LogEntry>>.fromHandlers(
+                                              handleData: (log, sink) {
+                                                final currentLogs = state.filteredLogs.toList();
+                                                currentLogs.add(log);
+                                                sink.add(currentLogs
+                                                    .where((l) => l.deviceId == state.serialNumber || l.deviceId.isEmpty)
+                                                    .toList());
+                                              },
                                             ),
-                                            Container(
-                                              padding: const EdgeInsets.only(bottom: 8.0), // Add padding to avoid overlap
-                                              color: _isDarkTheme ? Colors.grey[900] : Colors.grey[50],
-                                              child: ActionButtons(
-                                                isDarkTheme: _isDarkTheme,
-                                                onClearLogs: () => context.read<LogBloc>().add(ClearLogsEvent()),
-                                                onInitiateFlash: (device, version, serial, type) {
-                                                  context.read<LogBloc>().add(InitiateFlashEvent(
-                                                    deviceId: device,
-                                                    firmwareVersion: version,
-                                                    deviceSerial: serial,
-                                                    deviceType: type,
-                                                  ));
-                                                },
-                                                isFlashing: state.isFlashing,
-                                                selectedPort: _selectedPort,
-                                                selectedFirmwareVersion: _selectedFirmwareVersion,
-                                                selectedDevice: _selectedDevice,
-                                                deviceSerial: _serialController.text,
-                                              ),
-                                            ),
-                                          ],
+                                          ),
+                                          builder: (context, snapshot) {
+                                            final logs = snapshot.data ?? state.filteredLogs
+                                                .where((log) => log.deviceId == state.serialNumber || log.deviceId.isEmpty)
+                                                .toList();
+                                            return ConsoleLogView(
+                                              logs: logs,
+                                              scrollController: _scrollController,
+                                            );
+                                          },
                                         ),
-                                        const Center(child: Text('No serial data to display', style: TextStyle(color: Colors.grey))),
+                                        // Serial Monitor
+                                        StreamBuilder<List<LogEntry>>(
+                                          stream: _logService.logStream.transform(
+                                            StreamTransformer<LogEntry, List<LogEntry>>.fromHandlers(
+                                              handleData: (log, sink) {
+                                                final currentLogs = state.filteredLogs.toList();
+                                                currentLogs.add(log);
+                                                sink.add(currentLogs
+                                                    .where((l) => l.step == ProcessStep.serialMonitor && l.deviceId == state.serialNumber)
+                                                    .toList());
+                                              },
+                                            ),
+                                          ),
+                                          builder: (context, snapshot) {
+                                            final serialLogs = snapshot.data ?? state.filteredLogs
+                                                .where((log) => log.step == ProcessStep.serialMonitor && log.deviceId == state.serialNumber)
+                                                .toList();
+                                            return ConsoleLogView(
+                                              logs: serialLogs,
+                                              scrollController: _scrollController,
+                                            );
+                                          },
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -189,8 +254,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                             ),
                           ],
                         ),
-                      ),
-                    ],
+                      ),                    ],
                   ),
                   if (_localFileWarning)
                     WarningDialog(
@@ -207,5 +271,87 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         },
       ),
     );
+  }
+
+  // Khởi động serial monitor
+  void _startSerialMonitor(String serialNumber) async {
+    final port = await _arduinoCliService.getPortForDevice(serialNumber);
+    if (port != null) {
+      await _logService.startSerialMonitor(port, 115200, serialNumber);
+    } else {
+      _logService.addLog(
+        message: 'No port found for device $serialNumber',
+        level: LogLevel.error,
+        step: ProcessStep.serialMonitor,
+        deviceId: serialNumber,
+        origin: 'system',
+      );
+    }
+  }
+
+  // Xử lý flash firmware
+  void _flashFirmware(String deviceId, String firmwareVersion, String serialNumber, String deviceType) async {
+    final port = await _arduinoCliService.getPortForDevice(serialNumber);
+    if (port == null) {
+      _logService.addLog(
+        message: 'No port found for device $serialNumber',
+        level: LogLevel.error,
+        step: ProcessStep.flash,
+        deviceId: serialNumber,
+        origin: 'system',
+      );
+      return;
+    }
+
+    // Lấy firmware template
+    final firmwareData = await _logService.fetchBatchFirmware(_selectedBatch ?? '');
+    if (firmwareData.isEmpty) return;
+
+    final sourceCode = firmwareData['sourceCode']!;
+    final templatePath = await _templateService.getFirmwareTemplate(
+      firmwareVersion,
+      deviceType,
+      sourceCode,
+      null, // Có thể thêm hash nếu cần
+    );
+
+    if (templatePath == null) {
+      _logService.addLog(
+        message: 'Failed to get firmware template for $firmwareVersion',
+        level: LogLevel.error,
+        step: ProcessStep.firmwareDownload,
+        deviceId: serialNumber,
+        origin: 'system',
+      );
+      return;
+    }
+
+    // Chuẩn bị template với serial number
+    final preparedPath = await _templateService.prepareFirmwareTemplate(
+      templatePath,
+      serialNumber,
+      deviceId,
+    );
+
+    if (preparedPath == null) {
+      _logService.addLog(
+        message: 'Failed to prepare firmware template for $serialNumber',
+        level: LogLevel.error,
+        step: ProcessStep.templatePreparation,
+        deviceId: serialNumber,
+        origin: 'system',
+      );
+      return;
+    }
+
+    // Biên dịch và flash firmware
+    final fqbn = _arduinoCliService.getBoardFqbn(deviceType);
+    final success = await _logService.compileAndFlash(preparedPath, port, fqbn, serialNumber);
+
+    if (success) {
+      _logService.markDeviceProcessed(serialNumber, true);
+    } else {
+      _logService.markDeviceProcessed(serialNumber, false);
+    }
   }
 }

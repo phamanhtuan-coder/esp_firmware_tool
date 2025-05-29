@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
 import 'package:esp_firmware_tool/utils/app_colors.dart';
-import 'package:esp_firmware_tool/utils/app_theme.dart';
 
 class ActionButtons extends StatelessWidget {
   final bool isDarkTheme;
@@ -40,18 +39,21 @@ class ActionButtons extends StatelessWidget {
               backgroundColor: isDarkTheme ? AppColors.idle : AppColors.dividerColor,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            onPressed: onClearLogs,
+            onPressed: () {
+              onClearLogs();
+              context.read<LogBloc>().add(ClearLogsEvent());
+            },
           ),
           ElevatedButton.icon(
             icon: isFlashing
                 ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation(Colors.white),
-                    ),
-                  )
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation(Colors.white),
+              ),
+            )
                 : const Icon(Icons.flash_on, size: 16),
             label: Text(isFlashing ? 'Flashing...' : 'Flash Firmware'),
             style: ElevatedButton.styleFrom(
@@ -64,13 +66,19 @@ class ActionButtons extends StatelessWidget {
             onPressed: isFlashing || selectedPort == null || selectedFirmwareVersion == null || selectedDevice == null
                 ? null
                 : () {
-                    onInitiateFlash(
-                      selectedDevice!,
-                      selectedFirmwareVersion!,
-                      deviceSerial,
-                      'esp32',
-                    );
-                  },
+              context.read<LogBloc>().add(InitiateFlashEvent(
+                deviceId: selectedDevice!,
+                firmwareVersion: selectedFirmwareVersion!,
+                deviceSerial: deviceSerial,
+                deviceType: 'esp32',
+              ));
+              onInitiateFlash(
+                selectedDevice!,
+                selectedFirmwareVersion!,
+                deviceSerial,
+                'esp32',
+              );
+            },
           ),
         ],
       ),

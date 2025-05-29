@@ -1,45 +1,80 @@
-import 'dart:async';
-import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:esp_firmware_tool/data/services/usb_service.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:esp_firmware_tool/data/models/batch.dart';
 import 'package:esp_firmware_tool/data/models/device.dart';
 import 'package:esp_firmware_tool/data/models/log_entry.dart';
+import 'package:esp_firmware_tool/di/service_locator.dart';
+import 'package:esp_firmware_tool/data/services/log_service.dart';
 
-// Sample data (mimic React's SAMPLE_BATCHES and SAMPLE_DEVICES)
-final List<Batch> SAMPLE_BATCHES = [
-  Batch(id: 1, name: 'Batch A-001'),
-  Batch(id: 2, name: 'Batch B-002'),
-  Batch(id: 3, name: 'Batch C-003'),
-];
-
-final List<Device> SAMPLE_DEVICES = [
-  Device(id: 1, batchId: 1, serial: 'SN001', status: 'pending'),
-  Device(id: 2, batchId: 1, serial: 'SN002', status: 'pending'),
-   Device(id: 3, batchId: 1, serial: 'SN003', status: 'pending'),
-  Device(id: 4, batchId: 2, serial: 'SN004', status: 'pending'),
-   Device(id: 5, batchId: 2, serial: 'SN005', status: 'pending'),
-   Device(id: 6, batchId: 3, serial: 'SN006', status: 'pending'),
-];
-
-// Events
-// log_bloc.dart (cập nhật một phần)
-abstract class LogEvent extends Equatable {
+class LogEvent extends Equatable {
+  const LogEvent();
   @override
   List<Object?> get props => [];
 }
 
 class LoadInitialDataEvent extends LogEvent {}
-class SelectBatchEvent extends LogEvent { final String batchId; SelectBatchEvent(this.batchId); @override List<Object?> get props => [batchId]; }
-class SelectDeviceEvent extends LogEvent { final String deviceId; SelectDeviceEvent(this.deviceId); @override List<Object?> get props => [deviceId]; }
-class MarkDeviceDefectiveEvent extends LogEvent { final String deviceId; final String? reason; MarkDeviceDefectiveEvent(this.deviceId, {this.reason}); @override List<Object?> get props => [deviceId, reason]; }
-class SelectUsbPortEvent extends LogEvent { final String port; SelectUsbPortEvent(this.port); @override List<Object?> get props => [port]; }
+class SelectBatchEvent extends LogEvent {
+  final String batchId;
+  const SelectBatchEvent(this.batchId);
+  @override
+  List<Object?> get props => [batchId];
+}
+class SelectDeviceEvent extends LogEvent {
+  final String deviceId;
+  const SelectDeviceEvent(this.deviceId);
+  @override
+  List<Object?> get props => [deviceId];
+}
+class MarkDeviceDefectiveEvent extends LogEvent {
+  final String deviceId;
+  final String reason;
+  const MarkDeviceDefectiveEvent(this.deviceId, {this.reason = ''});
+  @override
+  List<Object?> get props => [deviceId, reason];
+}
+class SelectUsbPortEvent extends LogEvent {
+  final String port;
+  const SelectUsbPortEvent(this.port);
+  @override
+  List<Object?> get props => [port];
+}
 class ScanUsbPortsEvent extends LogEvent {}
-class InitiateFlashEvent extends LogEvent { final String deviceId; final String firmwareVersion; final String deviceSerial; final String deviceType; InitiateFlashEvent({required this.deviceId, required this.firmwareVersion, required this.deviceSerial, required this.deviceType}); @override List<Object?> get props => [deviceId, firmwareVersion, deviceSerial, deviceType]; }
+class InitiateFlashEvent extends LogEvent {
+  final String deviceId;
+  final String firmwareVersion;
+  final String deviceSerial;
+  final String deviceType;
+  const InitiateFlashEvent({
+    required this.deviceId,
+    required this.firmwareVersion,
+    required this.deviceSerial,
+    required this.deviceType,
+  });
+  @override
+  List<Object?> get props => [deviceId, firmwareVersion, deviceSerial, deviceType];
+}
 class StopProcessEvent extends LogEvent {}
 class ClearLogsEvent extends LogEvent {}
-class FilterLogEvent extends LogEvent { final String? filter; FilterLogEvent({this.filter}); @override List<Object?> get props => [filter]; }
-class SelectSerialEvent extends LogEvent { final String serial; SelectSerialEvent(this.serial); @override List<Object?> get props => [serial]; }
+class FilterLogEvent extends LogEvent {
+  final String? filter;
+  const FilterLogEvent({this.filter});
+  @override
+  List<Object?> get props => [filter];
+}
+class SelectSerialEvent extends LogEvent {
+  final String serial;
+  const SelectSerialEvent(this.serial);
+  @override
+  List<Object?> get props => [serial];
+}
 class AutoScrollEvent extends LogEvent {}
+class AddLogEvent extends LogEvent {
+  final LogEntry log;
+  const AddLogEvent(this.log);
+  @override
+  List<Object?> get props => [log];
+}
 
 class LogState extends Equatable {
   final List<Batch> batches;
@@ -94,11 +129,23 @@ class LogState extends Equatable {
 
   @override
   List<Object?> get props => [
-    batches, devices, availablePorts, filteredLogs, selectedBatchId, selectedDeviceId, serialNumber, isFlashing, status, error,
+    batches,
+    devices,
+    availablePorts,
+    filteredLogs,
+    selectedBatchId,
+    selectedDeviceId,
+    serialNumber,
+    isFlashing,
+    status,
+    error,
   ];
 }
 
 class LogBloc extends Bloc<LogEvent, LogState> {
+  final LogService _logService = serviceLocator<LogService>();
+  final UsbService _usbService = serviceLocator<UsbService>();
+
   LogBloc() : super(const LogState()) {
     on<LoadInitialDataEvent>(_onLoadInitialData);
     on<SelectBatchEvent>(_onSelectBatch);
@@ -112,21 +159,22 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     on<FilterLogEvent>(_onFilterLog);
     on<SelectSerialEvent>(_onSelectSerial);
     on<AutoScrollEvent>(_onAutoScroll);
+    on<AddLogEvent>(_onAddLog);
   }
 
   Future<void> _onLoadInitialData(LoadInitialDataEvent event, Emitter<LogState> emit) async {
-    await Future.delayed(const Duration(milliseconds: 100));
+    final batches = await _logService.fetchBatches();
+    final ports = _usbService.getAvailablePorts();
     emit(state.copyWith(
-      batches: SAMPLE_BATCHES,
-      devices: SAMPLE_DEVICES,
-      availablePorts: ['COM1', 'COM2', 'COM3'],
+      batches: batches.map((b) => Batch(id: int.parse(b['id']), name: b['name'])).toList(),
+      availablePorts: ports,
     ));
   }
 
-  void _onSelectBatch(SelectBatchEvent event, Emitter<LogState> emit) {
-    final selectedBatch = state.batches.firstWhere((batch) => batch.id.toString() == event.batchId);
-    final filteredDevices = SAMPLE_DEVICES.where((device) => device.batchId == selectedBatch.id).toList();
-    emit(state.copyWith(selectedBatchId: event.batchId, devices: filteredDevices));
+  void _onSelectBatch(SelectBatchEvent event, Emitter<LogState> emit) async {
+    final serials = await _logService.fetchSerialsForBatch(event.batchId);
+    final devices = serials.map((serial) => Device(id: serial.hashCode, batchId: int.parse(event.batchId), serial: serial)).toList();
+    emit(state.copyWith(selectedBatchId: event.batchId, devices: devices));
   }
 
   void _onSelectDevice(SelectDeviceEvent event, Emitter<LogState> emit) {
@@ -149,22 +197,12 @@ class LogBloc extends Bloc<LogEvent, LogState> {
   }
 
   void _onScanUsbPorts(ScanUsbPortsEvent event, Emitter<LogState> emit) {
-    emit(state.copyWith(status: 'Scanning ports...', availablePorts: ['COM1', 'COM2', 'COM3', 'COM4']));
+    final ports = _usbService.getAvailablePorts();
+    emit(state.copyWith(status: 'Scanning ports...', availablePorts: ports));
   }
 
   void _onInitiateFlash(InitiateFlashEvent event, Emitter<LogState> emit) {
     emit(state.copyWith(isFlashing: true, status: 'Flashing ${event.firmwareVersion} on ${event.deviceSerial}...'));
-    Future.delayed(const Duration(seconds: 3), () {
-      if (state.isFlashing) {
-        final success = DateTime.now().second % 2 == 0;
-        add(success ? ClearLogsEvent() : StopProcessEvent());
-        emit(state.copyWith(
-          isFlashing: false,
-          status: success ? 'Firmware flashed successfully!' : 'Firmware flash failed.',
-          error: success ? null : 'Flash failed. Please retry.',
-        ));
-      }
-    });
   }
 
   void _onStopProcess(StopProcessEvent event, Emitter<LogState> emit) {
@@ -178,7 +216,9 @@ class LogBloc extends Bloc<LogEvent, LogState> {
   void _onFilterLog(FilterLogEvent event, Emitter<LogState> emit) {
     final filtered = event.filter == null
         ? state.filteredLogs
-        : state.filteredLogs.where((log) => log.message.toLowerCase().contains(event.filter!.toLowerCase()) || log.deviceId == event.filter).toList();
+        : state.filteredLogs
+        .where((log) => log.message.toLowerCase().contains(event.filter!.toLowerCase()) || log.deviceId == event.filter)
+        .toList();
     emit(state.copyWith(filteredLogs: filtered, status: 'Filtering logs for: ${event.filter ?? 'all'}'));
   }
 
@@ -188,5 +228,10 @@ class LogBloc extends Bloc<LogEvent, LogState> {
 
   void _onAutoScroll(AutoScrollEvent event, Emitter<LogState> emit) {
     // Handle auto-scroll if needed
+  }
+
+  void _onAddLog(AddLogEvent event, Emitter<LogState> emit) {
+    final updatedLogs = List<LogEntry>.from(state.filteredLogs)..add(event.log);
+    emit(state.copyWith(filteredLogs: updatedLogs));
   }
 }
