@@ -57,6 +57,7 @@ class _LogViewState extends State<LogView> with SingleTickerProviderStateMixin {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (context) => LogBloc()..add(LoadInitialDataEvent()),
@@ -142,9 +143,36 @@ class _LogViewState extends State<LogView> with SingleTickerProviderStateMixin {
                                     child: TabBarView(
                                       controller: _tabController,
                                       children: [
-                                        ConsoleLogView(
-                                          logs: state.filteredLogs.where((log) => log.deviceId == state.serialNumber || log.deviceId.isEmpty).toList(),
-                                          scrollController: _scrollController,
+                                        Column(
+                                          children: [
+                                            Expanded(
+                                              child: ConsoleLogView(
+                                                logs: state.filteredLogs.where((log) => log.deviceId == state.serialNumber || log.deviceId.isEmpty).toList(),
+                                                scrollController: _scrollController,
+                                              ),
+                                            ),
+                                            Container(
+                                              padding: const EdgeInsets.only(bottom: 8.0), // Add padding to avoid overlap
+                                              color: _isDarkTheme ? Colors.grey[900] : Colors.grey[50],
+                                              child: ActionButtons(
+                                                isDarkTheme: _isDarkTheme,
+                                                onClearLogs: () => context.read<LogBloc>().add(ClearLogsEvent()),
+                                                onInitiateFlash: (device, version, serial, type) {
+                                                  context.read<LogBloc>().add(InitiateFlashEvent(
+                                                    deviceId: device,
+                                                    firmwareVersion: version,
+                                                    deviceSerial: serial,
+                                                    deviceType: type,
+                                                  ));
+                                                },
+                                                isFlashing: state.isFlashing,
+                                                selectedPort: _selectedPort,
+                                                selectedFirmwareVersion: _selectedFirmwareVersion,
+                                                selectedDevice: _selectedDevice,
+                                                deviceSerial: _serialController.text,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                         const Center(child: Text('No serial data to display', style: TextStyle(color: Colors.grey))),
                                       ],
@@ -160,23 +188,6 @@ class _LogViewState extends State<LogView> with SingleTickerProviderStateMixin {
                                         context.read<LogBloc>().add(FilterLogEvent());
                                       },
                                     ),
-                                  ActionButtons(
-                                    isDarkTheme: _isDarkTheme,
-                                    onClearLogs: () => context.read<LogBloc>().add(ClearLogsEvent()),
-                                    onInitiateFlash: (device, version, serial, type) {
-                                      context.read<LogBloc>().add(InitiateFlashEvent(
-                                        deviceId: device,
-                                        firmwareVersion: version,
-                                        deviceSerial: serial,
-                                        deviceType: type,
-                                      ));
-                                    },
-                                    isFlashing: state.isFlashing,
-                                    selectedPort: _selectedPort,
-                                    selectedFirmwareVersion: _selectedFirmwareVersion,
-                                    selectedDevice: _selectedDevice,
-                                    deviceSerial: _serialController.text,
-                                  ),
                                 ],
                               ),
                             ),
