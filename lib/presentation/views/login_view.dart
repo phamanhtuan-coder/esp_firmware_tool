@@ -15,7 +15,6 @@ class _LoginViewState extends State<LoginView> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _showPassword = false;
-  bool _remember = false;
   bool _isLoading = false;
 
   @override
@@ -110,17 +109,6 @@ class _LoginViewState extends State<LoginView> {
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Checkbox(
-                          value: _remember,
-                          onChanged: (value) => setState(() => _remember = value!),
-                          activeColor: AppColors.primary,
-                        ),
-                        const Text('Ghi nhớ đăng nhập', style: TextStyle(color: AppColors.text)),
-                      ],
                     ),
                     const SizedBox(height: 24),
                     SizedBox(
