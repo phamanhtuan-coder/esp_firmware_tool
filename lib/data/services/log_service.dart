@@ -17,11 +17,17 @@ class LogService {
   // Serial monitor process
   Process? _serialMonitorProcess;
 
+  // Console log process
+  Process? _consoleLogProcess;
+
   // Device currently being monitored
   String? _currentDeviceId;
 
   // Whether the serial monitor is active
   bool _serialMonitorActive = false;
+
+  // Whether the console log is active
+  bool _consoleLogActive = false;
 
   // Base directory for firmware templates
   String? _firmwareTemplatesDir;
@@ -95,6 +101,32 @@ class LogService {
 
   // Handle process output and convert to log entries with improved Arduino CLI output parsing
   void _processOutput(String output, ProcessStep step, String deviceId, {String? origin}) {
+    // Handle serial monitor output specifically
+    if (origin == 'serial-monitor') {
+      addLog(
+        message: output.trim(),
+        level: LogLevel.serialOutput,
+        step: step,
+        deviceId: deviceId,
+        origin: origin,
+        rawOutput: output,
+      );
+      return;
+    }
+
+    // Handle console log output specifically
+    if (origin == 'console-log') {
+      addLog(
+        message: output.trim(),
+        level: LogLevel.consoleOutput,
+        step: step,
+        deviceId: deviceId,
+        origin: origin,
+        rawOutput: output,
+      );
+      return;
+    }
+
     // Check for common Arduino CLI error patterns with more specific detection
     if (output.contains('error:') || output.contains('Error:') || output.contains('ERROR:') ||
         output.contains('failed') || output.contains('Failed') || output.contains('FAILED')) {
@@ -350,6 +382,132 @@ class LogService {
     }
   }
 
+  // Start console log monitoring like in Arduino IDE
+  Future<bool> startConsoleLog(String sketchPath, String deviceId) async {
+    // Close any existing console log monitor
+    await stopConsoleLog();
+
+    try {
+      final sketchDirectory = path.dirname(sketchPath);
+
+      // Start Arduino CLI compilation process with verbose output
+      _consoleLogProcess = await Process.start(
+        'arduino-cli',
+        ['compile', '--verbose', '--log-level', 'debug', '-b', getBoardFqbn(deviceId), sketchPath],
+        workingDirectory: sketchDirectory,
+      );
+
+      _consoleLogActive = true;
+
+      addLog(
+        message: 'Console log monitor started for sketch: ${path.basename(sketchPath)}',
+        level: LogLevel.info,
+        step: ProcessStep.consoleLog,
+        deviceId: deviceId,
+        origin: 'system',
+      );
+
+      // Stream stdout from console log
+      _consoleLogProcess!.stdout
+        .transform(utf8.decoder)
+        .listen((data) {
+          final lines = data.split('\n');
+          for (final line in lines) {
+            if (line.trim().isNotEmpty) {
+              _processOutput(
+                line.trim(),
+                ProcessStep.consoleLog,
+                deviceId,
+                origin: 'console-log'
+              );
+            }
+          }
+        });
+
+      // Stream stderr from console log
+      _consoleLogProcess!.stderr
+        .transform(utf8.decoder)
+        .listen((data) {
+          final lines = data.split('\n');
+          for (final line in lines) {
+            if (line.trim().isNotEmpty) {
+              _processOutput(
+                line.trim(),
+                ProcessStep.consoleLog,
+                deviceId,
+                origin: 'console-log'
+              );
+            }
+          }
+        });
+
+      // Monitor the process exit
+      _consoleLogProcess!.exitCode.then((exitCode) {
+        _consoleLogActive = false;
+        _consoleLogProcess = null;
+
+        addLog(
+          message: 'Console log monitor ended with exit code: $exitCode',
+          level: exitCode == 0 ? LogLevel.success : LogLevel.error,
+          step: ProcessStep.consoleLog,
+          deviceId: deviceId,
+          origin: 'system',
+        );
+      });
+
+      return true;
+    } catch (e) {
+      addLog(
+        message: 'Failed to start console log monitor: $e',
+        level: LogLevel.error,
+        step: ProcessStep.consoleLog,
+        deviceId: deviceId,
+        origin: 'system',
+      );
+      return false;
+    }
+  }
+
+  // Stop console log monitoring
+  Future<void> stopConsoleLog() async {
+    if (_consoleLogProcess != null) {
+      _consoleLogActive = false;
+
+      try {
+        _consoleLogProcess!.kill();
+        await _consoleLogProcess!.exitCode;
+      } catch (e) {
+        addLog(
+          message: 'Error stopping console log monitor: $e',
+          level: LogLevel.error,
+          step: ProcessStep.consoleLog,
+          origin: 'system',
+        );
+      }
+
+      _consoleLogProcess = null;
+    }
+  }
+
+  // Determine board FQBN based on deviceId (simplified - in real code, look this up from device info)
+  String getBoardFqbn(String deviceId) {
+    if (deviceId.toLowerCase().contains('esp32')) {
+      return 'esp32:esp32:esp32';
+    } else if (deviceId.toLowerCase().contains('esp8266')) {
+      return 'esp8266:esp8266:generic';
+    } else {
+      return 'arduino:avr:uno'; // Default to Arduino Uno
+    }
+  }
+
+  // Start both serial monitor and console log for combined Arduino IDE-like experience
+  Future<bool> startArduinoIdeExperience(String port, int baudRate, String sketchPath, String deviceId) async {
+    final serialStarted = await startSerialMonitor(port, baudRate, deviceId);
+    final consoleStarted = await startConsoleLog(sketchPath, deviceId);
+
+    return serialStarted && consoleStarted;
+  }
+
   // Send data to the serial monitor with improved input handling
   void sendToSerialMonitor(String data) {
     if (_serialMonitorProcess != null && _serialMonitorActive) {
@@ -401,11 +559,18 @@ class LogService {
         );
       }
 
-      // Kill the process
+      // Try to kill the process
       try {
         _serialMonitorProcess!.kill();
+        await _serialMonitorProcess!.exitCode;
       } catch (e) {
-        print('Error killing serial monitor: $e');
+        addLog(
+          message: 'Error killing serial monitor: $e',
+          level: LogLevel.error,
+          step: ProcessStep.serialMonitor,
+          deviceId: _currentDeviceId ?? '',
+          origin: 'system',
+        );
       }
 
       _serialMonitorProcess = null;
@@ -413,365 +578,38 @@ class LogService {
     }
   }
 
-  // Clear logs for the specified device or all logs if deviceId is empty
-  void clearLogs([String deviceId = '']) {
-    // We can't clear the StreamController directly,
-    // but we can send a special log entry that the UI can use to clear logs
-    addLog(
-      message: 'CLEAR_LOGS',
-      level: LogLevel.info,
-      step: ProcessStep.other,
-      deviceId: deviceId,
-      origin: 'system',
-    );
+  // Stop all monitors and close completely
+  Future<void> stopAll() async {
+    await stopSerialMonitor();
+    await stopConsoleLog();
+    await killActiveProcess();
   }
 
-  // Register a USB device connection
-  void registerUsbConnection(String deviceId, String port) {
-    _connectedDevices[deviceId] = true;
-
-    addLog(
-      message: 'USB device connected: $deviceId on port $port',
-      level: LogLevel.info,
-      step: ProcessStep.systemEvent,
-      deviceId: deviceId,
-      origin: 'system',
-    );
-  }
-
-  // Register a USB device disconnection and clear its logs
-  void registerUsbDisconnection(String deviceId) {
-    _connectedDevices.remove(deviceId);
-
-    // Automatically clear logs for disconnected devices
-    clearLogs(deviceId);
-
-    addLog(
-      message: 'USB device disconnected: $deviceId',
-      level: LogLevel.info,
-      step: ProcessStep.systemEvent,
-      deviceId: deviceId,
-      origin: 'system',
-    );
-  }
-
-  // Set current batch of serials being processed
-  void setCurrentBatch(String batchId, List<String> serials) {
-    _currentBatchId = batchId;
-    _currentBatchSerials = serials;
-
-    addLog(
-      message: 'Batch loaded: $batchId with ${serials.length} devices',
-      level: LogLevel.info,
-      step: ProcessStep.productBatch,
-      deviceId: '',
-      origin: 'system',
-    );
-  }
-
-  // Mark a device as processed in the batch
-  void markDeviceProcessed(String serialNumber, bool success) {
-    if (_currentBatchSerials.contains(serialNumber)) {
-      addLog(
-        message: 'Device $serialNumber marked as ${success ? 'successfully' : 'failed to be'} processed',
-        level: success ? LogLevel.success : LogLevel.error,
-        step: ProcessStep.updateStatus,
-        deviceId: serialNumber,
-        origin: 'system',
-      );
-    }
-  }
-
-  // Download and store a firmware template
-  Future<String?> downloadFirmwareTemplate(
-    String templateId,
-    String templateUrl,
-    String deviceType,
-    String version
-  ) async {
-    try {
-      // Create device type directory if it doesn't exist
-      final deviceTypeDir = path.join(_firmwareTemplatesDir!, deviceType);
-      final directory = Directory(deviceTypeDir);
-      if (!await directory.exists()) {
-        await directory.create(recursive: true);
-      }
-
-      // Target file path
-      final filePath = path.join(deviceTypeDir, '${version.replaceAll('.', '_')}.ino');
-
-      // Log the download start
-      addLog(
-        message: 'Downloading firmware template: $deviceType v$version',
-        level: LogLevel.info,
-        step: ProcessStep.firmwareDownload,
-        origin: 'system',
-      );
-
-      // Download the template
-      final response = await http.get(Uri.parse(templateUrl));
-      if (response.statusCode == 200) {
-        // Save the template to disk
-        final file = File(filePath);
-        await file.writeAsBytes(response.bodyBytes);
-
-        addLog(
-          message: 'Firmware template downloaded and saved: $deviceType v$version',
-          level: LogLevel.success,
-          step: ProcessStep.firmwareDownload,
-          origin: 'system',
-        );
-
-        return filePath;
-      } else {
-        addLog(
-          message: 'Failed to download firmware template: HTTP ${response.statusCode}',
-          level: LogLevel.error,
-          step: ProcessStep.firmwareDownload,
-          origin: 'system',
-        );
-        return null;
-      }
-    } catch (e) {
-      addLog(
-        message: 'Error downloading firmware template: $e',
-        level: LogLevel.error,
-        step: ProcessStep.firmwareDownload,
-        origin: 'system',
-      );
-      return null;
-    }
-  }
-
-  // Prepare a firmware template by replacing placeholders with actual serial number
-  Future<String?> prepareFirmwareTemplate(
-    String templatePath,
-    String serialNumber,
-    String deviceId
-  ) async {
-    try {
-      // Read the template
-      final templateFile = File(templatePath);
-      if (!await templateFile.exists()) {
-        addLog(
-          message: 'Template file not found: $templatePath',
-          level: LogLevel.error,
-          step: ProcessStep.templatePreparation,
-          deviceId: deviceId,
-          origin: 'system',
-        );
-        return null;
-      }
-
-      // Read template content
-      String templateContent = await templateFile.readAsString();
-
-      // Replace placeholders - assuming {{SERIAL_NUMBER}} is the placeholder
-      templateContent = templateContent.replaceAll('{{SERIAL_NUMBER}}', serialNumber);
-
-      // Create a temporary file for compilation
-      final tempDir = await getTemporaryDirectory();
-      final compilePath = path.join(tempDir.path, 'compile_$serialNumber.ino');
-      final compileFile = File(compilePath);
-      await compileFile.writeAsString(templateContent);
-
-      addLog(
-        message: 'Template prepared for device $serialNumber',
-        level: LogLevel.success,
-        step: ProcessStep.templatePreparation,
-        deviceId: deviceId,
-        origin: 'system',
-      );
-
-      return compilePath;
-    } catch (e) {
-      addLog(
-        message: 'Error preparing template: $e',
-        level: LogLevel.error,
-        step: ProcessStep.templatePreparation,
-        deviceId: deviceId,
-        origin: 'system',
-      );
-      return null;
-    }
-  }
-
-  // Compile and flash prepared firmware to device
-  Future<bool> compileAndFlash(
-    String sketchPath,
-    String port,
-    String fqbn,
-    String deviceId
-  ) async {
-    try {
-      // First compile the sketch
-      final compileResult = await runProcess(
-        'arduino-cli',
-        ['compile', '--fqbn', fqbn, sketchPath],
-        step: ProcessStep.compile,
-        deviceId: deviceId,
-      );
-
-      if (compileResult != 0) {
-        addLog(
-          message: 'Compilation failed with code: $compileResult',
-          level: LogLevel.error,
-          step: ProcessStep.compile,
-          deviceId: deviceId,
-          origin: 'system',
-        );
-        return false;
-      }
-
-      // Then upload to device
-      final uploadResult = await runProcess(
-        'arduino-cli',
-        ['upload', '--fqbn', fqbn, '--port', port, sketchPath],
-        step: ProcessStep.flash,
-        deviceId: deviceId,
-      );
-
-      if (uploadResult != 0) {
-        addLog(
-          message: 'Upload failed with code: $uploadResult',
-          level: LogLevel.error,
-          step: ProcessStep.flash,
-          deviceId: deviceId,
-          origin: 'system',
-        );
-        return false;
-      }
-
-      addLog(
-        message: 'Firmware successfully compiled and uploaded',
-        level: LogLevel.success,
-        step: ProcessStep.flash,
-        deviceId: deviceId,
-        origin: 'system',
-      );
-
-      return true;
-    } catch (e) {
-      addLog(
-        message: 'Error during compile and flash: $e',
-        level: LogLevel.error,
-        step: ProcessStep.flash,
-        deviceId: deviceId,
-        origin: 'system',
-      );
-      return false;
-    }
-  }
-
-  // Kill any active process
+  // Kill any active process with improved cleanup
   Future<void> killActiveProcess() async {
     if (_activeProcess != null) {
       try {
         _activeProcess!.kill();
       } catch (e) {
-        print('Error killing active process: $e');
+        addLog(
+          message: 'Error killing active process: $e',
+          level: LogLevel.error,
+          step: ProcessStep.systemEvent,
+          origin: 'system',
+        );
       }
       _activeProcess = null;
     }
   }
 
-  // Dispose resources
+  // Dispose of resources
   Future<void> dispose() async {
-    await killActiveProcess();
-    await stopSerialMonitor();
-    await _logStreamController.close();
-  }
+    await stopAll();
 
-  Future<List<Map<String, dynamic>>> fetchBatches() async {
     try {
-      final response = await http.get(Uri.parse('https://api.example.com/batches'));
-      if (response.statusCode == 200) {
-        return List<Map<String, dynamic>>.from(json.decode(response.body));
-      }
-      addLog(
-        message: 'Failed to fetch batches: HTTP ${response.statusCode}',
-        level: LogLevel.error,
-        step: ProcessStep.productBatch,
-        origin: 'system',
-      );
-      return [];
+      await _logStreamController.close();
     } catch (e) {
-      addLog(
-        message: 'Error fetching batches: $e',
-        level: LogLevel.error,
-        step: ProcessStep.productBatch,
-        origin: 'system',
-      );
-      return [];
+      print('Error closing log stream controller: $e');
     }
-  }
-
-  Future<List<String>> fetchSerialsForBatch(String batchId) async {
-    try {
-      final response = await http.get(Uri.parse('https://api.example.com/batches/$batchId/serials'));
-      if (response.statusCode == 200) {
-        final serials = List<String>.from(json.decode(response.body));
-        setCurrentBatch(batchId, serials);
-        return serials;
-      }
-      addLog(
-        message: 'Failed to fetch serials for batch $batchId: HTTP ${response.statusCode}',
-        level: LogLevel.error,
-        step: ProcessStep.productBatch,
-        origin: 'system',
-      );
-      return [];
-    } catch (e) {
-      addLog(
-        message: 'Error fetching serials for batch $batchId: $e',
-        level: LogLevel.error,
-        step: ProcessStep.productBatch,
-        origin: 'system',
-      );
-      return [];
-    }
-  }
-
-  Future<Map<String, String>> fetchBatchFirmware(String batchId) async {
-    try {
-      final response = await http.get(Uri.parse('https://api.example.com/batches/$batchId/firmware'));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return {'version': data['version'], 'deviceType': data['deviceType'], 'sourceCode': data['sourceCode']};
-      }
-      addLog(
-        message: 'Failed to fetch firmware for batch $batchId: HTTP ${response.statusCode}',
-        level: LogLevel.error,
-        step: ProcessStep.firmwareDownload,
-        origin: 'system',
-      );
-      return {};
-    } catch (e) {
-      addLog(
-        message: 'Error fetching firmware for batch $batchId: $e',
-        level: LogLevel.error,
-        step: ProcessStep.firmwareDownload,
-        origin: 'system',
-      );
-      return {};
-    }
-  }
-
-  Future<String?> createFirmwareTemplate(String batchId, String serialNumber, String deviceId) async {
-    final firmwareData = await fetchBatchFirmware(batchId);
-    if (firmwareData.isEmpty) return null;
-
-    final sourceCode = firmwareData['sourceCode']!;
-    final version = firmwareData['version']!;
-    final deviceType = firmwareData['deviceType']!;
-
-    // Save source code to a temporary .ino file
-    final tempDir = await getTemporaryDirectory();
-    final filePath = path.join(tempDir.path, 'template_$serialNumber.ino');
-    final file = File(filePath);
-    await file.writeAsString(sourceCode);
-
-    // Prepare template with serial number
-    return prepareFirmwareTemplate(filePath, serialNumber, deviceId);
   }
 }

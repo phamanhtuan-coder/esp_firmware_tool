@@ -6,6 +6,7 @@ import 'package:esp_firmware_tool/data/models/device.dart';
 import 'package:esp_firmware_tool/data/models/batch.dart';
 import 'package:esp_firmware_tool/data/models/log_entry.dart';
 import 'package:esp_firmware_tool/data/services/arduino_cli_service.dart';
+import 'package:esp_firmware_tool/data/services/batch_service.dart';
 import 'package:esp_firmware_tool/data/services/log_service.dart';
 import 'package:esp_firmware_tool/data/services/template_service.dart';
 import 'package:esp_firmware_tool/data/services/usb_service.dart';
@@ -46,6 +47,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   final UsbService _usbService = serviceLocator<UsbService>();
   final ArduinoCliService _arduinoCliService = serviceLocator<ArduinoCliService>();
   final TemplateService _templateService = serviceLocator<TemplateService>();
+  final BatchService _batchService = serviceLocator<BatchService>();
 
   @override
   void initState() {
@@ -66,9 +68,9 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     _usbService.deviceStream.listen((event) {
       context.read<LogBloc>().add(ScanUsbPortsEvent());
       if (event.connected) {
-        _logService.registerUsbConnection(event.deviceId, event.port);
+        _batchService.registerUsbConnection(event.deviceId, event.port);
       } else {
-        _logService.registerUsbDisconnection(event.deviceId);
+        _batchService.registerUsbDisconnection(event.deviceId);
       }
     });
     _logService.logStream.listen((log) {
@@ -304,7 +306,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     }
 
     // Lấy firmware template
-    final firmwareData = await _logService.fetchBatchFirmware(_selectedBatch ?? '');
+    final firmwareData = await _batchService.fetchBatchFirmware(_selectedBatch ?? '');
     if (firmwareData.isEmpty) return;
 
     final sourceCode = firmwareData['sourceCode']!;
@@ -346,12 +348,12 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
 
     // Biên dịch và flash firmware
     final fqbn = _arduinoCliService.getBoardFqbn(deviceType);
-    final success = await _logService.compileAndFlash(preparedPath, port, fqbn, serialNumber);
+    final success = await _batchService.compileAndFlash(preparedPath, port, fqbn, serialNumber);
 
     if (success) {
-      _logService.markDeviceProcessed(serialNumber, true);
+      _batchService.markDeviceProcessed(serialNumber, true);
     } else {
-      _logService.markDeviceProcessed(serialNumber, false);
+      _batchService.markDeviceProcessed(serialNumber, false);
     }
   }
 }

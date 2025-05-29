@@ -140,6 +140,28 @@ class ArduinoCliService {
     }
   }
 
+  /// Compile a sketch using arduino-cli
+  Future<bool> compileSketch(String sketchPath, String fqbn) async {
+    final exitCode = await runProcess(
+      'arduino-cli',
+      ['compile', '--fqbn', fqbn, sketchPath],
+      step: ProcessStep.compile,
+      showCommandInLogs: true,
+    );
+    return exitCode == 0;
+  }
+
+  /// Upload a sketch to a board using arduino-cli
+  Future<bool> uploadSketch(String sketchPath, String port, String fqbn) async {
+    final exitCode = await runProcess(
+      'arduino-cli',
+      ['upload', '-p', port, '--fqbn', fqbn, sketchPath],
+      step: ProcessStep.flash,
+      showCommandInLogs: true,
+    );
+    return exitCode == 0;
+  }
+
   /// Check if Arduino CLI is installed and available
   Future<bool> isCliAvailable() async {
     try {

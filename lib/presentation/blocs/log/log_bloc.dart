@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:esp_firmware_tool/data/services/batch_service.dart';
 import 'package:esp_firmware_tool/data/services/usb_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:esp_firmware_tool/data/models/batch.dart';
@@ -145,6 +146,7 @@ class LogState extends Equatable {
 class LogBloc extends Bloc<LogEvent, LogState> {
   final LogService _logService = serviceLocator<LogService>();
   final UsbService _usbService = serviceLocator<UsbService>();
+  final BatchService _batchService = serviceLocator<BatchService>();
 
   LogBloc() : super(const LogState()) {
     on<LoadInitialDataEvent>(_onLoadInitialData);
@@ -163,16 +165,16 @@ class LogBloc extends Bloc<LogEvent, LogState> {
   }
 
   Future<void> _onLoadInitialData(LoadInitialDataEvent event, Emitter<LogState> emit) async {
-    final batches = await _logService.fetchBatches();
+    final batches = await _batchService.fetchBatches();
     final ports = _usbService.getAvailablePorts();
     emit(state.copyWith(
-      batches: batches.map((b) => Batch(id: int.parse(b['id']), name: b['name'])).toList(),
+      batches: batches.map((b) => Batch(id: int.parse(b['id']!), name: b['name']!)).toList(),
       availablePorts: ports,
     ));
   }
 
   void _onSelectBatch(SelectBatchEvent event, Emitter<LogState> emit) async {
-    final serials = await _logService.fetchSerialsForBatch(event.batchId);
+    final serials = await _batchService.fetchSerialsForBatch(event.batchId);
     final devices = serials.map((serial) => Device(id: serial.hashCode, batchId: int.parse(event.batchId), serial: serial)).toList();
     emit(state.copyWith(selectedBatchId: event.batchId, devices: devices));
   }
