@@ -5,6 +5,7 @@ class AppColors {
   static const Color primary = Color(0xFF1976D2);
   static const Color accent = Color(0xFF42A5F5);
   static const Color background = Color(0xFFF5F5F5);
+  static const Color text = Color(0xFF212121);
 
   // Status colors
   static const Color connected = Color(0xFF2196F3);    // Blue
@@ -13,6 +14,8 @@ class AppColors {
   static const Color done = Color(0xFF4CAF50);         // Green
   static const Color error = Color(0xFFE53935);        // Red
   static const Color success = Color(0xFF4CAF50);
+  static const Color warning = Color(0xFFFFC107);      // Yellow
+  static const Color info = Color(0xFF2196F3);         // Blue
 
   // Additional UI colors
   static const Color idle = Color(0xFF757575);         // Grey

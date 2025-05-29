@@ -4,7 +4,6 @@ import 'package:esp_firmware_tool/data/services/arduino_cli_service.dart';
 import 'package:esp_firmware_tool/data/services/usb_service.dart';
 import 'package:esp_firmware_tool/data/services/template_service.dart';
 import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
-import 'package:esp_firmware_tool/presentation/blocs/settings/settings_bloc.dart';
 
 final GetIt serviceLocator = GetIt.instance;
 
@@ -19,5 +18,4 @@ void setupServiceLocator() {
   templateService: serviceLocator<TemplateService>(),
   usbService: serviceLocator<UsbService>(),
   ));
-  serviceLocator.registerFactory<SettingsBloc>(() => SettingsBloc());
 }

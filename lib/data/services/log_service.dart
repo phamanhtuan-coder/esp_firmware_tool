@@ -681,4 +681,97 @@ class LogService {
     await stopSerialMonitor();
     await _logStreamController.close();
   }
+
+  Future<List<Map<String, dynamic>>> fetchBatches() async {
+    try {
+      final response = await http.get(Uri.parse('https://api.example.com/batches'));
+      if (response.statusCode == 200) {
+        return List<Map<String, dynamic>>.from(json.decode(response.body));
+      }
+      addLog(
+        message: 'Failed to fetch batches: HTTP ${response.statusCode}',
+        level: LogLevel.error,
+        step: ProcessStep.productBatch,
+        origin: 'system',
+      );
+      return [];
+    } catch (e) {
+      addLog(
+        message: 'Error fetching batches: $e',
+        level: LogLevel.error,
+        step: ProcessStep.productBatch,
+        origin: 'system',
+      );
+      return [];
+    }
+  }
+
+  Future<List<String>> fetchSerialsForBatch(String batchId) async {
+    try {
+      final response = await http.get(Uri.parse('https://api.example.com/batches/$batchId/serials'));
+      if (response.statusCode == 200) {
+        final serials = List<String>.from(json.decode(response.body));
+        setCurrentBatch(batchId, serials);
+        return serials;
+      }
+      addLog(
+        message: 'Failed to fetch serials for batch $batchId: HTTP ${response.statusCode}',
+        level: LogLevel.error,
+        step: ProcessStep.productBatch,
+        origin: 'system',
+      );
+      return [];
+    } catch (e) {
+      addLog(
+        message: 'Error fetching serials for batch $batchId: $e',
+        level: LogLevel.error,
+        step: ProcessStep.productBatch,
+        origin: 'system',
+      );
+      return [];
+    }
+  }
+
+  Future<Map<String, String>> fetchBatchFirmware(String batchId) async {
+    try {
+      final response = await http.get(Uri.parse('https://api.example.com/batches/$batchId/firmware'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return {'version': data['version'], 'deviceType': data['deviceType'], 'sourceCode': data['sourceCode']};
+      }
+      addLog(
+        message: 'Failed to fetch firmware for batch $batchId: HTTP ${response.statusCode}',
+        level: LogLevel.error,
+        step: ProcessStep.firmwareDownload,
+        origin: 'system',
+      );
+      return {};
+    } catch (e) {
+      addLog(
+        message: 'Error fetching firmware for batch $batchId: $e',
+        level: LogLevel.error,
+        step: ProcessStep.firmwareDownload,
+        origin: 'system',
+      );
+      return {};
+    }
+  }
+
+  Future<String?> createFirmwareTemplate(String batchId, String serialNumber, String deviceId) async {
+    final firmwareData = await fetchBatchFirmware(batchId);
+    if (firmwareData.isEmpty) return null;
+
+    final sourceCode = firmwareData['sourceCode']!;
+    final version = firmwareData['version']!;
+    final deviceType = firmwareData['deviceType']!;
+
+    // Save source code to a temporary .ino file
+    final tempDir = await getTemporaryDirectory();
+    final filePath = path.join(tempDir.path, 'template_$serialNumber.ino');
+    final file = File(filePath);
+    await file.writeAsString(sourceCode);
+
+    // Prepare template with serial number
+    return prepareFirmwareTemplate(filePath, serialNumber, deviceId);
+  }
 }

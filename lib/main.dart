@@ -2,13 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:esp_firmware_tool/di/service_locator.dart';
 import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
-import 'package:esp_firmware_tool/presentation/blocs/settings/settings_bloc.dart';
 import 'package:esp_firmware_tool/presentation/views/log_view.dart';
-import 'package:esp_firmware_tool/presentation/views/settings_view.dart';
 import 'package:esp_firmware_tool/utils/app_routes.dart';
 import 'package:esp_firmware_tool/utils/app_theme.dart';
+import 'presentation/views/login_view.dart';
+import 'package:window_manager/window_manager.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await windowManager.ensureInitialized();
+
+  // Configure window to start maximized with standard controls
+  WindowOptions windowOptions = const WindowOptions(
+    titleBarStyle: TitleBarStyle.normal, // Preserve standard window controls
+  );
+  await windowManager.waitUntilReadyToShow(windowOptions, () async {
+    await windowManager.maximize(); // Start in maximized mode
+    await windowManager.show();
+    await windowManager.focus();
+  });
+
   setupServiceLocator();
   runApp(const MyApp());
 }
@@ -21,15 +34,13 @@ class MyApp extends StatelessWidget {
     return MultiBlocProvider(
       providers: [
         BlocProvider<LogBloc>(create: (context) => serviceLocator<LogBloc>()),
-        BlocProvider<SettingsBloc>(create: (context) => serviceLocator<SettingsBloc>()),
       ],
       child: MaterialApp(
         title: 'ESP Firmware Tool',
         theme: AppTheme.lightTheme,
-        home: const LogView(),
+        home: const LoginView(),
         routes: {
           AppRoutes.logs: (context) => const LogView(),
-          AppRoutes.settings: (context) => const SettingsView(),
         },
         debugShowCheckedModeBanner: false,
       ),

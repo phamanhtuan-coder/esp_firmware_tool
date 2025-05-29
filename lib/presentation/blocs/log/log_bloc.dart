@@ -15,6 +15,8 @@ class LogState {
   final List<String> availablePorts;
   final String? selectedPort;
   final String? serialNumber;
+  final String? selectedBatch;
+  final List<String> batchSerials;
 
   LogState({
     this.filteredLogs = const [],
@@ -26,6 +28,8 @@ class LogState {
     this.availablePorts = const [],
     this.selectedPort,
     this.serialNumber,
+    this.selectedBatch,
+    this.batchSerials = const [],
   });
 }
 
@@ -83,53 +87,46 @@ class LogBloc extends Bloc<LogEvent, LogState> {
         availablePorts: state.availablePorts,
         selectedPort: state.selectedPort,
         serialNumber: event.deviceSerial,
+        selectedBatch: state.selectedBatch,
+        batchSerials: state.batchSerials,
       ));
-      final templatePath = await templateService.getFirmwareTemplate(
-        event.firmwareVersion,
-        event.deviceType,
+      final templatePath = await logService.createFirmwareTemplate(
+        state.selectedBatch ?? '',
+        event.deviceSerial,
+        event.deviceId,
       );
       if (templatePath != null) {
-        final preparedPath = await templateService.prepareFirmwareTemplate(
+        final success = await logService.compileAndFlash(
           templatePath,
-          event.deviceSerial,
+          state.selectedPort ?? '',
+          arduinoCliService.getBoardFqbn(event.deviceType),
           event.deviceId,
         );
-        if (preparedPath != null) {
-          final success = await logService.compileAndFlash(
-            preparedPath,
-            state.selectedPort ?? '',
-            arduinoCliService.getBoardFqbn(event.deviceType),
-            event.deviceId,
-          );
-          emit(LogState(
-            filteredLogs: state.filteredLogs,
-            isFlashing: false,
-            status: success ? 'Done' : 'Error',
-            error: success ? null : 'Failed to flash firmware',
-            availablePorts: state.availablePorts,
-            selectedPort: state.selectedPort,
-            serialNumber: state.serialNumber,
-          ));
-        } else {
-          emit(LogState(
-            filteredLogs: state.filteredLogs,
-            isFlashing: false,
-            status: 'Error',
-            error: 'Failed to prepare template',
-            availablePorts: state.availablePorts,
-            selectedPort: state.selectedPort,
-            serialNumber: state.serialNumber,
-          ));
+        if (success) {
+          logService.markDeviceProcessed(event.deviceSerial, true);
         }
+        emit(LogState(
+          filteredLogs: state.filteredLogs,
+          isFlashing: false,
+          status: success ? 'Done' : 'Error',
+          error: success ? null : 'Failed to flash firmware',
+          availablePorts: state.availablePorts,
+          selectedPort: state.selectedPort,
+          serialNumber: event.deviceSerial,
+          selectedBatch: state.selectedBatch,
+          batchSerials: state.batchSerials,
+        ));
       } else {
         emit(LogState(
           filteredLogs: state.filteredLogs,
           isFlashing: false,
           status: 'Error',
-          error: 'Failed to get template',
+          error: 'Failed to prepare template',
           availablePorts: state.availablePorts,
           selectedPort: state.selectedPort,
-          serialNumber: state.serialNumber,
+          serialNumber: event.deviceSerial,
+          selectedBatch: state.selectedBatch,
+          batchSerials: state.batchSerials,
         ));
       }
     });
@@ -144,10 +141,99 @@ class LogBloc extends Bloc<LogEvent, LogState> {
         serialNumber: state.serialNumber,
       ));
     });
+    on<SelectBatchEvent>((event, emit) async {
+      final serials = await logService.fetchSerialsForBatch(event.batchId);
+      emit(LogState(
+        filteredLogs: state.filteredLogs,
+        availablePorts: state.availablePorts,
+        selectedPort: state.selectedPort,
+        serialNumber: state.serialNumber,
+        selectedBatch: event.batchId,
+        batchSerials: serials,
+      ));
+    });
+    on<SelectSerialEvent>((event, emit) async {
+      // Check if serial is already flashed or defective
+      bool isFlashed = await _checkIfFlashed(event.serialNumber);
+      bool isDefective = await _checkIfDefective(event.serialNumber);
+      if (isFlashed) {
+        emit(LogState(
+          filteredLogs: state.filteredLogs,
+          availablePorts: state.availablePorts,
+          selectedPort: state.selectedPort,
+          serialNumber: event.serialNumber,
+          selectedBatch: state.selectedBatch,
+          batchSerials: state.batchSerials,
+          error: 'Device ${event.serialNumber} already flashed',
+        ));
+      } else if (isDefective) {
+        emit(LogState(
+          filteredLogs: state.filteredLogs,
+          availablePorts: state.availablePorts,
+          selectedPort: state.selectedPort,
+          serialNumber: event.serialNumber,
+          selectedBatch: state.selectedBatch,
+          batchSerials: state.batchSerials,
+          error: 'Device ${event.serialNumber} is defective',
+        ));
+      } else {
+        emit(LogState(
+          filteredLogs: state.filteredLogs,
+          availablePorts: state.availablePorts,
+          selectedPort: state.selectedPort,
+          serialNumber: event.serialNumber,
+          selectedBatch: state.selectedBatch,
+          batchSerials: state.batchSerials,
+        ));
+      }
+    });
+    on<MarkDeviceDefectiveEvent>((event, emit) async {
+      // Simulate API call to mark device as defective
+      await _markDeviceDefective(event.serialNumber);
+      logService.markDeviceProcessed(event.serialNumber, false);
+      emit(LogState(
+        filteredLogs: state.filteredLogs,
+        availablePorts: state.availablePorts,
+        selectedPort: state.selectedPort,
+        serialNumber: state.serialNumber,
+        selectedBatch: state.selectedBatch,
+        batchSerials: state.batchSerials,
+        status: 'Device ${event.serialNumber} marked as defective',
+      ));
+    });
+  }
+  Future<bool> _checkIfFlashed(String serialNumber) async {
+    // Simulate API check (replace with actual API call)
+    return false;
+  }
+
+  Future<bool> _checkIfDefective(String serialNumber) async {
+    // Simulate API check (replace with actual API call)
+    return false;
+  }
+
+  Future<void> _markDeviceDefective(String serialNumber) async {
+    // Simulate API call to mark device as defective
+    await Future.delayed(const Duration(seconds: 1));
   }
 }
 
 abstract class LogEvent {}
+
+class SelectBatchEvent extends LogEvent {
+  final String batchId;
+  SelectBatchEvent(this.batchId);
+}
+
+class SelectSerialEvent extends LogEvent {
+  final String serialNumber;
+  SelectSerialEvent(this.serialNumber);
+}
+
+class MarkDeviceDefectiveEvent extends LogEvent {
+  final String serialNumber;
+  MarkDeviceDefectiveEvent(this.serialNumber);
+}
 
 class FilterLogEvent extends LogEvent {
   final String deviceFilter;
