@@ -8,18 +8,29 @@ class AppColors {
   static const Color text = Color(0xFF212121);
 
   // Status colors
-  static const Color connected = Color(0xFF2196F3);    // Blue
-  static const Color compiling = Color(0xFFFFA726);    // Orange
-  static const Color flashing = Color(0xFF9C27B0);     // Purple
-  static const Color done = Color(0xFF4CAF50);         // Green
-  static const Color error = Color(0xFFE53935);        // Red
+  static const Color connected = Color(0xFF2196F3); // Blue
+  static const Color compiling = Color(0xFFFFA726); // Orange
+  static const Color flashing = Color(0xFF9C27B0); // Purple
+  static const Color done = Color(0xFF4CAF50); // Green
+  static const Color error = Color(0xFFE53935); // Red
   static const Color success = Color(0xFF4CAF50);
-  static const Color warning = Color(0xFFFFC107);      // Yellow
-  static const Color info = Color(0xFF2196F3);         // Blue
+  static const Color warning = Color(0xFFFFC107); // Yellow
+  static const Color info = Color(0xFF2196F3); // Blue
 
   // Additional UI colors
-  static const Color idle = Color(0xFF757575);         // Grey
+  static const Color idle = Color(0xFF757575); // Grey
   static const Color cardBackground = Colors.white;
-  static const Color shadowColor = Color(0x1F000000);  // 12% black
+  static const Color shadowColor = Color(0x1F000000); // 12% black
   static const Color dividerColor = Color(0xFFEEEEEE);
+  static const Color buttonPressed = Color(
+    0xFF1565C0,
+  ); // Darker blue for pressed state
+  static const Color buttonDisabled = Color(0xFFBDBDBD);
+  static const Color buttonHover = Color(
+    0xFF90CAF9,
+  ); // Lighter blue for hover state
+  static const Color findFile = Color(0xFF42A5F5); // Blue
+  static const Color selectVersion = Color(0xFF4CAF50); // Green
+  static const Color refresh = Color(0xFFFFA726); // Orange
+  static const Color scanQr = Color(0xFF9C27B0); // Purple
 }

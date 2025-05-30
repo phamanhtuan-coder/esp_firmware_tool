@@ -36,30 +36,62 @@ class AppTheme {
       background: AppColors.background,
     ),
 
-    // Enhanced Button Themes with consistent styling
+    // Enhanced Button Themes with consistent styling and feedback effects
     elevatedButtonTheme: ElevatedButtonThemeData(
-      style: ElevatedButton.styleFrom(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+      style: ButtonStyle(
+        elevation: MaterialStateProperty.resolveWith<double>((states) {
+          if (states.contains(MaterialState.pressed)) return 1;
+          return 4;
+        }),
+        shape: MaterialStateProperty.all(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        textStyle: const TextStyle(
-          fontWeight: FontWeight.bold,
-          fontSize: 16,
+        padding: MaterialStateProperty.all(
+          const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         ),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+        textStyle: MaterialStateProperty.all(
+          const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        backgroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+          if (states.contains(MaterialState.disabled)) return AppColors.buttonDisabled;
+          if (states.contains(MaterialState.pressed)) return AppColors.buttonPressed;
+          if (states.contains(MaterialState.hovered)) return AppColors.buttonHover;
+          return AppColors.primary;
+        }),
+        foregroundColor: MaterialStateProperty.all(Colors.white),
+        overlayColor: MaterialStateProperty.all(Colors.white.withOpacity(0.1)),
       ),
     ),
 
     outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+      style: ButtonStyle(
+        shape: MaterialStateProperty.all(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        side: BorderSide(color: AppColors.primary),
-        foregroundColor: AppColors.primary,
+        padding: MaterialStateProperty.all(
+          const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        ),
+        side: MaterialStateProperty.resolveWith<BorderSide>((states) {
+          if (states.contains(MaterialState.disabled)) {
+            return BorderSide(color: AppColors.buttonDisabled);
+          }
+          if (states.contains(MaterialState.pressed)) {
+            return BorderSide(color: AppColors.buttonPressed, width: 2);
+          }
+          return BorderSide(color: AppColors.primary);
+        }),
+        foregroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+          if (states.contains(MaterialState.disabled)) return AppColors.buttonDisabled;
+          if (states.contains(MaterialState.pressed)) return AppColors.buttonPressed;
+          return AppColors.primary;
+        }),
       ),
     ),
 

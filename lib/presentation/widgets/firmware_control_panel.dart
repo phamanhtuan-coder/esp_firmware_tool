@@ -8,7 +8,7 @@ import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
 import 'package:esp_firmware_tool/presentation/widgets/warning_dialog.dart';
 import 'package:esp_firmware_tool/utils/app_colors.dart';
 
-class FirmwareControlPanel extends StatelessWidget {
+class FirmwareControlPanel extends StatefulWidget {
   final bool isDarkTheme;
   final String? selectedFirmwareVersion;
   final String? selectedPort;
@@ -36,8 +36,23 @@ class FirmwareControlPanel extends StatelessWidget {
     required this.availablePorts,
   });
 
+  @override
+  State<FirmwareControlPanel> createState() => _FirmwareControlPanelState();
+}
+
+class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
+  bool _isVersionButtonLoading = false;
+  bool _isFileButtonLoading = false;
+  bool _isQrCodeButtonLoading = false;
+  bool _isRefreshButtonLoading = false;
+
   void _handleFilePick(BuildContext context) async {
     final logBloc = context.read<LogBloc>();
+
+    setState(() {
+      _isFileButtonLoading = true;
+    });
+
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -53,7 +68,7 @@ class FirmwareControlPanel extends StatelessWidget {
         logBloc.add(SelectLocalFileEvent(filePath));
       } else {
         logBloc.add(AddLogEvent(LogEntry(
-          message: 'No file selected',
+          message: 'Không có file nào được chọn',
           timestamp: DateTime.now(),
           level: LogLevel.warning,
           step: ProcessStep.firmwareDownload,
@@ -61,19 +76,107 @@ class FirmwareControlPanel extends StatelessWidget {
         )));
       }
     } catch (e) {
-      logBloc.add(AddLogEvent(LogEntry(
-        message: 'Error picking file: $e',
-        timestamp: DateTime.now(),
-        level: LogLevel.error,
-        step: ProcessStep.firmwareDownload,
-        origin: 'system',
-      )));
+      if (mounted) {
+        logBloc.add(AddLogEvent(LogEntry(
+          message: 'Lỗi khi chọn file: $e',
+          timestamp: DateTime.now(),
+          level: LogLevel.error,
+          step: ProcessStep.firmwareDownload,
+          origin: 'system',
+        )));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isFileButtonLoading = false;
+        });
+      }
     }
   }
 
-  void _clearLocalFile(BuildContext context) {
-    context.read<LogBloc>().add(ClearLocalFileEvent()); // Xóa file cục bộ
-    onFirmwareVersionSelected(null); // Reset phiên bản firmware
+  void _clearLocalFile(BuildContext context) async {
+    setState(() {
+      _isVersionButtonLoading = true;
+    });
+
+    try {
+      context.read<LogBloc>().add(ClearLocalFileEvent());
+      widget.onFirmwareVersionSelected(null);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isVersionButtonLoading = false;
+        });
+      }
+    }
+  }
+
+  void _handleQrScan() async {
+    setState(() {
+      _isQrCodeButtonLoading = true;
+    });
+
+    try {
+      widget.onQrCodeScan();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isQrCodeButtonLoading = false;
+        });
+        // Giả lập delay để người dùng thấy hiệu ứng loading
+        Future.delayed(const Duration(milliseconds: 300));
+      }
+    }
+  }
+
+  void _handleRefreshPorts() async {
+    setState(() {
+      _isRefreshButtonLoading = true;
+    });
+
+    try {
+      widget.onUsbPortRefresh();
+    } finally {
+      if (mounted) {
+        // Giả lập delay để hiệu ứng loading hiển thị đủ lâu
+        await Future.delayed(const Duration(milliseconds: 500));
+        setState(() {
+          _isRefreshButtonLoading = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildLoadingButton({
+    required bool isLoading,
+    required VoidCallback onPressed,
+    required String text,
+    required IconData icon,
+    required Color backgroundColor,
+  }) {
+    return SizedBox(
+      height: 48,
+      child: ElevatedButton.icon(
+        icon: isLoading
+          ? SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            )
+          : Icon(icon, size: 20),
+        label: Text(isLoading ? 'Đang xử lý...' : text),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: backgroundColor,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+        onPressed: isLoading ? null : onPressed,
+      ),
+    );
   }
 
   @override
@@ -89,7 +192,7 @@ class FirmwareControlPanel extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              // Row 1: Phiên bản Firmware
+              // Hàng 1: Phiên bản Firmware
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -101,11 +204,11 @@ class FirmwareControlPanel extends StatelessWidget {
                         const Text('Phiên bản Firmware', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                         const SizedBox(height: 4),
                         DropdownButtonFormField<String>(
-                          value: selectedFirmwareVersion,
+                          value: widget.selectedFirmwareVersion,
                           decoration: InputDecoration(
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                            fillColor: isDarkTheme ? AppColors.idle : AppColors.cardBackground,
+                            fillColor: widget.isDarkTheme ? AppColors.idle : AppColors.cardBackground,
                             filled: true,
                           ),
                           items: const [
@@ -113,33 +216,26 @@ class FirmwareControlPanel extends StatelessWidget {
                             DropdownMenuItem(value: 'v1.1.0', child: Text('v1.1.0')),
                             DropdownMenuItem(value: 'v2.0.0-beta', child: Text('v2.0.0-beta')),
                           ],
-                          onChanged: hasLocalFile ? null : onFirmwareVersionSelected, // Vô hiệu hóa nếu có file cục bộ
+                          onChanged: hasLocalFile ? null : widget.onFirmwareVersionSelected,
                           hint: const Text('-- Chọn phiên bản --'),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(width: 8),
-                  SizedBox(
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.list, size: 20),
-                      label: const Text('Select Version'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.connected,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                      ),
-                      onPressed: () => _clearLocalFile(context), // Xóa file cục bộ, enable dropdown
-                    ),
+                  _buildLoadingButton(
+                    isLoading: _isVersionButtonLoading,
+                    onPressed: () => _clearLocalFile(context),
+                    text: 'Chọn Phiên Bản',
+                    icon: Icons.list,
+                    backgroundColor: AppColors.selectVersion,
                   ),
                 ],
               ),
 
               const SizedBox(height: 16),
 
-              // Row 2: Local Firmware File
+              // Hàng 2: File Firmware Cục Bộ
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -149,7 +245,7 @@ class FirmwareControlPanel extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Local Firmware File',
+                          'File Firmware Cục Bộ',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
@@ -159,7 +255,7 @@ class FirmwareControlPanel extends StatelessWidget {
                         TextField(
                           readOnly: true,
                           controller: TextEditingController(
-                              text: hasLocalFile ? fileName : 'No file selected'),
+                              text: hasLocalFile ? fileName : 'Chưa chọn file'),
                           decoration: InputDecoration(
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
@@ -169,7 +265,7 @@ class FirmwareControlPanel extends StatelessWidget {
                               vertical: 14,
                             ),
                             fillColor:
-                                isDarkTheme
+                                widget.isDarkTheme
                                     ? AppColors.idle
                                     : AppColors.cardBackground,
                             filled: true,
@@ -179,35 +275,19 @@ class FirmwareControlPanel extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  SizedBox(
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.search, size: 20),
-                      label: const Text('Find in File'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.connected,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 14,
-                        ),
-                        textStyle: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      onPressed: () => _handleFilePick(context),
-                    ),
+                  _buildLoadingButton(
+                    isLoading: _isFileButtonLoading,
+                    onPressed: () => _handleFilePick(context),
+                    text: 'Tìm File',
+                    icon: Icons.search,
+                    backgroundColor: AppColors.findFile,
                   ),
                 ],
               ),
 
               const SizedBox(height: 16),
 
-              // Row 3: Serial Number
+              // Hàng 3: Số Serial
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -216,42 +296,36 @@ class FirmwareControlPanel extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Serial Number', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                        const Text('Số Serial', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                         const SizedBox(height: 4),
                         TextField(
-                          controller: serialController,
+                          controller: widget.serialController,
                           decoration: InputDecoration(
                             hintText: 'Nhập hoặc quét mã serial',
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                            fillColor: isDarkTheme ? AppColors.idle : AppColors.cardBackground,
+                            fillColor: widget.isDarkTheme ? AppColors.idle : AppColors.cardBackground,
                             filled: true,
                           ),
-                          onSubmitted: onSerialSubmitted, // Gửi serial number từ TextField
+                          onSubmitted: widget.onSerialSubmitted,
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(width: 8),
-                  SizedBox(
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.qr_code, size: 16),
-                      label: const Text('Quét QR'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.connected,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      onPressed: onQrCodeScan, // Gửi serial number từ QR code
-                    ),
+                  _buildLoadingButton(
+                    isLoading: _isQrCodeButtonLoading,
+                    onPressed: _handleQrScan,
+                    text: 'Quét QR',
+                    icon: Icons.qr_code,
+                    backgroundColor: AppColors.scanQr,
                   ),
                 ],
               ),
 
               const SizedBox(height: 16),
 
-              // Row 4: Cổng COM (USB)
+              // Hàng 4: Cổng COM (USB)
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -269,7 +343,7 @@ class FirmwareControlPanel extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         DropdownButtonFormField<String>(
-                          value: selectedPort,
+                          value: widget.selectedPort,
                           decoration: InputDecoration(
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
@@ -279,13 +353,13 @@ class FirmwareControlPanel extends StatelessWidget {
                               vertical: 14,
                             ),
                             fillColor:
-                                isDarkTheme
+                                widget.isDarkTheme
                                     ? AppColors.idle
                                     : AppColors.cardBackground,
                             filled: true,
                           ),
                           items:
-                              availablePorts
+                              widget.availablePorts
                                   .map(
                                     (port) => DropdownMenuItem(
                                       value: port,
@@ -293,35 +367,19 @@ class FirmwareControlPanel extends StatelessWidget {
                                     ),
                                   )
                                   .toList(),
-                          onChanged: onUsbPortSelected,
+                          onChanged: widget.onUsbPortSelected,
                           hint: const Text('-- Chọn cổng --'),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(width: 8),
-                  SizedBox(
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.refresh, size: 20),
-                      label: const Text('Refresh'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.connected,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 14,
-                        ),
-                        textStyle: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      onPressed: onUsbPortRefresh,
-                    ),
+                  _buildLoadingButton(
+                    isLoading: _isRefreshButtonLoading,
+                    onPressed: _handleRefreshPorts,
+                    text: 'Làm Mới',
+                    icon: Icons.refresh,
+                    backgroundColor: AppColors.refresh,
                   ),
                 ],
               ),
