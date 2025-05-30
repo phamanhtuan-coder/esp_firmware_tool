@@ -86,16 +86,23 @@ class SelectLocalFileEvent extends LogEvent {
 
 class ClearLocalFileEvent extends LogEvent {}
 
+class LoadBatchesForPlanningEvent extends LogEvent {
+  final String planningId;
+  const LoadBatchesForPlanningEvent(this.planningId);
+  @override
+  List<Object?> get props => [planningId];
+}
 
 class LogState extends Equatable {
   final List<Batch> batches;
   final List<Device> devices;
   final List<String> availablePorts;
   final List<LogEntry> filteredLogs;
+  final String? selectedPlanningId;
   final String? selectedBatchId;
   final String? selectedDeviceId;
   final String? serialNumber;
-  final String? selectedPort; // Thêm thuộc tính selectedPort để lưu cổng COM đã chọn
+  final String? selectedPort;
   final bool isFlashing;
   final String? status;
   final String? error;
@@ -107,10 +114,11 @@ class LogState extends Equatable {
     this.devices = const [],
     this.availablePorts = const [],
     this.filteredLogs = const [],
+    this.selectedPlanningId,
     this.selectedBatchId,
     this.selectedDeviceId,
     this.serialNumber,
-    this.selectedPort, // Thêm vào constructor
+    this.selectedPort,
     this.isFlashing = false,
     this.status,
     this.error,
@@ -123,10 +131,11 @@ class LogState extends Equatable {
     List<Device>? devices,
     List<String>? availablePorts,
     List<LogEntry>? filteredLogs,
+    String? selectedPlanningId,
     String? selectedBatchId,
     String? selectedDeviceId,
     String? serialNumber,
-    String? selectedPort, // Thêm vào phương thức copyWith
+    String? selectedPort,
     bool? isFlashing,
     String? status,
     String? error,
@@ -138,10 +147,11 @@ class LogState extends Equatable {
       devices: devices ?? this.devices,
       availablePorts: availablePorts ?? this.availablePorts,
       filteredLogs: filteredLogs ?? this.filteredLogs,
+      selectedPlanningId: selectedPlanningId ?? this.selectedPlanningId,
       selectedBatchId: selectedBatchId ?? this.selectedBatchId,
       selectedDeviceId: selectedDeviceId ?? this.selectedDeviceId,
       serialNumber: serialNumber ?? this.serialNumber,
-      selectedPort: selectedPort ?? this.selectedPort, // Thêm vào return
+      selectedPort: selectedPort ?? this.selectedPort,
       isFlashing: isFlashing ?? this.isFlashing,
       status: status ?? this.status,
       error: error ?? this.error,
@@ -156,10 +166,11 @@ class LogState extends Equatable {
     devices,
     availablePorts,
     filteredLogs,
+    selectedPlanningId,
     selectedBatchId,
     selectedDeviceId,
     serialNumber,
-    selectedPort, // Thêm vào danh sách props
+    selectedPort,
     isFlashing,
     status,
     error,
@@ -188,9 +199,10 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     on<AutoScrollEvent>(_onAutoScroll);
     on<AddLogEvent>(_onAddLog);
     on<SelectLocalFileEvent>(_onSelectLocalFile);
-    on<ClearLocalFileEvent>((event, emit) { // Thêm handler cho ClearLocalFileEvent
+    on<ClearLocalFileEvent>((event, emit) {
       emit(state.copyWith(localFilePath: null));
     });
+    on<LoadBatchesForPlanningEvent>(_onLoadBatchesForPlanning);
   }
 
   Future<void> _onLoadInitialData(LoadInitialDataEvent event, Emitter<LogState> emit) async {
@@ -229,7 +241,6 @@ class LogBloc extends Bloc<LogEvent, LogState> {
       status: 'Selected port: ${event.port}'
     ));
 
-    // Thêm log về việc chọn cổng COM
     final logEntry = LogEntry(
       message: 'Selected COM port: ${event.port}',
       timestamp: DateTime.now(),
@@ -246,17 +257,13 @@ class LogBloc extends Bloc<LogEvent, LogState> {
   }
 
   Future<void> _onInitiateFlash(InitiateFlashEvent event, Emitter<LogState> emit) async {
-    // Thiết lập trạng thái đang biên dịch
     emit(state.copyWith(isFlashing: true, status: 'Compiling firmware for ${event.deviceSerial}...'));
 
-    // Lấy dịch vụ ArduinoCliService từ service locator
     final arduinoCliService = serviceLocator<ArduinoCliService>();
 
-    // Tạm thời sử dụng Arduino UNO R3 thay vì loại thiết bị từ tham số
     const String deviceType = 'arduino_uno_r3';
     final String fqbn = arduinoCliService.getBoardFqbn(deviceType);
 
-    // Sử dụng cổng COM đã chọn từ state thay vì gọi getPortForDevice
     final String? selectedPort = state.selectedPort;
 
     if (selectedPort == null || selectedPort.isEmpty) {
@@ -268,10 +275,8 @@ class LogBloc extends Bloc<LogEvent, LogState> {
       return;
     }
 
-    // Xác định đường dẫn đến sketch (template hoặc file đã chọn)
     final String sketchPath = state.localFilePath ?? 'lib/firmware_template/template.ino';
 
-    // Thêm log bắt đầu quá trình biên dịch
     final compileStartLog = LogEntry(
       message: 'Starting compilation of $sketchPath for Arduino UNO R3 ($fqbn)',
       timestamp: DateTime.now(),
@@ -281,12 +286,10 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     );
     add(AddLogEvent(compileStartLog));
 
-    // Gọi hàm biên dịch sketch
     emit(state.copyWith(status: 'Compiling Arduino UNO R3 firmware...'));
     final bool compileSuccess = await arduinoCliService.compileSketch(sketchPath, fqbn);
 
     if (!compileSuccess) {
-      // Thêm log về lỗi biên dịch
       final compileFailLog = LogEntry(
         message: 'Compilation failed for $sketchPath',
         timestamp: DateTime.now(),
@@ -304,7 +307,6 @@ class LogBloc extends Bloc<LogEvent, LogState> {
       return;
     }
 
-    // Thêm log về thành công biên dịch
     final compileSuccessLog = LogEntry(
       message: 'Compilation successful, starting upload to device on port $selectedPort',
       timestamp: DateTime.now(),
@@ -314,14 +316,11 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     );
     add(AddLogEvent(compileSuccessLog));
 
-    // Cập nhật trạng thái đang upload
     emit(state.copyWith(status: 'Uploading firmware to ${event.deviceSerial} on port $selectedPort...'));
 
-    // Gọi hàm upload firmware với cổng đã chọn
     final bool uploadSuccess = await arduinoCliService.uploadSketch(sketchPath, selectedPort, fqbn);
 
     if (!uploadSuccess) {
-      // Thêm log về lỗi upload
       final uploadFailLog = LogEntry(
         message: 'Upload failed to device ${event.deviceSerial} on port $selectedPort',
         timestamp: DateTime.now(),
@@ -339,7 +338,6 @@ class LogBloc extends Bloc<LogEvent, LogState> {
       return;
     }
 
-    // Thêm log về thành công upload
     final uploadSuccessLog = LogEntry(
       message: 'Successfully flashed firmware to device ${event.deviceSerial} on port $selectedPort',
       timestamp: DateTime.now(),
@@ -349,7 +347,6 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     );
     add(AddLogEvent(uploadSuccessLog));
 
-    // Cập nhật trạng thái thành công
     emit(state.copyWith(
       isFlashing: false,
       status: 'Successfully flashed firmware to ${event.deviceSerial}',
@@ -402,4 +399,11 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     add(AddLogEvent(logEntry));
   }
 
+  Future<void> _onLoadBatchesForPlanning(LoadBatchesForPlanningEvent event, Emitter<LogState> emit) async {
+    final batches = await _batchService.fetchBatchesForPlanning(event.planningId);
+    emit(state.copyWith(
+      selectedPlanningId: event.planningId,
+      batches: batches.map((b) => Batch(id: int.parse(b['id']!), name: b['name']!)).toList(),
+    ));
+  }
 }

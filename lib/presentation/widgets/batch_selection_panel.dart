@@ -10,12 +10,22 @@ class BatchSelectionPanel extends StatelessWidget {
   final List<Device> devices;
   final String? selectedBatch;
   final String? selectedDevice;
+  final String? selectedPlanning;
   final Function(String?) onBatchSelected;
   final Function(String?) onDeviceSelected;
+  final Function(String?) onPlanningSelected;
   final Function(Device) onDeviceMarkDefective;
   final bool isDarkTheme;
 
-  const BatchSelectionPanel({
+  // List of available plannings
+  final List<Map<String, String>> plannings = [
+    {'id': '1', 'name': 'Planning 2025 Q1'},
+    {'id': '2', 'name': 'Planning 2025 Q2'},
+    {'id': '3', 'name': 'Planning 2025 Q3'},
+    {'id': '4', 'name': 'Planning 2025 Q4'},
+  ];
+
+  BatchSelectionPanel({
     super.key,
     required this.batches,
     required this.devices,
@@ -25,6 +35,8 @@ class BatchSelectionPanel extends StatelessWidget {
     required this.onDeviceSelected,
     required this.onDeviceMarkDefective,
     required this.isDarkTheme,
+    this.selectedPlanning,
+    required this.onPlanningSelected,
   });
 
   @override
@@ -43,6 +55,28 @@ class BatchSelectionPanel extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Planning Dropdown
+                const Text('Chọn kế hoạch', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 4),
+                DropdownButtonFormField<String>(
+                  value: selectedPlanning,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    fillColor: isDarkTheme ? AppColors.darkCardBackground : Colors.white,
+                    filled: true,
+                  ),
+                  items: plannings.map((planning) => DropdownMenuItem(
+                    value: planning['id'],
+                    child: Text(planning['name']!),
+                  )).toList(),
+                  onChanged: onPlanningSelected,
+                  hint: const Text('-- Chọn kế hoạch --'),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Batch Dropdown
                 const Text('Chọn lô (Batch)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 4),
                 DropdownButtonFormField<String>(

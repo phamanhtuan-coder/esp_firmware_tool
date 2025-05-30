@@ -31,6 +31,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   late TabController _tabController;
+  String? _selectedPlanning;
   String? _selectedBatch;
   String? _selectedDevice;
   String? _selectedFirmwareVersion;
@@ -184,6 +185,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                           devices: state.devices,
                           selectedBatch: _selectedBatch,
                           selectedDevice: _selectedDevice,
+                          selectedPlanning: _selectedPlanning,
                           onBatchSelected: (value) {
                             setState(() => _selectedBatch = value);
                             context.read<LogBloc>().add(SelectBatchEvent(value!));
@@ -191,6 +193,15 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                           onDeviceSelected: (value) {
                             setState(() => _selectedDevice = value);
                             context.read<LogBloc>().add(SelectDeviceEvent(value!));
+                          },
+                          onPlanningSelected: (value) {
+                            setState(() {
+                              _selectedPlanning = value;
+                              // Reset batch selection when planning changes
+                              _selectedBatch = null;
+                            });
+                            // Load batches for the selected planning
+                            context.read<LogBloc>().add(LoadBatchesForPlanningEvent(value!));
                           },
                           onDeviceMarkDefective: (device) {
                             context.read<LogBloc>().add(
