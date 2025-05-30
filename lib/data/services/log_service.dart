@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:libserialport/libserialport.dart';
 
 import 'package:esp_firmware_tool/data/models/log_entry.dart';
 import 'package:path_provider/path_provider.dart';
@@ -10,6 +12,9 @@ import 'package:http/http.dart' as http;
 class LogService {
   // Stream controller for broadcasting logs to UI
   final _logStreamController = StreamController<LogEntry>.broadcast();
+
+  // Stream controller specifically for serial monitor data
+  final _serialMonitorStreamController = StreamController<List<LogEntry>>.broadcast();
 
   // Current active process (compile, upload, etc.)
   Process? _activeProcess;
@@ -39,11 +44,56 @@ class LogService {
   List<String> _currentBatchSerials = [];
   String _currentBatchId = '';
 
+  // Serial port instance for native serial monitor
+  SerialPort? _serialPort;
+
+  // Buffer for serial data with configurable maximum size
+  final List<LogEntry> _serialBuffer = [];
+  static const int _maxBufferSize = 5000; // Maximum number of entries to keep in buffer
+
+  // Current display mode for serial data
+  DataDisplayMode _serialDisplayMode = DataDisplayMode.ascii;
+
+  // Auto-scroll flag
+  bool _autoScroll = true;
+
   // Public stream for UI to listen to
   Stream<LogEntry> get logStream => _logStreamController.stream;
 
+  // Public stream specifically for serial monitor data
+  Stream<List<LogEntry>> get serialMonitorStream => _serialMonitorStreamController.stream;
+
+  // Getter for current display mode
+  DataDisplayMode get serialDisplayMode => _serialDisplayMode;
+
+  // Getter for auto-scroll flag
+  bool get autoScroll => _autoScroll;
+
+  // Setter for auto-scroll
+  set autoScroll(bool value) {
+    _autoScroll = value;
+  }
+
   // Getter for current batch ID
   String get currentBatchId => _currentBatchId;
+
+  // Get the current serial buffer
+  List<LogEntry> getSerialBuffer() {
+    return List<LogEntry>.from(_serialBuffer);
+  }
+
+  // Clear the serial buffer
+  void clearSerialBuffer() {
+    _serialBuffer.clear();
+    _serialMonitorStreamController.add([]);
+  }
+
+  // Set the display mode for serial data
+  void setDisplayMode(DataDisplayMode mode) {
+    _serialDisplayMode = mode;
+    // Broadcast updated buffer with new display mode
+    _serialMonitorStreamController.add(_serialBuffer);
+  }
 
   // Constructor to initialize the service
   LogService() {
@@ -97,6 +147,15 @@ class LogService {
     );
 
     _logStreamController.add(entry);
+
+    // Add to serial buffer if it's serial output
+    if (level == LogLevel.serialOutput) {
+      _serialBuffer.add(entry);
+      if (_serialBuffer.length > _maxBufferSize) {
+        _serialBuffer.removeAt(0);
+      }
+      _serialMonitorStreamController.add(_serialBuffer);
+    }
   }
 
   // Handle process output and convert to log entries with improved Arduino CLI output parsing
@@ -293,10 +352,18 @@ class LogService {
     await stopSerialMonitor();
 
     try {
-      // Start Arduino CLI serial monitor
+      // Start Arduino CLI monitor with specific configuration for better data handling
       _serialMonitorProcess = await Process.start(
         'arduino-cli',
-        ['monitor', '-p', port, '-c', 'baudrate=$baudRate'],
+        [
+          'monitor',
+          '--port', port,
+          '--config', 'baudrate=$baudRate',
+          '--config', 'parity=none',
+          '--config', 'databits=8',
+          '--config', 'stopbits=1',
+        ],
+        mode: ProcessStartMode.inheritStdio, // This helps with direct data streaming
       );
 
       _currentDeviceId = deviceId;
@@ -310,58 +377,55 @@ class LogService {
         origin: 'system',
       );
 
-      // Add a log entry for requesting input with Arduino IDE-like experience
-      final inputRequestEntry = SerialInputLogEntry(
-        prompt: 'Type commands to send to the device (Enter to send)',
-        onSerialInput: sendToSerialMonitor,
-        step: ProcessStep.serialMonitor,
-        deviceId: deviceId,
-      );
-
-      _logStreamController.add(inputRequestEntry);
-
-      // Stream stdout from serial monitor with improved buffering
+      // Listen to stdout with binary encoding for more reliable data capture
       _serialMonitorProcess!.stdout
-        .transform(utf8.decoder)
+        .transform(const Utf8Decoder(allowMalformed: true))
         .listen((data) {
-          final lines = data.split('\n');
-          for (final line in lines) {
-            if (line.trim().isNotEmpty) {
-              _processOutput(
-                line.trim(),
-                ProcessStep.serialMonitor,
-                deviceId,
-                origin: 'serial-monitor'
-              );
-            }
+          if (data.isNotEmpty) {
+            // Process the data and add it to the log
+            addLog(
+              message: data.trim(),
+              level: LogLevel.serialOutput,
+              step: ProcessStep.serialMonitor,
+              deviceId: deviceId,
+              origin: 'serial-monitor',
+              rawOutput: data,
+            );
           }
+        },
+        onError: (error) {
+          addLog(
+            message: 'Error reading from serial port: $error',
+            level: LogLevel.error,
+            step: ProcessStep.serialMonitor,
+            deviceId: deviceId,
+            origin: 'system',
+          );
         });
 
-      // Stream stderr from serial monitor
+      // Listen to stderr for errors
       _serialMonitorProcess!.stderr
         .transform(utf8.decoder)
         .listen((data) {
-          final lines = data.split('\n');
-          for (final line in lines) {
-            if (line.trim().isNotEmpty) {
-              _processOutput(
-                line.trim(),
-                ProcessStep.serialMonitor,
-                deviceId,
-                origin: 'serial-monitor'
-              );
-            }
+          if (data.trim().isNotEmpty) {
+            addLog(
+              message: 'Serial Error: ${data.trim()}',
+              level: LogLevel.error,
+              step: ProcessStep.serialMonitor,
+              deviceId: deviceId,
+              origin: 'serial-monitor',
+            );
           }
         });
 
-      // Monitor the process exit
+      // Monitor process exit
       _serialMonitorProcess!.exitCode.then((exitCode) {
         _serialMonitorActive = false;
         _serialMonitorProcess = null;
         _currentDeviceId = null;
 
         addLog(
-          message: 'Serial monitor closed',
+          message: 'Serial monitor closed (exit code: $exitCode)',
           level: LogLevel.info,
           step: ProcessStep.serialMonitor,
           deviceId: deviceId,
@@ -379,6 +443,153 @@ class LogService {
         origin: 'system',
       );
       return false;
+    }
+  }
+
+  Future<bool> startNativeSerialMonitor(String port, int baudRate, String deviceId) async {
+    await stopSerialMonitor();
+
+    try {
+      // Create and configure serial port
+      final serialPort = SerialPort(port);
+
+      if (!serialPort.openReadWrite()) {
+        addLog(
+          message: 'Failed to open serial port: ${SerialPort.lastError}', // Fix static access
+          level: LogLevel.error,
+          step: ProcessStep.serialMonitor,
+          deviceId: deviceId,
+          origin: 'system',
+        );
+        return false;
+      }
+
+      serialPort.config = SerialPortConfig()
+        ..baudRate = baudRate
+        ..bits = 8
+        ..stopBits = 1
+        ..parity = 0
+        ..setFlowControl(SerialPortFlowControl.none);
+
+      // Create a reader for the port
+      final reader = SerialPortReader(serialPort);
+
+      // Start reading data
+      reader.stream.listen(
+        (data) {
+          if (data.isNotEmpty) {
+            final String message = String.fromCharCodes(data).trim();
+            if (message.isNotEmpty) {
+              addLog(
+                message: message,
+                level: LogLevel.serialOutput,
+                step: ProcessStep.serialMonitor,
+                deviceId: deviceId,
+                origin: 'serial-monitor',
+                rawOutput: message,
+              );
+            }
+          }
+        },
+        onError: (error) {
+          addLog(
+            message: 'Serial port error: $error',
+            level: LogLevel.error,
+            step: ProcessStep.serialMonitor,
+            deviceId: deviceId,
+            origin: 'system',
+          );
+        },
+        onDone: () {
+          addLog(
+            message: 'Serial port closed',
+            level: LogLevel.info,
+            step: ProcessStep.serialMonitor,
+            deviceId: deviceId,
+            origin: 'system',
+          );
+          serialPort.close();
+        },
+      );
+
+      _serialMonitorActive = true;
+      _currentDeviceId = deviceId;
+
+      // Store the serial port instance for cleanup
+      _serialPort = serialPort;
+
+      addLog(
+        message: 'Serial monitor started on port $port at $baudRate baud',
+        level: LogLevel.info,
+        step: ProcessStep.serialMonitor,
+        deviceId: deviceId,
+        origin: 'system',
+      );
+
+      return true;
+    } catch (e) {
+      addLog(
+        message: 'Failed to start native serial monitor: $e',
+        level: LogLevel.error,
+        step: ProcessStep.serialMonitor,
+        deviceId: deviceId,
+        origin: 'system',
+      );
+      return false;
+    }
+  }
+
+  Future<bool> startAlternativeSerialMonitor(String port, int baudRate, String deviceId) async {
+    await stopSerialMonitor();
+
+    try {
+      // Try using screen command for more reliable serial communication
+      _serialMonitorProcess = await Process.start(
+        'screen',
+        [port, baudRate.toString()],
+        mode: ProcessStartMode.inheritStdio,
+      );
+
+      _currentDeviceId = deviceId;
+      _serialMonitorActive = true;
+
+      addLog(
+        message: 'Serial monitor started using screen on port $port at $baudRate baud',
+        level: LogLevel.info,
+        step: ProcessStep.serialMonitor,
+        deviceId: deviceId,
+        origin: 'system',
+      );
+
+      return true;
+    } catch (e) {
+      // If screen fails, try using minicom
+      try {
+        _serialMonitorProcess = await Process.start(
+          'minicom',
+          ['-D', port, '-b', baudRate.toString()],
+          mode: ProcessStartMode.inheritStdio,
+        );
+
+        addLog(
+          message: 'Serial monitor started using minicom on port $port at $baudRate baud',
+          level: LogLevel.info,
+          step: ProcessStep.serialMonitor,
+          deviceId: deviceId,
+          origin: 'system',
+        );
+
+        return true;
+      } catch (e) {
+        addLog(
+          message: 'Failed to start alternative serial monitor: $e',
+          level: LogLevel.error,
+          step: ProcessStep.serialMonitor,
+          deviceId: deviceId,
+          origin: 'system',
+        );
+        return false;
+      }
     }
   }
 
@@ -512,12 +723,11 @@ class LogService {
 
   // Send data to the serial monitor with improved input handling
   void sendToSerialMonitor(String data) {
-    if (_serialMonitorProcess != null && _serialMonitorActive) {
+    if (_serialPort != null && _serialMonitorActive) {
       try {
-        // Send the input to the process
-        _serialMonitorProcess!.stdin.writeln(data);
+        final bytes = Uint8List.fromList('$data\n'.codeUnits);
+        _serialPort!.write(bytes);
 
-        // Log the input (with input level to display differently)
         addLog(
           message: '> $data',
           level: LogLevel.input,
@@ -527,7 +737,7 @@ class LogService {
         );
       } catch (e) {
         addLog(
-          message: 'Failed to send data to serial monitor: $e',
+          message: 'Failed to send data to serial port: $e',
           level: LogLevel.error,
           step: ProcessStep.serialMonitor,
           deviceId: _currentDeviceId ?? '',
@@ -536,7 +746,7 @@ class LogService {
       }
     } else {
       addLog(
-        message: 'No active serial monitor to send data to',
+        message: 'No active serial connection to send data to',
         level: LogLevel.warning,
         step: ProcessStep.serialMonitor,
         deviceId: _currentDeviceId ?? '',
@@ -547,6 +757,21 @@ class LogService {
 
   // Stop the serial monitor with improved cleanup
   Future<void> stopSerialMonitor() async {
+    if (_serialPort != null) {
+      try {
+        _serialPort!.close();
+      } catch (e) {
+        addLog(
+          message: 'Error closing serial port: $e',
+          level: LogLevel.error,
+          step: ProcessStep.serialMonitor,
+          deviceId: _currentDeviceId ?? '',
+          origin: 'system',
+        );
+      }
+      _serialPort = null;
+    }
+
     if (_serialMonitorProcess != null) {
       _serialMonitorActive = false;
 

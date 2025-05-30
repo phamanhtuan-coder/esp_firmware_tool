@@ -32,6 +32,12 @@ enum ProcessStep {
   systemEvent,         // New step for system events like USB connect/disconnect
 }
 
+enum DataDisplayMode {
+  ascii,
+  hex,
+  mixed,
+}
+
 class LogEntry {
   final String message;
   final DateTime timestamp;
@@ -41,6 +47,7 @@ class LogEntry {
   final bool requiresInput;
   final String? origin; // 'arduino-cli', 'system', 'user-input', 'serial-monitor'
   final String? rawOutput; // Store raw output from Arduino CLI for parsing/display
+  final DataDisplayMode displayMode;
 
   LogEntry({
     required this.message,
@@ -51,7 +58,52 @@ class LogEntry {
     this.requiresInput = false,
     this.origin,
     this.rawOutput,
+    this.displayMode = DataDisplayMode.ascii,
   });
+
+  // Format the timestamp in a readable form
+  String get formattedTimestamp =>
+      '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}:${timestamp.second.toString().padLeft(2, '0')}.${timestamp.millisecond.toString().padLeft(3, '0')}';
+
+  // Convert message to hex view if needed
+  String getFormattedMessage(DataDisplayMode mode) {
+    if (mode == DataDisplayMode.ascii || rawOutput == null) {
+      return message;
+    } else if (mode == DataDisplayMode.hex) {
+      return _convertToHex(rawOutput!);
+    } else {
+      // Mixed mode - show both ascii and hex
+      return '$message\n${_convertToHex(rawOutput!)}';
+    }
+  }
+
+  // Convert a string to hex representation
+  String _convertToHex(String input) {
+    final buffer = StringBuffer();
+    for (int i = 0; i < input.length; i++) {
+      final charCode = input.codeUnitAt(i);
+      buffer.write(charCode.toRadixString(16).padLeft(2, '0'));
+      buffer.write(' ');
+      // Add line break every 16 bytes for readability
+      if ((i + 1) % 16 == 0) buffer.write('\n');
+    }
+    return buffer.toString();
+  }
+
+  // Create a copy with a different display mode
+  LogEntry withDisplayMode(DataDisplayMode newMode) {
+    return LogEntry(
+      message: message,
+      timestamp: timestamp,
+      level: level,
+      step: step,
+      deviceId: deviceId,
+      requiresInput: requiresInput,
+      origin: origin,
+      rawOutput: rawOutput,
+      displayMode: newMode,
+    );
+  }
 
   factory LogEntry.fromJson(Map<String, dynamic> json) {
     return LogEntry(
@@ -69,6 +121,7 @@ class LogEntry {
       requiresInput: json['requiresInput'] ?? false,
       origin: json['origin'],
       rawOutput: json['rawOutput'],
+      displayMode: DataDisplayMode.ascii,
     );
   }
 

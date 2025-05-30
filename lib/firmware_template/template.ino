@@ -3,15 +3,13 @@
 // Compatible with Arduino CLI in the provided app structure
 
 #define SERIAL_NUMBER "{{SERIAL_NUMBER}}"
+unsigned long lastMillis = 0;
+int counter = 0;
 
 void setup() {
     // Initialize Serial communication at 115200 baud rate
     Serial.begin(115200);
-
-    // Wait for Serial to initialize
-    while (!Serial) {
-        delay(100);
-    }
+    delay(1000); // Give serial port time to initialize
 
     // Print initial log with serial number
     Serial.println("=== Arduino Test Template ===");
@@ -21,10 +19,20 @@ void setup() {
 }
 
 void loop() {
-    // Print periodic log every 5 seconds
-    Serial.println("Running loop...");
-    Serial.print("Serial: ");
-    Serial.println(SERIAL_NUMBER);
-    Serial.println("Status: OK");
-    delay(5000); // Wait 5 seconds before next log
+    // Print more frequent logs (every second) with counter
+    unsigned long currentMillis = millis();
+    if (currentMillis - lastMillis >= 1000) {
+        lastMillis = currentMillis;
+        Serial.print("Time: ");
+        Serial.print(currentMillis / 1000);
+        Serial.print("s, Counter: ");
+        Serial.print(counter++);
+        Serial.print(", Serial: ");
+        Serial.println(SERIAL_NUMBER);
+
+        // Send a byte pattern to help debug serial issues
+        Serial.write(0xAA);
+        Serial.write(0x55);
+        Serial.println();
+    }
 }
