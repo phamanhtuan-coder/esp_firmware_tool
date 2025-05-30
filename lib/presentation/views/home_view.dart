@@ -348,81 +348,37 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
               ),
               const SizedBox(width: 8),
               Text(
-                hasPortSelected
+                hasPortSelected && _selectedBaudRate != 0
                     ? 'Connected to: $_selectedPort at $_selectedBaudRate baud'
-                    : 'Not connected - Select a COM port first',
+                    : 'Not connected - Select a COM port and baud rate first',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   color: hasPortSelected ? AppColors.success : AppColors.warning,
                 ),
               ),
-              const Spacer(),
-              // Add display mode toggle and auto-scroll controls
-              if (hasPortSelected) ...[
-                ToggleButtons(
-                  children: const [
-                    Icon(Icons.text_fields, size: 18),
-                    Icon(Icons.code, size: 18),
-                    Icon(Icons.merge_type, size: 18),
-                  ],
-                  isSelected: [
-                    _logService.serialDisplayMode == DataDisplayMode.ascii,
-                    _logService.serialDisplayMode == DataDisplayMode.hex,
-                    _logService.serialDisplayMode == DataDisplayMode.mixed,
-                  ],
-                  onPressed: (index) {
-                    setState(() {
-                      if (index == 0) {
-                        _logService.setDisplayMode(DataDisplayMode.ascii);
-                      } else if (index == 1) {
-                        _logService.setDisplayMode(DataDisplayMode.hex);
-                      } else {
-                        _logService.setDisplayMode(DataDisplayMode.mixed);
-                      }
-                    });
-                  },
-                  borderRadius: BorderRadius.circular(4),
-                  color: _isDarkTheme ? Colors.grey.shade400 : Colors.grey.shade600,
-                  selectedColor: Colors.blue,
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: Icon(
-                    _logService.autoScroll ? Icons.vertical_align_bottom : Icons.vertical_align_center,
-                    color: _logService.autoScroll ? Colors.blue : Colors.grey,
-                    size: 20,
-                  ),
-                  tooltip: _logService.autoScroll ? 'Auto-scroll enabled' : 'Auto-scroll disabled',
-                  onPressed: () {
-                    setState(() {
-                      _logService.autoScroll = !_logService.autoScroll;
-                    });
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.clear, size: 20),
-                  tooltip: 'Clear serial monitor',
-                  onPressed: () {
-                    _logService.clearSerialBuffer();
-                    setState(() {});
-                  },
-                ),
-              ],
             ],
           ),
         ),
 
         // Controls Row
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Row(
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const Text(
+                'Baud Rate',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 4),
               SizedBox(
                 width: 150,
                 child: DropdownButtonFormField<int>(
-                  value: _selectedBaudRate,
+                  value: _selectedBaudRate != 0 ? _selectedBaudRate : null,
                   decoration: InputDecoration(
-                    labelText: 'Baud Rate',
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     fillColor: _isDarkTheme ? AppColors.idle : AppColors.cardBackground,
@@ -440,76 +396,22 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                       }
                     }
                   },
+                  hint: const Text('-- Chọn baud rate --'),
                 ),
               ),
-
-              // Add Serial Monitor Terminal Widget below the controls
-              const SizedBox(height: 8),
             ],
           ),
         ),
 
-        // Terminal Widget Integration
+        // Terminal Widget fills remaining space
         Expanded(
-          child: Row(
-            children: [
-              // Left side: Standard log display
-              Expanded(
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      color: _isDarkTheme ? Colors.grey.shade900 : Colors.grey.shade200,
-                      child: const Text("Standard Output", style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(8.0),
-                        itemCount: state.filteredLogs.where((log) =>
-                          log.level == LogLevel.serialOutput &&
-                          log.deviceId == state.serialNumber
-                        ).length,
-                        itemBuilder: (context, index) {
-                          final logs = state.filteredLogs.where((log) =>
-                            log.level == LogLevel.serialOutput &&
-                            log.deviceId == state.serialNumber
-                          ).toList();
-                          final entry = logs[index];
-                          return Text(
-                            entry.rawOutput ?? entry.message,
-                            style: TextStyle(
-                              fontFamily: 'Courier New',
-                              fontSize: 13,
-                              color: entry.message.contains('Error') ? Colors.red : null,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Right side: Terminal widget
-              Expanded(
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      color: _isDarkTheme ? Colors.grey.shade900 : Colors.grey.shade200,
-                      child: const Text("Terminal View", style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                    Expanded(
-                      child: SerialMonitorTerminalWidget(
-                        initialPort: _selectedPort,
-                        initialBaudRate: _selectedBaudRate,
-                        autoStart: hasPortSelected,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: SerialMonitorTerminalWidget(
+              initialPort: _selectedPort,
+              initialBaudRate: _selectedBaudRate,
+              autoStart: hasPortSelected && _selectedBaudRate != 0,
+            ),
           ),
         ),
       ],

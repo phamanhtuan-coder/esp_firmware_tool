@@ -16,7 +16,7 @@ void main() async {
   WindowOptions windowOptions = const WindowOptions(
     title: 'SmartNet Solution - Firmware Deployment Tool',
     titleBarStyle: TitleBarStyle.normal, // Preserve standard window controls
-    size: Size(1280,720), // Initial size, will be maximized later
+    size: Size(1600,900), // Initial size, will be maximized later
   );
   await windowManager.waitUntilReadyToShow(windowOptions, () async {
     await windowManager.maximize(); // Start in maximized mode
