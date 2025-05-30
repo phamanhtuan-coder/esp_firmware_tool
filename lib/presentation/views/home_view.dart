@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide SearchBar;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:esp_firmware_tool/data/models/log_entry.dart';
@@ -18,6 +19,8 @@ import 'package:esp_firmware_tool/presentation/widgets/search_bar.dart';
 import 'package:esp_firmware_tool/presentation/widgets/serial_monitor_terminal_widget.dart';
 import 'package:esp_firmware_tool/presentation/widgets/warning_dialog.dart';
 import 'package:esp_firmware_tool/utils/app_colors.dart';
+
+import '../../data/models/device.dart';
 
 class HomeView extends StatefulWidget {
   const HomeView({super.key});
@@ -160,6 +163,45 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     }
   }
 
+  void _handleFilePick(BuildContext context) async {
+    final FilePicker filePicker = FilePicker.platform;
+
+    try {
+      final result = await filePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['ino', 'cpp'],
+        allowMultiple: false,
+        dialogTitle: 'Chọn file firmware',
+      );
+
+      if (!mounted) return;
+
+      if (result != null && result.files.single.path != null) {
+        final filePath = result.files.single.path!;
+
+        // When selecting a local file, clear any version selection
+        setState(() => _selectedFirmwareVersion = null);
+
+        // Add the file path to the bloc state
+        context.read<LogBloc>().add(SelectLocalFileEvent(filePath));
+
+        _logService.addLog(
+          message: 'File firmware đã được chọn: ${result.files.single.name}',
+          level: LogLevel.info,
+          step: ProcessStep.selectFirmware,
+          origin: 'system',
+        );
+      }
+    } catch (e) {
+      _logService.addLog(
+        message: 'Lỗi khi chọn file: $e',
+        level: LogLevel.error,
+        step: ProcessStep.selectFirmware,
+        origin: 'system',
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
@@ -232,14 +274,58 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                               onSerialSubmitted: (value) {
                                 if (value.isNotEmpty) {
                                   context.read<LogBloc>().add(SelectSerialEvent(value));
+
+                                  // Check if the entered serial exists in current batch
+                                  if (_selectedBatch != null) {
+                                    final matchingDevice = state.devices.firstWhere(
+                                      (device) => device.serial == value,
+                                      orElse: () => Device(id: -1, batchId: -1, serial: ''),
+                                    );
+
+                                    if (matchingDevice.id != -1) {
+                                      // Serial found in the batch, select the device
+                                      setState(() => _selectedDevice = matchingDevice.id.toString());
+                                      context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id.toString()));
+                                    } else {
+                                      // Serial not found in current batch
+                                      _logService.addLog(
+                                        message: 'Serial $value không tồn tại trong lô $_selectedBatch',
+                                        level: LogLevel.warning,
+                                        step: ProcessStep.deviceSelection,
+                                        origin: 'system',
+                                      );
+                                    }
+                                  }
+
                                   _startSerialMonitor(value);
                                 }
                               },
                               onQrCodeScan: () {
                                 final scannedSerial = 'SN-${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}';
                                 _serialController.text = scannedSerial;
-                                context.read<LogBloc>().add(SelectSerialEvent(scannedSerial));
-                                _startSerialMonitor(scannedSerial);
+
+                                // Check if the scanned serial exists in current batch
+                                if (_selectedBatch != null) {
+                                  final matchingDevice = state.devices.firstWhere(
+                                    (device) => device.serial == scannedSerial,
+                                    orElse: () => Device(id: -1, batchId: -1, serial: ''),
+                                  );
+
+                                  if (matchingDevice.id != -1) {
+                                    // Serial found in the batch, select the device
+                                    setState(() => _selectedDevice = matchingDevice.id.toString());
+                                    context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id.toString()));
+                                    context.read<LogBloc>().add(SelectSerialEvent(scannedSerial));
+                                  } else {
+                                    // Serial not found in current batch
+                                    _logService.addLog(
+                                      message: 'Serial $scannedSerial không tồn tại trong lô $_selectedBatch',
+                                      level: LogLevel.warning,
+                                      step: ProcessStep.scanQrCode,
+                                      origin: 'system',
+                                    );
+                                  }
+                                }
                               },
                               availablePorts: _usbService.getAvailablePorts(),
                             ),
@@ -328,7 +414,10 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                     WarningDialog(
                       isDarkTheme: _isDarkTheme,
                       onCancel: () => setState(() => _localFileWarning = false),
-                      onContinue: () => setState(() => _localFileWarning = false),
+                      onContinue: () {
+                        setState(() => _localFileWarning = false);
+                        _handleFilePick(context);
+                      },
                       title: 'Cảnh báo',
                       message: 'Tính năng chọn file local có thể gây ra lỗi không mong muốn. Bạn có chắc chắn muốn tiếp tục?',
                     ),

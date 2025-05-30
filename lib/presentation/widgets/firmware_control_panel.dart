@@ -208,16 +208,27 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                           decoration: InputDecoration(
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                            fillColor: widget.isDarkTheme ? AppColors.darkCardBackground : AppColors.cardBackground,
+                            fillColor: widget.isDarkTheme
+                                ? hasLocalFile
+                                    ? AppColors.darkCardBackground.withOpacity(0.5)  // Dimmed when disabled
+                                    : AppColors.darkCardBackground
+                                : hasLocalFile
+                                    ? AppColors.cardBackground.withOpacity(0.5)  // Dimmed when disabled
+                                    : AppColors.cardBackground,
                             filled: true,
+                            enabled: !hasLocalFile,  // Disable when local file is selected
                           ),
                           items: const [
-                            DropdownMenuItem(value: 'v1.0.0', child: Text('v1.0.0')),
-                            DropdownMenuItem(value: 'v1.1.0', child: Text('v1.1.0')),
-                            DropdownMenuItem(value: 'v2.0.0-beta', child: Text('v2.0.0-beta')),
+                            DropdownMenuItem(value: '1.0.0', child: Text('1.0.0')),
+                            DropdownMenuItem(value: '1.1.0', child: Text('1.1.0')),
+                            DropdownMenuItem(value: '2.0.0', child: Text('2.0.0')),
                           ],
                           onChanged: hasLocalFile ? null : widget.onFirmwareVersionSelected,
-                          hint: const Text('-- Chọn phiên bản --'),
+                          hint: Text(
+                            hasLocalFile
+                                ? 'Không khả dụng khi chọn file local'
+                                : '-- Chọn phiên bản --'
+                          ),
                         ),
                       ],
                     ),
@@ -277,7 +288,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                   const SizedBox(width: 8),
                   _buildLoadingButton(
                     isLoading: _isFileButtonLoading,
-                    onPressed: () => _handleFilePick(context),
+                    onPressed: widget.onLocalFileSearch, // Call onLocalFileSearch to show warning dialog first
                     text: 'Tìm File',
                     icon: Icons.search,
                     backgroundColor: AppColors.findFile,
