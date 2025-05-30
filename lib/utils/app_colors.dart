@@ -33,4 +33,15 @@ class AppColors {
   static const Color selectVersion = Color(0xFF4CAF50); // Green
   static const Color refresh = Color(0xFFFFA726); // Orange
   static const Color scanQr = Color(0xFF9C27B0); // Purple
+
+  // Dark theme colors
+  static const Color darkBackground = Color(0xFF121212); // Material dark background
+  static const Color darkSurface = Color(0xFF1E1E1E); // Dark surface color
+  static const Color darkCardBackground = Color(0xFF2D2D2D); // Slightly lighter than surface
+  static const Color darkDivider = Color(0xFF3D3D3D);
+  static const Color darkHeaderBackground = Color(0xFF0D47A1); // Deeper blue for headers in dark mode
+  static const Color darkTabBackground = Color(0xFF333333);
+  static const Color darkPanelBackground = Color(0xFF252525);
+  static const Color darkTextPrimary = Color(0xFFE0E0E0);
+  static const Color darkTextSecondary = Color(0xFFAAAAAA);
 }

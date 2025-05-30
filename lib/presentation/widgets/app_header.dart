@@ -15,7 +15,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      backgroundColor: isDarkTheme ? AppColors.primary : AppColors.accent,
+      backgroundColor: isDarkTheme ? AppColors.darkHeaderBackground : AppColors.accent,
       title: const Text('Firmware Deployment Tool', style: TextStyle(color: Colors.white)),
       actions: [
         IconButton(

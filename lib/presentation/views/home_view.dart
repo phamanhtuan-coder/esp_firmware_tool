@@ -169,7 +169,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
             debugShowCheckedModeBanner: false,
             theme: _isDarkTheme ? ThemeData.dark() : ThemeData.light(),
             home: Scaffold(
-              backgroundColor: _isDarkTheme ? Colors.grey[900] : Colors.grey[50],
+              backgroundColor: _isDarkTheme ? AppColors.darkBackground : Colors.grey[50],
               appBar: AppHeader(
                 isDarkTheme: _isDarkTheme,
                 onThemeToggled: () => setState(() => _isDarkTheme = !_isDarkTheme),
@@ -248,16 +248,16 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                               child: Column(
                                 children: [
                                   Container(
-                                    color: _isDarkTheme ? Colors.grey[700] : Colors.grey[200],
+                                    color: _isDarkTheme ? AppColors.darkTabBackground : Colors.grey[200],
                                     child: TabBar(
                                       controller: _tabController,
                                       tabs: const [
                                         Tab(text: 'Console Log'),
                                         Tab(text: 'Serial Monitor'),
                                       ],
-                                      labelColor: Colors.blue,
-                                      unselectedLabelColor: Colors.grey,
-                                      indicatorColor: Colors.blue,
+                                      labelColor: _isDarkTheme ? AppColors.accent : Colors.blue,
+                                      unselectedLabelColor: _isDarkTheme ? AppColors.darkTextSecondary : Colors.grey,
+                                      indicatorColor: _isDarkTheme ? AppColors.accent : Colors.blue,
                                     ),
                                   ),
                                   Expanded(
@@ -337,7 +337,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       children: [
         // Status bar for selected port and baud rate
         Container(
-          color: _isDarkTheme ? Colors.grey.shade800 : Colors.grey.shade100,
+          color: _isDarkTheme ? AppColors.darkPanelBackground : Colors.grey.shade100,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             children: [

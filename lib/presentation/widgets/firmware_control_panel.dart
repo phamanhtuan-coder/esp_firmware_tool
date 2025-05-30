@@ -208,7 +208,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                           decoration: InputDecoration(
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                            fillColor: widget.isDarkTheme ? AppColors.idle : AppColors.cardBackground,
+                            fillColor: widget.isDarkTheme ? AppColors.darkCardBackground : AppColors.cardBackground,
                             filled: true,
                           ),
                           items: const [
@@ -266,7 +266,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                             ),
                             fillColor:
                                 widget.isDarkTheme
-                                    ? AppColors.idle
+                                    ? AppColors.darkCardBackground
                                     : AppColors.cardBackground,
                             filled: true,
                           ),
@@ -304,7 +304,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                             hintText: 'Nhập hoặc quét mã serial',
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                            fillColor: widget.isDarkTheme ? AppColors.idle : AppColors.cardBackground,
+                            fillColor: widget.isDarkTheme ? AppColors.darkCardBackground : AppColors.cardBackground,
                             filled: true,
                           ),
                           onSubmitted: widget.onSerialSubmitted,
@@ -354,7 +354,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                             ),
                             fillColor:
                                 widget.isDarkTheme
-                                    ? AppColors.idle
+                                    ? AppColors.darkCardBackground
                                     : AppColors.cardBackground,
                             filled: true,
                           ),

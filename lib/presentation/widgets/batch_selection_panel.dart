@@ -32,7 +32,7 @@ class BatchSelectionPanel extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: isDarkTheme ? AppColors.idle : AppColors.cardBackground,
+        color: isDarkTheme ? AppColors.darkSurface : AppColors.cardBackground,
         borderRadius: BorderRadius.circular(8),
         boxShadow: [BoxShadow(color: AppColors.shadowColor, blurRadius: 8)],
       ),
@@ -50,7 +50,7 @@ class BatchSelectionPanel extends StatelessWidget {
                   decoration: InputDecoration(
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    fillColor: isDarkTheme ? Colors.grey[700] : Colors.white,
+                    fillColor: isDarkTheme ? AppColors.darkCardBackground : Colors.white,
                     filled: true,
                   ),
                   items: batches.map((batch) => DropdownMenuItem(
