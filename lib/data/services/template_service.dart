@@ -28,20 +28,18 @@ class TemplateService {
   Future<String?> getFirmwareTemplate(
       String firmwareVersion,
       String deviceType,
-      String sourceCode, // Thêm sourceCode từ API
-      String? hash, // Thêm hash để xác thực
+      String sourceCode,
+      String? hash,
       ) async {
-    // Kiểm tra local trước
-    final localPath = await _getLocalTemplatePath(firmwareVersion, deviceType);
+    // Update deviceType handling
+    final normalizedDeviceType = deviceType.toLowerCase() == 'arduino_uno_r3' ? 'arduino_uno' : deviceType;
+    final localPath = await _getLocalTemplatePath(firmwareVersion, normalizedDeviceType);
     if (localPath != null && await File(localPath).exists()) {
-      // Xác thực hash nếu có
       if (hash != null && await _verifyHash(localPath, hash)) {
         return localPath;
       }
     }
-
-    // Nếu không có local hoặc hash không khớp, lưu mới từ sourceCode
-    return await _saveTemplate(firmwareVersion, deviceType, sourceCode, hash);
+    return await _saveTemplate(firmwareVersion, normalizedDeviceType, sourceCode, hash);
   }
 
   /// Get the local path for a template if it exists
@@ -144,13 +142,20 @@ class TemplateService {
         return null;
       }
       String templateContent = await templateFile.readAsString();
-      templateContent = templateContent.replaceAll('{{SERIAL_NUMBER}}', serialNumber);
+      // Thay thế placeholder
+      templateContent = templateContent.replaceAll('{{DEVICE_ID}}', serialNumber);
+      templateContent = templateContent.replaceAll('{{DEVICE_UUID}}', serialNumber); // Nếu cần UUID
+      templateContent = templateContent.replaceAll('{{AP_SSID}}', 'AP_$serialNumber');
+      templateContent = templateContent.replaceAll('{{SERIAL_NUMBER}}', 'AP_$serialNumber');
+
+      // Các placeholder khác nếu cần
+
       final tempDir = await getTemporaryDirectory();
       final compilePath = path.join(tempDir.path, 'compile_$serialNumber.ino');
       final compileFile = File(compilePath);
       await compileFile.writeAsString(templateContent);
       print('Template prepared for device $serialNumber');
-      return compilePath; // Không xóa file tạm
+      return compilePath;
     } catch (e) {
       print('Error preparing template: $e');
       return null;

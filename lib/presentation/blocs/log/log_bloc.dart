@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:esp_firmware_tool/data/services/arduino_cli_service.dart';
 import 'package:esp_firmware_tool/data/services/batch_service.dart';
 import 'package:esp_firmware_tool/data/services/usb_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -94,10 +95,11 @@ class LogState extends Equatable {
   final String? selectedBatchId;
   final String? selectedDeviceId;
   final String? serialNumber;
+  final String? selectedPort; // Thêm thuộc tính selectedPort để lưu cổng COM đã chọn
   final bool isFlashing;
   final String? status;
   final String? error;
-  final String? localFilePath; // Thêm tham số mới
+  final String? localFilePath;
 
   const LogState({
     this.batches = const [],
@@ -107,6 +109,7 @@ class LogState extends Equatable {
     this.selectedBatchId,
     this.selectedDeviceId,
     this.serialNumber,
+    this.selectedPort, // Thêm vào constructor
     this.isFlashing = false,
     this.status,
     this.error,
@@ -121,6 +124,7 @@ class LogState extends Equatable {
     String? selectedBatchId,
     String? selectedDeviceId,
     String? serialNumber,
+    String? selectedPort, // Thêm vào phương thức copyWith
     bool? isFlashing,
     String? status,
     String? error,
@@ -134,6 +138,7 @@ class LogState extends Equatable {
       selectedBatchId: selectedBatchId ?? this.selectedBatchId,
       selectedDeviceId: selectedDeviceId ?? this.selectedDeviceId,
       serialNumber: serialNumber ?? this.serialNumber,
+      selectedPort: selectedPort ?? this.selectedPort, // Thêm vào return
       isFlashing: isFlashing ?? this.isFlashing,
       status: status ?? this.status,
       error: error ?? this.error,
@@ -150,6 +155,7 @@ class LogState extends Equatable {
     selectedBatchId,
     selectedDeviceId,
     serialNumber,
+    selectedPort, // Thêm vào danh sách props
     isFlashing,
     status,
     error,
@@ -213,7 +219,20 @@ class LogBloc extends Bloc<LogEvent, LogState> {
   }
 
   void _onSelectUsbPort(SelectUsbPortEvent event, Emitter<LogState> emit) {
-    emit(state.copyWith(status: 'Selected port: ${event.port}'));
+    emit(state.copyWith(
+      selectedPort: event.port,
+      status: 'Selected port: ${event.port}'
+    ));
+
+    // Thêm log về việc chọn cổng COM
+    final logEntry = LogEntry(
+      message: 'Selected COM port: ${event.port}',
+      timestamp: DateTime.now(),
+      level: LogLevel.info,
+      step: ProcessStep.usbCheck,
+      origin: 'system',
+    );
+    add(AddLogEvent(logEntry));
   }
 
   void _onScanUsbPorts(ScanUsbPortsEvent event, Emitter<LogState> emit) {
@@ -221,8 +240,116 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     emit(state.copyWith(status: 'Scanning ports...', availablePorts: ports));
   }
 
-  void _onInitiateFlash(InitiateFlashEvent event, Emitter<LogState> emit) {
-    emit(state.copyWith(isFlashing: true, status: 'Flashing ${event.firmwareVersion} on ${event.deviceSerial}...'));
+  Future<void> _onInitiateFlash(InitiateFlashEvent event, Emitter<LogState> emit) async {
+    // Thiết lập trạng thái đang biên dịch
+    emit(state.copyWith(isFlashing: true, status: 'Compiling firmware for ${event.deviceSerial}...'));
+
+    // Lấy dịch vụ ArduinoCliService từ service locator
+    final arduinoCliService = serviceLocator<ArduinoCliService>();
+
+    // Tạm thời sử dụng Arduino UNO R3 thay vì loại thiết bị từ tham số
+    const String deviceType = 'arduino_uno_r3';
+    final String fqbn = arduinoCliService.getBoardFqbn(deviceType);
+
+    // Sử dụng cổng COM đã chọn từ state thay vì gọi getPortForDevice
+    final String? selectedPort = state.selectedPort;
+
+    if (selectedPort == null || selectedPort.isEmpty) {
+      emit(state.copyWith(
+        isFlashing: false,
+        error: 'No COM port selected',
+        status: 'Please select a COM port first'
+      ));
+      return;
+    }
+
+    // Xác định đường dẫn đến sketch (template hoặc file đã chọn)
+    final String sketchPath = state.localFilePath ?? 'lib/firmware_template/template.ino';
+
+    // Thêm log bắt đầu quá trình biên dịch
+    final compileStartLog = LogEntry(
+      message: 'Starting compilation of $sketchPath for Arduino UNO R3 ($fqbn)',
+      timestamp: DateTime.now(),
+      level: LogLevel.info,
+      step: ProcessStep.compile,
+      origin: 'system',
+    );
+    add(AddLogEvent(compileStartLog));
+
+    // Gọi hàm biên dịch sketch
+    emit(state.copyWith(status: 'Compiling Arduino UNO R3 firmware...'));
+    final bool compileSuccess = await arduinoCliService.compileSketch(sketchPath, fqbn);
+
+    if (!compileSuccess) {
+      // Thêm log về lỗi biên dịch
+      final compileFailLog = LogEntry(
+        message: 'Compilation failed for $sketchPath',
+        timestamp: DateTime.now(),
+        level: LogLevel.error,
+        step: ProcessStep.compile,
+        origin: 'system',
+      );
+      add(AddLogEvent(compileFailLog));
+
+      emit(state.copyWith(
+        isFlashing: false,
+        error: 'Compilation failed',
+        status: 'Failed to compile firmware for ${event.deviceSerial}'
+      ));
+      return;
+    }
+
+    // Thêm log về thành công biên dịch
+    final compileSuccessLog = LogEntry(
+      message: 'Compilation successful, starting upload to device on port $selectedPort',
+      timestamp: DateTime.now(),
+      level: LogLevel.info,
+      step: ProcessStep.flash,
+      origin: 'system',
+    );
+    add(AddLogEvent(compileSuccessLog));
+
+    // Cập nhật trạng thái đang upload
+    emit(state.copyWith(status: 'Uploading firmware to ${event.deviceSerial} on port $selectedPort...'));
+
+    // Gọi hàm upload firmware với cổng đã chọn
+    final bool uploadSuccess = await arduinoCliService.uploadSketch(sketchPath, selectedPort, fqbn);
+
+    if (!uploadSuccess) {
+      // Thêm log về lỗi upload
+      final uploadFailLog = LogEntry(
+        message: 'Upload failed to device ${event.deviceSerial} on port $selectedPort',
+        timestamp: DateTime.now(),
+        level: LogLevel.error,
+        step: ProcessStep.flash,
+        origin: 'system',
+      );
+      add(AddLogEvent(uploadFailLog));
+
+      emit(state.copyWith(
+        isFlashing: false,
+        error: 'Upload failed',
+        status: 'Failed to upload firmware to ${event.deviceSerial}'
+      ));
+      return;
+    }
+
+    // Thêm log về thành công upload
+    final uploadSuccessLog = LogEntry(
+      message: 'Successfully flashed firmware to device ${event.deviceSerial} on port $selectedPort',
+      timestamp: DateTime.now(),
+      level: LogLevel.success,
+      step: ProcessStep.flash,
+      origin: 'system',
+    );
+    add(AddLogEvent(uploadSuccessLog));
+
+    // Cập nhật trạng thái thành công
+    emit(state.copyWith(
+      isFlashing: false,
+      status: 'Successfully flashed firmware to ${event.deviceSerial}',
+      error: null
+    ));
   }
 
   void _onStopProcess(StopProcessEvent event, Emitter<LogState> emit) {

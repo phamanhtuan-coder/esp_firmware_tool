@@ -44,63 +44,36 @@ class FirmwareControlPanel extends StatelessWidget {
         allowedExtensions: ['ino', 'cpp'],
         allowMultiple: false,
         dialogTitle: 'Chọn file firmware',
-        withData: false,
-        withReadStream: true,
-        lockParentWindow: true,
       );
 
       if (!context.mounted) return;
 
       if (result != null && result.files.single.path != null) {
         final filePath = result.files.single.path!;
-        final extension = filePath.split('.').last.toLowerCase();
-
-        if (extension == 'ino' || extension == 'cpp') {
-          logBloc.add(SelectLocalFileEvent(filePath));
-        } else {
-          logBloc.add(
-            AddLogEvent(
-              LogEntry(
-                message: 'Invalid file type. Only .ino or .cpp allowed',
-                timestamp: DateTime.now(),
-                level: LogLevel.error,
-                step: ProcessStep.firmwareDownload,
-                origin: 'system',
-              ),
-            ),
-          );
-        }
+        logBloc.add(SelectLocalFileEvent(filePath));
       } else {
-        logBloc.add(
-          AddLogEvent(
-            LogEntry(
-              message: 'No file selected',
-              timestamp: DateTime.now(),
-              level: LogLevel.warning,
-              step: ProcessStep.firmwareDownload,
-              origin: 'system',
-            ),
-          ),
-        );
+        logBloc.add(AddLogEvent(LogEntry(
+          message: 'No file selected',
+          timestamp: DateTime.now(),
+          level: LogLevel.warning,
+          step: ProcessStep.firmwareDownload,
+          origin: 'system',
+        )));
       }
     } catch (e) {
-      if (!context.mounted) return;
-      logBloc.add(
-        AddLogEvent(
-          LogEntry(
-            message: 'Error picking file: $e',
-            timestamp: DateTime.now(),
-            level: LogLevel.error,
-            step: ProcessStep.firmwareDownload,
-            origin: 'system',
-          ),
-        ),
-      );
+      logBloc.add(AddLogEvent(LogEntry(
+        message: 'Error picking file: $e',
+        timestamp: DateTime.now(),
+        level: LogLevel.error,
+        step: ProcessStep.firmwareDownload,
+        origin: 'system',
+      )));
     }
   }
 
   void _clearLocalFile(BuildContext context) {
-    context.read<LogBloc>().add(ClearLocalFileEvent());
+    context.read<LogBloc>().add(ClearLocalFileEvent()); // Xóa file cục bộ
+    onFirmwareVersionSelected(null); // Reset phiên bản firmware
   }
 
   @override
@@ -108,10 +81,9 @@ class FirmwareControlPanel extends StatelessWidget {
     return BlocBuilder<LogBloc, LogState>(
       builder: (context, state) {
         final hasLocalFile = state.localFilePath != null;
-        final fileName =
-            state.localFilePath != null
-                ? state.localFilePath!.split(Platform.pathSeparator).last
-                : '';
+        final fileName = state.localFilePath != null
+            ? state.localFilePath!.split(Platform.pathSeparator).last
+            : '';
 
         return Padding(
           padding: const EdgeInsets.all(16),
@@ -126,47 +98,22 @@ class FirmwareControlPanel extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Phiên bản Firmware',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+                        const Text('Phiên bản Firmware', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                         const SizedBox(height: 4),
                         DropdownButtonFormField<String>(
                           value: selectedFirmwareVersion,
                           decoration: InputDecoration(
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 14,
-                            ),
-                            fillColor:
-                                isDarkTheme
-                                    ? AppColors.idle
-                                    : AppColors.cardBackground,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                            fillColor: isDarkTheme ? AppColors.idle : AppColors.cardBackground,
                             filled: true,
                           ),
                           items: const [
-                            DropdownMenuItem(
-                              value: 'v1.0.0',
-                              child: Text('v1.0.0'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'v1.1.0',
-                              child: Text('v1.1.0'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'v2.0.0-beta',
-                              child: Text('v2.0.0-beta'),
-                            ),
+                            DropdownMenuItem(value: 'v1.0.0', child: Text('v1.0.0')),
+                            DropdownMenuItem(value: 'v1.1.0', child: Text('v1.1.0')),
+                            DropdownMenuItem(value: 'v2.0.0-beta', child: Text('v2.0.0-beta')),
                           ],
-                          onChanged:
-                              hasLocalFile ? null : onFirmwareVersionSelected,
-                          // Disable dropdown nếu có file
+                          onChanged: hasLocalFile ? null : onFirmwareVersionSelected, // Vô hiệu hóa nếu có file cục bộ
                           hint: const Text('-- Chọn phiên bản --'),
                         ),
                       ],
@@ -181,20 +128,10 @@ class FirmwareControlPanel extends StatelessWidget {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.connected,
                         foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 14,
-                        ),
-                        textStyle: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                       ),
-                      onPressed:
-                          () => _clearLocalFile(context),
+                      onPressed: () => _clearLocalFile(context), // Xóa file cục bộ, enable dropdown
                     ),
                   ),
                 ],
@@ -279,32 +216,18 @@ class FirmwareControlPanel extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Serial Number',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+                        const Text('Serial Number', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                         const SizedBox(height: 4),
                         TextField(
                           controller: serialController,
                           decoration: InputDecoration(
                             hintText: 'Nhập hoặc quét mã serial',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 14,
-                            ),
-                            fillColor:
-                                isDarkTheme
-                                    ? AppColors.idle
-                                    : AppColors.cardBackground,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                            fillColor: isDarkTheme ? AppColors.idle : AppColors.cardBackground,
                             filled: true,
                           ),
-                          onSubmitted: onSerialSubmitted,
+                          onSubmitted: onSerialSubmitted, // Gửi serial number từ TextField
                         ),
                       ],
                     ),
@@ -318,11 +241,9 @@ class FirmwareControlPanel extends StatelessWidget {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.connected,
                         foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
-                      onPressed: onQrCodeScan,
+                      onPressed: onQrCodeScan, // Gửi serial number từ QR code
                     ),
                   ),
                 ],

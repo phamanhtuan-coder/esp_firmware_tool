@@ -495,6 +495,8 @@ class LogService {
       return 'esp32:esp32:esp32';
     } else if (deviceId.toLowerCase().contains('esp8266')) {
       return 'esp8266:esp8266:generic';
+    } else if (deviceId.toLowerCase().contains('arduino_uno_r3')) {
+      return 'arduino:avr:uno'; // Add Arduino UNO R3
     } else {
       return 'arduino:avr:uno'; // Default to Arduino Uno
     }

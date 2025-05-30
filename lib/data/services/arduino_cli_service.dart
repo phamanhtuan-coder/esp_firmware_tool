@@ -15,8 +15,25 @@ class ArduinoCliService {
     'arduino_uno': 'arduino:avr:uno',
     'arduino_mega': 'arduino:avr:mega',
     'arduino_nano': 'arduino:avr:nano',
+    'arduino_uno_r3': 'arduino:avr:uno', // Add Arduino UNO R3
   };
 
+  /// Get the Arduino core package for a specific device type
+  String? _getCoreForDeviceType(String deviceType) {
+    switch (deviceType.toLowerCase()) {
+      case 'esp32':
+        return 'esp32:esp32';
+      case 'esp8266':
+        return 'esp8266:esp8266';
+      case 'arduino_uno':
+      case 'arduino_uno_r3': // Add Arduino UNO R3
+      case 'arduino_mega':
+      case 'arduino_nano':
+        return 'arduino:avr';
+      default:
+        return null;
+    }
+  }
   /// Map to track detected device ports
   final Map<String, String> _devicePorts = {};
 
@@ -204,22 +221,6 @@ class ArduinoCliService {
       return process.exitCode == 0;
     } catch (e) {
       return false;
-    }
-  }
-
-  /// Get the Arduino core package for a specific device type
-  String? _getCoreForDeviceType(String deviceType) {
-    switch (deviceType.toLowerCase()) {
-      case 'esp32':
-        return 'esp32:esp32';
-      case 'esp8266':
-        return 'esp8266:esp8266';
-      case 'arduino_uno':
-      case 'arduino_mega':
-      case 'arduino_nano':
-        return 'arduino:avr';
-      default:
-        return null;
     }
   }
 

@@ -29,7 +29,7 @@ class ActionButtons extends StatelessWidget {
   Widget build(BuildContext context) {
     final logState = context.watch<LogBloc>().state;
     final hasLocalFile = logState.localFilePath != null;
-    final isFlashEnabled = selectedPort != null && (hasLocalFile || selectedFirmwareVersion != null);
+    final isFlashEnabled = selectedPort != null && (hasLocalFile || selectedFirmwareVersion != null) && deviceSerial.isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -65,17 +65,17 @@ class ActionButtons extends StatelessWidget {
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            onPressed: isFlashing || !isFlashEnabled || selectedDevice == null
+            onPressed: isFlashing || !isFlashEnabled
                 ? null
                 : () {
               context.read<LogBloc>().add(InitiateFlashEvent(
-                deviceId: selectedDevice!,
+                deviceId: deviceSerial, // Sử dụng serial từ TextField/QR
                 firmwareVersion: selectedFirmwareVersion ?? '',
                 deviceSerial: deviceSerial,
                 deviceType: 'esp32',
               ));
               onInitiateFlash(
-                selectedDevice!,
+                deviceSerial, // Sử dụng serial từ TextField/QR
                 selectedFirmwareVersion ?? '',
                 deviceSerial,
                 'esp32',

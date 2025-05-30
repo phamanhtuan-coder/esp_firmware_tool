@@ -368,7 +368,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
 
       preparedPath = await _templateService.prepareFirmwareTemplate(
         logState.localFilePath!,
-        serialNumber,
+        serialNumber, // Thay thế placeholder bằng serial từ TextField/QR
         deviceId,
       );
 
@@ -416,7 +416,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
 
       preparedPath = await _templateService.prepareFirmwareTemplate(
         templatePath,
-        serialNumber,
+        serialNumber, // Thay thế placeholder bằng serial từ TextField/QR
         deviceId,
       );
 
@@ -441,7 +441,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       return;
     }
 
-    final fqbn = _arduinoCliService.getBoardFqbn(deviceType);
+    final fqbn = _arduinoCliService.getBoardFqbn(deviceType.toLowerCase() == 'arduino uno r3' ? 'arduino_uno_r3' : deviceType);
     final success = await _batchService.compileAndFlash(preparedPath, port, fqbn, serialNumber);
 
     if (success) {
