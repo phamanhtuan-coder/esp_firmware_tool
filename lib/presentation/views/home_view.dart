@@ -15,6 +15,7 @@ import 'package:esp_firmware_tool/presentation/widgets/batch_selection_panel.dar
 import 'package:esp_firmware_tool/presentation/widgets/console_log_view.dart';
 import 'package:esp_firmware_tool/presentation/widgets/firmware_control_panel.dart';
 import 'package:esp_firmware_tool/presentation/widgets/search_bar.dart';
+import 'package:esp_firmware_tool/presentation/widgets/serial_monitor_terminal_widget.dart';
 import 'package:esp_firmware_tool/presentation/widgets/warning_dialog.dart';
 import 'package:esp_firmware_tool/utils/app_colors.dart';
 
@@ -90,14 +91,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     super.dispose();
   }
 
-  void _sendSerialData() {
-    if (_serialInputController.text.isNotEmpty) {
-      final logService = serviceLocator<LogService>();
-      logService.sendToSerialMonitor(_serialInputController.text);
-      _serialInputController.clear();
-    }
-  }
-
   void _startSerialMonitor(String serialNumber) async {
     final logService = serviceLocator<LogService>();
 
@@ -125,21 +118,36 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     final port = _selectedPort;
 
     if (port != null) {
-      // Try the native serial monitor first for better real-time performance
-      final success = await logService.startNativeSerialMonitor(port, _selectedBaudRate, serialNumber);
+      // Try the arduino-cli monitor first as it's more reliable
+      final cliSuccess = await logService.startSerialMonitor(port, _selectedBaudRate, serialNumber);
 
-      if (!success) {
-        // If native monitor fails, try arduino-cli monitor
-        final cliSuccess = await logService.startSerialMonitor(port, _selectedBaudRate, serialNumber);
+      if (!cliSuccess) {
+        // If arduino-cli fails, try the native serial port monitor
+        final nativeSuccess = await logService.startNativeSerialMonitor(port, _selectedBaudRate, serialNumber);
 
-        if (!cliSuccess) {
-          // If both methods fail, try alternative methods
+        if (!nativeSuccess) {
+          // If both methods fail, try alternative methods as a last resort
           await logService.startAlternativeSerialMonitor(port, _selectedBaudRate, serialNumber);
         }
       }
 
+      // Force the UI to refresh and show the tab with serial monitor
+      setState(() {
+        _tabController.animateTo(1); // Switch to the Serial Monitor tab (index 1)
+      });
+
       // Set auto-scroll to true when starting a new monitor
       logService.autoScroll = true;
+
+      // Add a test message to verify the stream is working
+      logService.addLog(
+        message: 'Serial monitor connection established',
+        level: LogLevel.serialOutput,
+        step: ProcessStep.serialMonitor,
+        deviceId: serialNumber,
+        origin: 'serial-monitor',
+        rawOutput: 'Serial monitor connection established',
+      );
     } else {
       logService.addLog(
         message: 'No port found for device $serialNumber',
@@ -380,9 +388,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                 const SizedBox(width: 8),
                 IconButton(
                   icon: Icon(
-                    _logService.autoScroll
-                        ? Icons.vertical_align_bottom
-                        : Icons.vertical_align_center,
+                    _logService.autoScroll ? Icons.vertical_align_bottom : Icons.vertical_align_center,
                     color: _logService.autoScroll ? Colors.blue : Colors.grey,
                     size: 20,
                   ),
@@ -398,7 +404,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                   tooltip: 'Clear serial monitor',
                   onPressed: () {
                     _logService.clearSerialBuffer();
-                    // Refresh UI
                     setState(() {});
                   },
                 ),
@@ -407,6 +412,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
           ),
         ),
 
+        // Controls Row
         Padding(
           padding: const EdgeInsets.all(8.0),
           child: Row(
@@ -417,13 +423,8 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                   value: _selectedBaudRate,
                   decoration: InputDecoration(
                     labelText: 'Baud Rate',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     fillColor: _isDarkTheme ? AppColors.idle : AppColors.cardBackground,
                     filled: true,
                   ),
@@ -434,212 +435,85 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                   onChanged: (value) {
                     if (value != null) {
                       setState(() => _selectedBaudRate = value);
-
-                      // Restart serial monitor with new baud rate if port is selected
                       if (_selectedPort != null && _selectedPort!.isNotEmpty) {
-                        _logService.addLog(
-                          message: 'Changing baud rate to $value',
-                          level: LogLevel.info,
-                          step: ProcessStep.serialMonitor,
-                          deviceId: _serialController.text,
-                          origin: 'system',
-                        );
-
                         _startSerialMonitor(_serialController.text);
                       }
                     }
                   },
                 ),
               ),
-              const SizedBox(width: 8),
+
+              // Add Serial Monitor Terminal Widget below the controls
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+
+        // Terminal Widget Integration
+        Expanded(
+          child: Row(
+            children: [
+              // Left side: Standard log display
               Expanded(
-                child: TextField(
-                  controller: _serialInputController,
-                  enabled: hasPortSelected,
-                  decoration: InputDecoration(
-                    hintText: hasPortSelected
-                        ? 'Enter command to send'
-                        : 'Select a COM port to start Serial Monitor',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      color: _isDarkTheme ? Colors.grey.shade900 : Colors.grey.shade200,
+                      child: const Text("Standard Output", style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(8.0),
+                        itemCount: state.filteredLogs.where((log) =>
+                          log.level == LogLevel.serialOutput &&
+                          log.deviceId == state.serialNumber
+                        ).length,
+                        itemBuilder: (context, index) {
+                          final logs = state.filteredLogs.where((log) =>
+                            log.level == LogLevel.serialOutput &&
+                            log.deviceId == state.serialNumber
+                          ).toList();
+                          final entry = logs[index];
+                          return Text(
+                            entry.rawOutput ?? entry.message,
+                            style: TextStyle(
+                              fontFamily: 'Courier New',
+                              fontSize: 13,
+                              color: entry.message.contains('Error') ? Colors.red : null,
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                    fillColor: hasPortSelected
-                        ? (_isDarkTheme ? AppColors.idle : AppColors.cardBackground)
-                        : (_isDarkTheme ? Colors.grey.shade800 : Colors.grey.shade200),
-                    filled: true,
-                  ),
-                  onSubmitted: hasPortSelected ? (_) => _sendSerialData() : null,
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
-              SizedBox(
-                height: 48,
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.send, size: 16),
-                  label: const Text('Send'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: hasPortSelected ? AppColors.connected : Colors.grey,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+
+              // Right side: Terminal widget
+              Expanded(
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      color: _isDarkTheme ? Colors.grey.shade900 : Colors.grey.shade200,
+                      child: const Text("Terminal View", style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
-                  ),
-                  onPressed: (hasPortSelected && _serialInputController.text.isNotEmpty)
-                      ? _sendSerialData
-                      : null,
+                    Expanded(
+                      child: SerialMonitorTerminalWidget(
+                        initialPort: _selectedPort,
+                        initialBaudRate: _selectedBaudRate,
+                        autoStart: hasPortSelected,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
         ),
-
-        // COM port selection reminder if no port is selected
-        if (!hasPortSelected)
-          Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: _isDarkTheme ? Colors.amber.shade900.withOpacity(0.3) : Colors.amber.shade50,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.amber.shade300),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.warning_amber_rounded, color: Colors.amber.shade800),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Hãy chọn cổng COM để sử dụng Serial Monitor',
-                    style: TextStyle(
-                      color: _isDarkTheme ? Colors.amber.shade200 : Colors.amber.shade900,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-        Expanded(
-          child: StreamBuilder<List<LogEntry>>(
-            stream: _logService.serialMonitorStream,
-            builder: (context, snapshot) {
-              // Get serial logs with timestamps displayed
-              final List<LogEntry> serialLogs = _logService.getSerialBuffer();
-
-              if (!hasPortSelected && serialLogs.isEmpty) {
-                // Empty state UI
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.terminal,
-                        size: 64,
-                        color: _isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Serial Monitor',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: _isDarkTheme ? Colors.grey.shade400 : Colors.grey.shade600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Select a COM port to start monitoring',
-                        style: TextStyle(
-                          color: _isDarkTheme ? Colors.grey.shade500 : Colors.grey.shade700,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              // Create a controller for auto-scrolling
-              final ScrollController scrollController = ScrollController();
-
-              // Auto-scroll to bottom if enabled
-              if (_logService.autoScroll && serialLogs.isNotEmpty) {
-                // Use post-frame callback to scroll after build is complete
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (scrollController.hasClients) {
-                    scrollController.animateTo(
-                      scrollController.position.maxScrollExtent,
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeOut,
-                    );
-                  }
-                });
-              }
-
-              // Show serial monitor output with auto-scroll
-              return ListView.builder(
-                controller: scrollController,
-                itemCount: serialLogs.length,
-                itemBuilder: (context, index) {
-                  final log = serialLogs[index];
-
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
-                    child: SelectableText.rich(
-                      TextSpan(
-                        children: [
-                          // Display timestamp
-                          TextSpan(
-                            text: '[${log.formattedTimestamp}] ',
-                            style: TextStyle(
-                              fontFamily: 'Consolas',
-                              fontSize: 12,
-                              color: _isDarkTheme ? Colors.grey.shade400 : Colors.grey.shade600,
-                            ),
-                          ),
-                          // Display message with appropriate formatting based on display mode
-                          TextSpan(
-                            text: log.level == LogLevel.input
-                                ? '> ${log.getFormattedMessage(_logService.serialDisplayMode)}'
-                                : log.getFormattedMessage(_logService.serialDisplayMode),
-                            style: TextStyle(
-                              fontFamily: 'Consolas',
-                              fontSize: 14,
-                              color: _getLogColor(log.level),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
       ],
     );
-  }
-
-  Color _getLogColor(LogLevel level) {
-    switch (level) {
-      case LogLevel.error:
-        return Colors.red;
-      case LogLevel.warning:
-        return Colors.orange;
-      case LogLevel.success:
-        return Colors.green;
-      case LogLevel.input:
-        return Colors.blue;
-      case LogLevel.serialOutput:
-        return _isDarkTheme ? Colors.white : Colors.black;
-      default:
-        return _isDarkTheme ? Colors.grey.shade300 : Colors.grey.shade700;
-    }
   }
 
   void _flashFirmware(String deviceId, String firmwareVersion, String serialNumber, String deviceType) async {

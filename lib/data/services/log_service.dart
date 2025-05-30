@@ -88,6 +88,11 @@ class LogService {
     _serialMonitorStreamController.add([]);
   }
 
+  // Check if serial monitor is active
+  bool isSerialMonitorActive() {
+    return _serialMonitorActive;
+  }
+
   // Set the display mode for serial data
   void setDisplayMode(DataDisplayMode mode) {
     _serialDisplayMode = mode;
@@ -146,6 +151,11 @@ class LogService {
       rawOutput: rawOutput,
     );
 
+    // Debug trace for all logs to help with troubleshooting
+    if (level == LogLevel.serialOutput || level == LogLevel.debug) {
+      print('LOG_TRACE [${entry.formattedTimestamp}] (${level.name}): $message');
+    }
+
     _logStreamController.add(entry);
 
     // Add to serial buffer if it's serial output
@@ -154,6 +164,7 @@ class LogService {
       if (_serialBuffer.length > _maxBufferSize) {
         _serialBuffer.removeAt(0);
       }
+      print('SERIAL_BUFFER_UPDATE: Added entry to buffer, length=${_serialBuffer.length}');
       _serialMonitorStreamController.add(_serialBuffer);
     }
   }
@@ -346,12 +357,21 @@ class LogService {
     }
   }
 
-  // Enhanced serial monitor with better input handling
+  // Enhanced serial monitor with better input handling and debugging logs
   Future<bool> startSerialMonitor(String port, int baudRate, String deviceId) async {
-    // Close any existing serial monitor
+    print('DEBUG: Starting serial monitor on port $port at $baudRate baud');
     await stopSerialMonitor();
 
     try {
+      // Add debug log to track serial monitor start
+      addLog(
+        message: 'Attempting to start serial monitor on port $port at $baudRate baud',
+        level: LogLevel.debug,
+        step: ProcessStep.serialMonitor,
+        deviceId: deviceId,
+        origin: 'system',
+      );
+
       // Start Arduino CLI monitor with specific configuration for better data handling
       _serialMonitorProcess = await Process.start(
         'arduino-cli',
@@ -363,78 +383,73 @@ class LogService {
           '--config', 'databits=8',
           '--config', 'stopbits=1',
         ],
-        mode: ProcessStartMode.inheritStdio, // This helps with direct data streaming
       );
+
+      print('DEBUG: Serial monitor process started with PID: ${_serialMonitorProcess?.pid}');
 
       _currentDeviceId = deviceId;
       _serialMonitorActive = true;
 
-      addLog(
-        message: 'Serial monitor started on port $port at $baudRate baud',
-        level: LogLevel.info,
-        step: ProcessStep.serialMonitor,
-        deviceId: deviceId,
-        origin: 'system',
-      );
-
-      // Listen to stdout with binary encoding for more reliable data capture
-      _serialMonitorProcess!.stdout
-        .transform(const Utf8Decoder(allowMalformed: true))
-        .listen((data) {
-          if (data.isNotEmpty) {
-            // Process the data and add it to the log
-            addLog(
-              message: data.trim(),
-              level: LogLevel.serialOutput,
-              step: ProcessStep.serialMonitor,
-              deviceId: deviceId,
-              origin: 'serial-monitor',
-              rawOutput: data,
-            );
+      // Set up stdout handler with detailed logging
+      _serialMonitorProcess!.stdout.listen(
+        (List<int> data) {
+          print('DEBUG: Received raw data length: ${data.length}');
+          try {
+            final String text = utf8.decode(data);
+            print('DEBUG: Decoded data: $text');
+            if (text.trim().isNotEmpty) {
+              addLog(
+                message: text.trim(),
+                level: LogLevel.serialOutput,
+                step: ProcessStep.serialMonitor,
+                deviceId: deviceId,
+                origin: 'serial-monitor',
+                rawOutput: text,
+              );
+            }
+          } catch (e) {
+            print('DEBUG: Error decoding serial data: $e');
+            // Try hex output for debugging
+            print('DEBUG: Raw hex data: ${data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
           }
         },
         onError: (error) {
+          print('DEBUG: Error in serial monitor stdout stream: $error');
           addLog(
-            message: 'Error reading from serial port: $error',
+            message: 'Serial monitor error: $error',
             level: LogLevel.error,
             step: ProcessStep.serialMonitor,
             deviceId: deviceId,
             origin: 'system',
           );
-        });
+        },
+        cancelOnError: false,
+      );
 
-      // Listen to stderr for errors
-      _serialMonitorProcess!.stderr
-        .transform(utf8.decoder)
-        .listen((data) {
-          if (data.trim().isNotEmpty) {
+      // Set up stderr handler with logging
+      _serialMonitorProcess!.stderr.listen(
+        (data) {
+          print('DEBUG: Received stderr data');
+          final text = utf8.decode(data);
+          if (text.trim().isNotEmpty) {
             addLog(
-              message: 'Serial Error: ${data.trim()}',
+              message: text.trim(),
               level: LogLevel.error,
               step: ProcessStep.serialMonitor,
               deviceId: deviceId,
               origin: 'serial-monitor',
             );
           }
-        });
-
-      // Monitor process exit
-      _serialMonitorProcess!.exitCode.then((exitCode) {
-        _serialMonitorActive = false;
-        _serialMonitorProcess = null;
-        _currentDeviceId = null;
-
-        addLog(
-          message: 'Serial monitor closed (exit code: $exitCode)',
-          level: LogLevel.info,
-          step: ProcessStep.serialMonitor,
-          deviceId: deviceId,
-          origin: 'system',
-        );
-      });
+        },
+        onError: (error) {
+          print('DEBUG: Error in serial monitor stderr stream: $error');
+        },
+        cancelOnError: false,
+      );
 
       return true;
     } catch (e) {
+      print('DEBUG: Exception starting serial monitor: $e');
       addLog(
         message: 'Failed to start serial monitor: $e',
         level: LogLevel.error,
@@ -442,20 +457,34 @@ class LogService {
         deviceId: deviceId,
         origin: 'system',
       );
+      _serialMonitorActive = false;
       return false;
     }
   }
 
   Future<bool> startNativeSerialMonitor(String port, int baudRate, String deviceId) async {
+    print('DEBUG: Starting native serial monitor on port $port at $baudRate baud');
     await stopSerialMonitor();
 
     try {
+      // Add debug log to track native serial monitor start attempt
+      addLog(
+        message: 'Attempting to start native serial monitor on port $port at $baudRate baud',
+        level: LogLevel.debug,
+        step: ProcessStep.serialMonitor,
+        deviceId: deviceId,
+        origin: 'system',
+      );
+
       // Create and configure serial port
       final serialPort = SerialPort(port);
 
-      if (!serialPort.openReadWrite()) {
+      // Check if port exists before trying to open
+      print('DEBUG: Available ports: ${SerialPort.availablePorts.join(", ")}');
+      if (!SerialPort.availablePorts.contains(port)) {
+        print('DEBUG: Port $port not found in available ports');
         addLog(
-          message: 'Failed to open serial port: ${SerialPort.lastError}', // Fix static access
+          message: 'Port $port not available. Available ports: ${SerialPort.availablePorts.join(", ")}',
           level: LogLevel.error,
           step: ProcessStep.serialMonitor,
           deviceId: deviceId,
@@ -464,6 +493,27 @@ class LogService {
         return false;
       }
 
+      // Try to open the port with read/write permissions
+      if (!serialPort.openReadWrite()) {
+        final error = SerialPort.lastError;
+        print('DEBUG: Failed to open port $port: $error');
+        final errorMessage = error != null ?
+            'Failed to open serial port: $error' :
+            'Failed to open serial port (unknown error)';
+
+        addLog(
+          message: errorMessage,
+          level: LogLevel.error,
+          step: ProcessStep.serialMonitor,
+          deviceId: deviceId,
+          origin: 'system',
+        );
+        return false;
+      }
+
+      print('DEBUG: Successfully opened port $port');
+
+      // Configure port parameters with proper settings for Arduino/ESP devices
       serialPort.config = SerialPortConfig()
         ..baudRate = baudRate
         ..bits = 8
@@ -471,27 +521,117 @@ class LogService {
         ..parity = 0
         ..setFlowControl(SerialPortFlowControl.none);
 
+      // Set DTR and RTS signals using direct control methods
+      // These are critical for Arduino/ESP32 communication
+      try {
+        // The signals need to be set directly on the port, not on the config
+        // For Arduino/ESP boards, we often need these signals enabled
+        serialPort.write(Uint8List.fromList([
+          0x80, // Enable DTR (sometimes helps with auto-reset)
+          0x02  // RTS related command on some implementations
+        ]));
+
+        print('DEBUG: Control signals sent to port');
+      } catch (e) {
+        print('DEBUG: Failed to set control signals: $e');
+      }
+
+      print('DEBUG: Port configuration set');
+
+      // Flush buffers to ensure clean start
+      serialPort.flush();
+
+      // Add a connection established message that mimics Arduino IDE style
+      addLog(
+        message: 'Serial monitor connection established',
+        level: LogLevel.serialOutput,
+        step: ProcessStep.serialMonitor,
+        deviceId: deviceId,
+        origin: 'serial-monitor',
+        rawOutput: 'Serial monitor connection established',
+      );
+
       // Create a reader for the port
       final reader = SerialPortReader(serialPort);
 
-      // Start reading data
+      print('DEBUG: Created SerialPortReader');
+
+      // Create a buffer to handle data that spans multiple reads
+      final StringBuffer lineBuffer = StringBuffer();
+
+      // Start reading data with better error handling
       reader.stream.listen(
-        (data) {
+        (Uint8List data) {
           if (data.isNotEmpty) {
-            final String message = String.fromCharCodes(data).trim();
-            if (message.isNotEmpty) {
+            try {
+              // Convert byte data to string
+              final String dataString = String.fromCharCodes(data);
+
+              print('DEBUG: Received raw data (${data.length} bytes): ${data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
+              print('DEBUG: Converted message: $dataString');
+
+              // Add to line buffer
+              lineBuffer.write(dataString);
+
+              // Process the buffer content
+              String bufferContent = lineBuffer.toString();
+
+              // Check for line endings (CR, LF, or CRLF)
+              if (bufferContent.contains('\n') || bufferContent.contains('\r')) {
+                // Split by common line endings
+                List<String> lines = bufferContent.split(RegExp(r'\r\n|\r|\n'));
+
+                // Process complete lines (all except the last one)
+                for (int i = 0; i < lines.length - 1; i++) {
+                  String line = lines[i].trim();
+                  if (line.isNotEmpty) {
+                    print('DEBUG: Complete line found: $line');
+                    addLog(
+                      message: line,
+                      level: LogLevel.serialOutput,
+                      step: ProcessStep.serialMonitor,
+                      deviceId: deviceId,
+                      origin: 'serial-monitor',
+                      rawOutput: line,
+                    );
+                  }
+                }
+
+                // Keep the last (potentially incomplete) line in the buffer
+                lineBuffer.clear();
+                lineBuffer.write(lines.last);
+              }
+
+              // For long content without line breaks, periodically flush the buffer
+              if (lineBuffer.length > 1024) {
+                String content = lineBuffer.toString().trim();
+                if (content.isNotEmpty) {
+                  print('DEBUG: Flushing large buffer content');
+                  addLog(
+                    message: content,
+                    level: LogLevel.serialOutput,
+                    step: ProcessStep.serialMonitor,
+                    deviceId: deviceId,
+                    origin: 'serial-monitor',
+                    rawOutput: content,
+                  );
+                  lineBuffer.clear();
+                }
+              }
+            } catch (e) {
+              print('DEBUG: Error processing serial data: $e');
               addLog(
-                message: message,
-                level: LogLevel.serialOutput,
+                message: 'Error processing serial data: $e',
+                level: LogLevel.error,
                 step: ProcessStep.serialMonitor,
                 deviceId: deviceId,
-                origin: 'serial-monitor',
-                rawOutput: message,
+                origin: 'system',
               );
             }
           }
         },
         onError: (error) {
+          print('DEBUG: Error in SerialPortReader stream: $error');
           addLog(
             message: 'Serial port error: $error',
             level: LogLevel.error,
@@ -501,14 +641,17 @@ class LogService {
           );
         },
         onDone: () {
+          print('DEBUG: SerialPortReader stream closed');
           addLog(
-            message: 'Serial port closed',
+            message: 'Serial port connection closed',
             level: LogLevel.info,
             step: ProcessStep.serialMonitor,
             deviceId: deviceId,
             origin: 'system',
           );
-          serialPort.close();
+          if (serialPort.isOpen) {
+            serialPort.close();
+          }
         },
       );
 
@@ -518,16 +661,9 @@ class LogService {
       // Store the serial port instance for cleanup
       _serialPort = serialPort;
 
-      addLog(
-        message: 'Serial monitor started on port $port at $baudRate baud',
-        level: LogLevel.info,
-        step: ProcessStep.serialMonitor,
-        deviceId: deviceId,
-        origin: 'system',
-      );
-
       return true;
     } catch (e) {
+      print('DEBUG: Exception in startNativeSerialMonitor: $e');
       addLog(
         message: 'Failed to start native serial monitor: $e',
         level: LogLevel.error,

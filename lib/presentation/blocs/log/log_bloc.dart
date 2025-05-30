@@ -100,6 +100,7 @@ class LogState extends Equatable {
   final String? status;
   final String? error;
   final String? localFilePath;
+  final List<String> serialBuffer;
 
   const LogState({
     this.batches = const [],
@@ -114,6 +115,7 @@ class LogState extends Equatable {
     this.status,
     this.error,
     this.localFilePath,
+    this.serialBuffer = const [],
   });
 
   LogState copyWith({
@@ -129,6 +131,7 @@ class LogState extends Equatable {
     String? status,
     String? error,
     String? localFilePath,
+    List<String>? serialBuffer,
   }) {
     return LogState(
       batches: batches ?? this.batches,
@@ -143,6 +146,7 @@ class LogState extends Equatable {
       status: status ?? this.status,
       error: error ?? this.error,
       localFilePath: localFilePath ?? this.localFilePath,
+      serialBuffer: serialBuffer ?? this.serialBuffer,
     );
   }
 
@@ -160,6 +164,7 @@ class LogState extends Equatable {
     status,
     error,
     localFilePath,
+    serialBuffer,
   ];
 }
 
