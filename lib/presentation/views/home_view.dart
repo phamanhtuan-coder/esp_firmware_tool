@@ -1,9 +1,6 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart' hide SearchBar;
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:esp_firmware_tool/data/models/device.dart';
-import 'package:esp_firmware_tool/data/models/batch.dart';
 import 'package:esp_firmware_tool/data/models/log_entry.dart';
 import 'package:esp_firmware_tool/data/services/arduino_cli_service.dart';
 import 'package:esp_firmware_tool/data/services/batch_service.dart';
@@ -20,7 +17,6 @@ import 'package:esp_firmware_tool/presentation/widgets/firmware_control_panel.da
 import 'package:esp_firmware_tool/presentation/widgets/search_bar.dart';
 import 'package:esp_firmware_tool/presentation/widgets/warning_dialog.dart';
 import 'package:esp_firmware_tool/utils/app_colors.dart';
-import 'package:window_manager/window_manager.dart';
 
 class HomeView extends StatefulWidget {
   const HomeView({super.key});
@@ -41,12 +37,15 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   bool _isDarkTheme = false;
   bool _isSearching = false;
   bool _localFileWarning = false;
-
-  // Dịch vụ từ service locator
+  final TextEditingController _serialInputController = TextEditingController();
+  int _selectedBaudRate = 115200;
+  final List<int> _baudRates = [
+    300, 600, 1200, 2400, 4800, 9600, 19200,
+    38400, 57600, 115200, 230400, 460800, 921600
+  ];
   final LogService _logService = serviceLocator<LogService>();
   final UsbService _usbService = serviceLocator<UsbService>();
-  final ArduinoCliService _arduinoCliService = serviceLocator<
-      ArduinoCliService>();
+  final ArduinoCliService _arduinoCliService = serviceLocator<ArduinoCliService>();
   final TemplateService _templateService = serviceLocator<TemplateService>();
   final BatchService _batchService = serviceLocator<BatchService>();
 
@@ -64,7 +63,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     });
   }
 
-  // Khởi tạo các dịch vụ
   Future<void> _initializeServices() async {
     await _logService.initialize();
     _usbService.deviceStream.listen((event) {
@@ -76,13 +74,13 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       }
     });
     _logService.logStream.listen((log) {
-      context.read<LogBloc>().add(
-          FilterLogEvent(filter: _searchController.text));
+      context.read<LogBloc>().add(FilterLogEvent(filter: _searchController.text));
     });
   }
 
   @override
   void dispose() {
+    _serialInputController.dispose();
     _serialController.dispose();
     _searchController.dispose();
     _scrollController.dispose();
@@ -92,24 +90,44 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     super.dispose();
   }
 
+  void _sendSerialData() {
+    if (_serialInputController.text.isNotEmpty) {
+      final logService = serviceLocator<LogService>();
+      logService.sendToSerialMonitor(_serialInputController.text);
+      _serialInputController.clear();
+    }
+  }
+
+  void _startSerialMonitor(String serialNumber) async {
+    final logService = serviceLocator<LogService>();
+    final port = await _arduinoCliService.getPortForDevice(serialNumber);
+    if (port != null) {
+      await logService.startSerialMonitor(port, _selectedBaudRate, serialNumber);
+    } else {
+      logService.addLog(
+        message: 'No port found for device $serialNumber',
+        level: LogLevel.error,
+        step: ProcessStep.serialMonitor,
+        deviceId: serialNumber,
+        origin: 'system',
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) =>
-      LogBloc()
-        ..add(LoadInitialDataEvent()),
+      create: (context) => LogBloc()..add(LoadInitialDataEvent()),
       child: BlocBuilder<LogBloc, LogState>(
         builder: (context, state) {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: _isDarkTheme ? ThemeData.dark() : ThemeData.light(),
             home: Scaffold(
-              backgroundColor: _isDarkTheme ? Colors.grey[900] : Colors
-                  .grey[50],
+              backgroundColor: _isDarkTheme ? Colors.grey[900] : Colors.grey[50],
               appBar: AppHeader(
                 isDarkTheme: _isDarkTheme,
-                onThemeToggled: () =>
-                    setState(() => _isDarkTheme = !_isDarkTheme),
+                onThemeToggled: () => setState(() => _isDarkTheme = !_isDarkTheme),
               ),
               body: Stack(
                 children: [
@@ -123,18 +141,15 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                           selectedDevice: _selectedDevice,
                           onBatchSelected: (value) {
                             setState(() => _selectedBatch = value);
-                            context.read<LogBloc>().add(
-                                SelectBatchEvent(value!));
+                            context.read<LogBloc>().add(SelectBatchEvent(value!));
                           },
                           onDeviceSelected: (value) {
                             setState(() => _selectedDevice = value);
-                            context.read<LogBloc>().add(
-                                SelectDeviceEvent(value!));
+                            context.read<LogBloc>().add(SelectDeviceEvent(value!));
                           },
                           onDeviceMarkDefective: (device) {
                             context.read<LogBloc>().add(
-                                MarkDeviceDefectiveEvent(
-                                    device.id.toString(), reason: ''));
+                                MarkDeviceDefectiveEvent(device.id.toString(), reason: ''));
                           },
                           isDarkTheme: _isDarkTheme,
                         ),
@@ -148,36 +163,26 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                               selectedPort: _selectedPort,
                               serialController: _serialController,
                               onFirmwareVersionSelected: (value) =>
-                                  setState(() =>
-                                  _selectedFirmwareVersion = value),
+                                  setState(() => _selectedFirmwareVersion = value),
                               onUsbPortSelected: (value) {
                                 setState(() => _selectedPort = value);
-                                context.read<LogBloc>().add(
-                                    SelectUsbPortEvent(value!));
+                                context.read<LogBloc>().add(SelectUsbPortEvent(value!));
                               },
-                              onLocalFileSearch: () =>
-                                  setState(() => _localFileWarning = true),
+                              onLocalFileSearch: () => setState(() => _localFileWarning = true),
                               onUsbPortRefresh: () {
-                                context.read<LogBloc>().add(
-                                    ScanUsbPortsEvent());
+                                context.read<LogBloc>().add(ScanUsbPortsEvent());
                                 _usbService.getAvailablePorts();
                               },
                               onSerialSubmitted: (value) {
                                 if (value.isNotEmpty) {
-                                  context.read<LogBloc>().add(
-                                      SelectSerialEvent(value));
+                                  context.read<LogBloc>().add(SelectSerialEvent(value));
                                   _startSerialMonitor(value);
                                 }
                               },
                               onQrCodeScan: () {
-                                final scannedSerial = 'SN-${DateTime
-                                    .now()
-                                    .millisecondsSinceEpoch
-                                    .toString()
-                                    .substring(6)}';
+                                final scannedSerial = 'SN-${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}';
                                 _serialController.text = scannedSerial;
-                                context.read<LogBloc>().add(
-                                    SelectSerialEvent(scannedSerial));
+                                context.read<LogBloc>().add(SelectSerialEvent(scannedSerial));
                                 _startSerialMonitor(scannedSerial);
                               },
                               availablePorts: _usbService.getAvailablePorts(),
@@ -198,9 +203,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                               child: Column(
                                 children: [
                                   Container(
-                                    color: _isDarkTheme
-                                        ? Colors.grey[700]
-                                        : Colors.grey[200],
+                                    color: _isDarkTheme ? Colors.grey[700] : Colors.grey[200],
                                     child: TabBar(
                                       controller: _tabController,
                                       tabs: const [
@@ -216,20 +219,15 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                     child: TabBarView(
                                       controller: _tabController,
                                       children: [
-                                        // Console Log
                                         StreamBuilder<List<LogEntry>>(
-                                          stream: _logService.logStream
-                                              .transform(
-                                            StreamTransformer<LogEntry,
-                                                List<LogEntry>>.fromHandlers(
+                                          stream: _logService.logStream.transform(
+                                            StreamTransformer<LogEntry, List<LogEntry>>.fromHandlers(
                                               handleData: (log, sink) {
-                                                final currentLogs = state
-                                                    .filteredLogs.toList();
+                                                final currentLogs = state.filteredLogs.toList();
                                                 currentLogs.add(log);
                                                 sink.add(currentLogs
                                                     .where((l) =>
-                                                l.deviceId ==
-                                                    state.serialNumber ||
+                                                l.deviceId == state.serialNumber ||
                                                     l.deviceId.isEmpty)
                                                     .toList());
                                               },
@@ -239,8 +237,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                             final logs = snapshot.data ??
                                                 state.filteredLogs
                                                     .where((log) =>
-                                                log.deviceId ==
-                                                    state.serialNumber ||
+                                                log.deviceId == state.serialNumber ||
                                                     log.deviceId.isEmpty)
                                                     .toList();
                                             return ConsoleLogView(
@@ -249,41 +246,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                             );
                                           },
                                         ),
-                                        // Serial Monitor
-                                        StreamBuilder<List<LogEntry>>(
-                                          stream: _logService.logStream
-                                              .transform(
-                                            StreamTransformer<LogEntry,
-                                                List<LogEntry>>.fromHandlers(
-                                              handleData: (log, sink) {
-                                                final currentLogs = state
-                                                    .filteredLogs.toList();
-                                                currentLogs.add(log);
-                                                sink.add(currentLogs
-                                                    .where((l) =>
-                                                l.step ==
-                                                    ProcessStep.serialMonitor &&
-                                                    l.deviceId ==
-                                                        state.serialNumber)
-                                                    .toList());
-                                              },
-                                            ),
-                                          ),
-                                          builder: (context, snapshot) {
-                                            final serialLogs = snapshot.data ??
-                                                state.filteredLogs
-                                                    .where((log) =>
-                                                log.step ==
-                                                    ProcessStep.serialMonitor &&
-                                                    log.deviceId ==
-                                                        state.serialNumber)
-                                                    .toList();
-                                            return ConsoleLogView(
-                                              logs: serialLogs,
-                                              scrollController: _scrollController,
-                                            );
-                                          },
-                                        ),
+                                        _buildSerialMonitorTab(context, state),
                                       ],
                                     ),
                                   ),
@@ -294,8 +257,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                       onClose: () {
                                         setState(() => _isSearching = false);
                                         _searchController.clear();
-                                        context.read<LogBloc>().add(
-                                            FilterLogEvent());
+                                        context.read<LogBloc>().add(FilterLogEvent());
                                       },
                                     ),
                                 ],
@@ -310,8 +272,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                     WarningDialog(
                       isDarkTheme: _isDarkTheme,
                       onCancel: () => setState(() => _localFileWarning = false),
-                      onContinue: () =>
-                          setState(() => _localFileWarning = false),
+                      onContinue: () => setState(() => _localFileWarning = false),
                       title: 'Cảnh báo',
                       message: 'Tính năng chọn file local có thể gây ra lỗi không mong muốn. Bạn có chắc chắn muốn tiếp tục?',
                     ),
@@ -324,23 +285,114 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     );
   }
 
-  // Khởi động serial monitor
-  void _startSerialMonitor(String serialNumber) async {
-    final port = await _arduinoCliService.getPortForDevice(serialNumber);
-    if (port != null) {
-      await _logService.startSerialMonitor(port, 115200, serialNumber);
-    } else {
-      _logService.addLog(
-        message: 'No port found for device $serialNumber',
-        level: LogLevel.error,
-        step: ProcessStep.serialMonitor,
-        deviceId: serialNumber,
-        origin: 'system',
-      );
-    }
+  Widget _buildSerialMonitorTab(BuildContext context, LogState state) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 150,
+                child: DropdownButtonFormField<int>(
+                  value: _selectedBaudRate,
+                  decoration: InputDecoration(
+                    labelText: 'Baud Rate',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    fillColor: _isDarkTheme ? AppColors.idle : AppColors.cardBackground,
+                    filled: true,
+                  ),
+                  items: _baudRates.map((baud) => DropdownMenuItem(
+                    value: baud,
+                    child: Text(baud.toString()),
+                  )).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _selectedBaudRate = value);
+                      if (_serialController.text.isNotEmpty) {
+                        _startSerialMonitor(_serialController.text);
+                      }
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _serialInputController,
+                  decoration: InputDecoration(
+                    hintText: 'Enter command to send',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    fillColor: _isDarkTheme ? AppColors.idle : AppColors.cardBackground,
+                    filled: true,
+                  ),
+                  onSubmitted: (_) => _sendSerialData(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.send, size: 16),
+                  label: const Text('Send'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.connected,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onPressed: _serialInputController.text.isNotEmpty ? _sendSerialData : null,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<List<LogEntry>>(
+            stream: _logService.logStream.transform(
+              StreamTransformer<LogEntry, List<LogEntry>>.fromHandlers(
+                handleData: (log, sink) {
+                  final currentLogs = state.filteredLogs.toList();
+                  currentLogs.add(log);
+                  sink.add(currentLogs
+                      .where((l) =>
+                  l.step == ProcessStep.serialMonitor &&
+                      l.deviceId == state.serialNumber)
+                      .toList());
+                },
+              ),
+            ),
+            builder: (context, snapshot) {
+              final serialLogs = snapshot.data ??
+                  state.filteredLogs
+                      .where((log) =>
+                  log.step == ProcessStep.serialMonitor &&
+                      log.deviceId == state.serialNumber)
+                      .toList();
+              return ConsoleLogView(
+                logs: serialLogs,
+                scrollController: _scrollController,
+              );
+            },
+          ),
+        ),
+      ],
+    );
   }
 
-  // Xử lý flash firmware
   void _flashFirmware(String deviceId, String firmwareVersion, String serialNumber, String deviceType) async {
     final port = await _arduinoCliService.getPortForDevice(serialNumber);
     if (port == null) {
@@ -368,7 +420,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
 
       preparedPath = await _templateService.prepareFirmwareTemplate(
         logState.localFilePath!,
-        serialNumber, // Thay thế placeholder bằng serial từ TextField/QR
+        serialNumber,
         deviceId,
       );
 
@@ -416,7 +468,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
 
       preparedPath = await _templateService.prepareFirmwareTemplate(
         templatePath,
-        serialNumber, // Thay thế placeholder bằng serial từ TextField/QR
+        serialNumber,
         deviceId,
       );
 
