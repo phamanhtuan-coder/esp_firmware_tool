@@ -22,6 +22,7 @@ class SerialMonitorService {
     }
 
     _isRunning = true;
+    String buffer = '';
 
     try {
       // Create a process using Shell with proper stream handling
@@ -35,12 +36,33 @@ class SerialMonitorService {
       shell.run(command, onProcess: (process) {
         _process = process;
 
-        // Handle stdout
+        // Handle stdout with improved line buffering
         process.stdout.listen((data) {
-          final output = String.fromCharCodes(data).trim();
-          if (output.isNotEmpty) {
-            _controller.add(output);
-            _logger?.stdout(output);
+          final output = String.fromCharCodes(data);
+
+          if (output.contains('\n')) {
+            // Process complete lines
+            final lines = (buffer + output).split('\n');
+            // Last element might be incomplete
+            buffer = lines.removeLast();
+
+            // Send complete lines
+            for (final line in lines) {
+              if (line.trim().isNotEmpty) {
+                _controller.add(line.trim());
+                _logger?.stdout(line.trim());
+              }
+            }
+          } else {
+            // Add to buffer for incomplete lines
+            buffer += output;
+
+            // If buffer contains a complete message but no newline
+            if (buffer.length > 80 || buffer.contains('.') || buffer.endsWith('}')) {
+              _controller.add(buffer.trim());
+              _logger?.stdout(buffer.trim());
+              buffer = '';
+            }
           }
         });
 

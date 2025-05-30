@@ -5,6 +5,15 @@ import 'package:cli_util/cli_logging.dart';
 import 'package:get_it/get_it.dart';
 import '../../data/services/serial_monitor_service.dart';
 
+// Đối tượng để lưu trữ dữ liệu hiển thị
+class LineDisplay {
+  final String timestamp;
+  final String content;
+  bool isSystemMessage;
+
+  LineDisplay(this.timestamp, this.content, {this.isSystemMessage = false});
+}
+
 class SerialMonitorTerminalWidget extends StatefulWidget {
   final String? initialPort;
   final int initialBaudRate;
@@ -23,7 +32,7 @@ class SerialMonitorTerminalWidget extends StatefulWidget {
 
 class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidget> {
   final SerialMonitorService _monitorService = GetIt.instance<SerialMonitorService>();
-  final List<String> _lines = [];
+  final List<LineDisplay> _lines = [];
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   late final Ansi _ansi;
@@ -36,11 +45,15 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
     _ansi = Ansi(Ansi.terminalSupportsAnsi);
 
     // Thêm welcome message
-    _lines.add('[${DateTime.now().toString().split('.').first}] Welcome to Serial Monitor');
-    _lines.add('[${DateTime.now().toString().split('.').first}] Select COM port and baud rate to start monitoring');
+    final timestamp = DateTime.now().toString().split('.').first;
+    _lines.add(LineDisplay(timestamp, 'Welcome to Serial Monitor', isSystemMessage: true));
+    _lines.add(LineDisplay(timestamp, 'Select COM port and baud rate to start monitoring', isSystemMessage: true));
 
-    // Đăng ký listen stream với broadcast
-    _subscription = _monitorService.outputStream.asBroadcastStream().listen(
+    // Cancel any existing subscription
+    _subscription?.cancel();
+
+    // Listen to the broadcast stream
+    _subscription = _monitorService.outputStream.listen(
       (data) {
         if (mounted) {
           _addLine(data);
@@ -48,7 +61,7 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
       },
       onError: (error) {
         if (mounted) {
-          _addLine('Error: $error');
+          _addLine('Error: $error', isSystemMessage: true);
         }
       },
     );
@@ -64,7 +77,7 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
         if (mounted) {
           _monitorService.stopMonitor(); // Stop any existing monitor
           _monitorService.startMonitor(widget.initialPort!, widget.initialBaudRate);
-          _addLine('Starting monitor on ${widget.initialPort} at ${widget.initialBaudRate} baud...');
+          _addLine('Starting monitor on ${widget.initialPort} at ${widget.initialBaudRate} baud...', isSystemMessage: true);
         }
       });
     }
@@ -81,15 +94,18 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
     }
   }
 
-  void _addLine(String line) {
+  void _addLine(String line, {bool isSystemMessage = false}) {
     if (!mounted) return;
 
     setState(() {
       final timestamp = DateTime.now().toString().split('.').first;
-      _lines.add('[$timestamp] ${_processAnsiCodes(line)}');
+      final processedLine = _processAnsiCodes(line);
 
-      // Keep buffer size under control
-      if (_lines.length > 1000) {
+      // Thêm dòng mới với timestamp và nội dung
+      _lines.add(LineDisplay(timestamp, processedLine, isSystemMessage: isSystemMessage));
+
+      // Giữ kích thước buffer trong giới hạn
+      while (_lines.length > 1000) {
         _lines.removeAt(0);
       }
     });
@@ -100,7 +116,7 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
         if (mounted && _scrollController.hasClients) {
           _scrollController.animateTo(
             _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 200),
+            duration: const Duration(milliseconds: 100),
             curve: Curves.easeOut,
           );
         }
@@ -168,13 +184,28 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
                       TextSpan(
                         children: _lines.map((line) {
                           return TextSpan(
-                            text: '$line\n',
-                            style: const TextStyle(
-                              color: Colors.lightGreenAccent,
-                              fontFamily: 'Courier New',
-                              fontSize: 14.0,
-                              height: 1.5,
-                            ),
+                            children: [
+                              // Timestamp with slight opacity
+                              TextSpan(
+                                text: '[${line.timestamp}] ',
+                                style: TextStyle(
+                                  color: line.isSystemMessage ? Colors.yellow.withOpacity(0.8) : Colors.grey.withOpacity(0.7),
+                                  fontFamily: 'Courier New',
+                                  fontSize: 12.0,
+                                  height: 1.5,
+                                ),
+                              ),
+                              // Actual content
+                              TextSpan(
+                                text: '${line.content}\n',
+                                style: TextStyle(
+                                  color: line.isSystemMessage ? Colors.yellow : Colors.lightGreenAccent,
+                                  fontFamily: 'Courier New',
+                                  fontSize: 14.0,
+                                  height: 1.5,
+                                ),
+                              ),
+                            ],
                           );
                         }).toList(),
                       ),

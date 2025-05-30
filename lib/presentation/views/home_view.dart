@@ -341,62 +341,65 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             children: [
-              Icon(
-                Icons.circle,
-                size: 12,
-                color: hasPortSelected ? AppColors.connected : AppColors.idle,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                hasPortSelected && _selectedBaudRate != 0
-                    ? 'Connected to: $_selectedPort at $_selectedBaudRate baud'
-                    : 'Not connected - Select a COM port and baud rate first',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: hasPortSelected ? AppColors.success : AppColors.warning,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Controls Row
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Baud Rate',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 4),
-              SizedBox(
-                width: 150,
-                child: DropdownButtonFormField<int>(
-                  value: _selectedBaudRate != 0 ? _selectedBaudRate : null,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    fillColor: _isDarkTheme ? AppColors.idle : AppColors.cardBackground,
-                    filled: true,
+              // COM Port Status
+              Row(
+                children: [
+                  Icon(
+                    Icons.circle,
+                    size: 12,
+                    color: hasPortSelected ? AppColors.connected : AppColors.idle,
                   ),
-                  items: _baudRates.map((baud) => DropdownMenuItem(
-                    value: baud,
-                    child: Text(baud.toString()),
-                  )).toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => _selectedBaudRate = value);
-                      if (_selectedPort != null && _selectedPort!.isNotEmpty) {
-                        _startSerialMonitor(_serialController.text);
-                      }
-                    }
-                  },
-                  hint: const Text('-- Chọn baud rate --'),
+                  const SizedBox(width: 8),
+                  Text(
+                    hasPortSelected ? 'Connected to: $_selectedPort' : 'Not connected - Select a COM port',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: hasPortSelected ? AppColors.success : AppColors.warning,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 24),
+              // Baud Rate Selector
+              Expanded(
+                child: Row(
+                  children: [
+                    const Text(
+                      'Tốc độ Baud:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        value: _selectedBaudRate != 0 ? _selectedBaudRate : null,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          fillColor: _isDarkTheme ? AppColors.idle : AppColors.cardBackground,
+                          filled: true,
+                        ),
+                        items: [
+                          const DropdownMenuItem<int>(
+                            value: null,
+                            child: Text('Chọn tốc độ Baud'),
+                          ),
+                          ..._baudRates.map((baud) => DropdownMenuItem(
+                            value: baud,
+                            child: Text(baud.toString()),
+                          )).toList(),
+                        ],
+                        onChanged: (value) {
+                          setState(() => _selectedBaudRate = value ?? 0);
+                          if (_selectedPort != null && _selectedPort!.isNotEmpty && value != null) {
+                            _startSerialMonitor(_serialController.text);
+                          }
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
