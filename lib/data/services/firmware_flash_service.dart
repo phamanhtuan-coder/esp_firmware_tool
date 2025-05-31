@@ -1,11 +1,13 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:convert';
 
 import 'package:esp_firmware_tool/data/models/log_entry.dart';
 import 'package:esp_firmware_tool/data/services/arduino_cli_service.dart';
 import 'package:esp_firmware_tool/data/services/batch_service.dart';
 import 'package:esp_firmware_tool/data/services/template_service.dart';
 import 'package:esp_firmware_tool/data/services/usb_service.dart';
-
+import 'package:path/path.dart' as path;
 
 class FirmwareFlashService {
   final ArduinoCliService _arduinoCliService;
@@ -20,6 +22,27 @@ class FirmwareFlashService {
       this._usbService,
       );
 
+  /// Retrieve board type from metadata file created during template processing
+  Future<String> _getBoardTypeFromMetadata(String sketchPath) async {
+    try {
+      final sketchDir = File(sketchPath).parent.path;
+      final metadataFile = File(path.join(sketchDir, 'board_metadata.json'));
+
+      if (await metadataFile.exists()) {
+        final jsonData = json.decode(await metadataFile.readAsString());
+        final boardType = jsonData['boardType'] as String?;
+        if (boardType != null && boardType.isNotEmpty) {
+          return boardType.toLowerCase();
+        }
+      }
+    } catch (e) {
+      print('DEBUG: Error reading board metadata: $e');
+    }
+
+    // Default to ESP32 if we can't determine
+    return 'esp32';
+  }
+
   Future<void> flash({
     required String serialNumber,
     required String deviceType,
@@ -29,6 +52,7 @@ class FirmwareFlashService {
     required void Function(LogEntry) onLog,
     String? selectedPort,
     bool useQuotesForDefines = false, // Add parameter to control quotes in #define
+    String? overrideBoardType, // Optional parameter to override auto-detected board type
   }) async {
     // Kiểm tra port được chọn trước tiên
     String? port = selectedPort;
@@ -170,9 +194,9 @@ class FirmwareFlashService {
       deviceId: serialNumber,
     ));
 
-    final fqbn = _arduinoCliService.getBoardFqbn(
-      deviceType.toLowerCase() == 'arduino uno r3' ? 'arduino_uno_r3' : deviceType,
-    );
+    // Determine board type
+    final boardType = overrideBoardType ?? await _getBoardTypeFromMetadata(processedPath);
+    final fqbn = _arduinoCliService.getBoardFqbn(boardType);
 
     onLog(LogEntry(
       message: '🛠 Đang biên dịch firmware...',
@@ -226,5 +250,5 @@ class FirmwareFlashService {
       deviceId: serialNumber,
     ));
   }
-
 }
+

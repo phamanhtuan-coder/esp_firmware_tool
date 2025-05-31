@@ -25,11 +25,56 @@ class TemplateService {
     }
   }
 
+  /// Extract board type from template file content
+  String extractBoardType(String content) {
+    // Default to ESP32 if we can't determine
+    String boardType = 'esp32';
+
+    // First, look for a board type marked as ACTIVE in comments
+    final activeCommentPattern = RegExp(r'\/\/\s*BOARD_TYPE:\s*(\w+)\s*\(ACTIVE\)', multiLine: true);
+    final activeMatches = activeCommentPattern.allMatches(content);
+
+    if (activeMatches.isNotEmpty) {
+      final foundType = activeMatches.first.group(1)?.toLowerCase();
+      if (foundType != null) {
+        boardType = foundType;
+        print('DEBUG: Found board type marked as ACTIVE: $boardType');
+        return boardType;
+      }
+    }
+
+    // Look for active BOARD_TYPE directive (not commented out)
+    final boardTypePattern = RegExp(r'^BOARD_TYPE:\s*(\w+)', multiLine: true);
+    final matches = boardTypePattern.allMatches(content);
+
+    if (matches.isNotEmpty) {
+      final foundType = matches.first.group(1)?.toLowerCase();
+      if (foundType != null) {
+        boardType = foundType;
+        print('DEBUG: Found active board type: $boardType');
+      }
+    }
+
+    // If no active board type found, look for commented ones and log them
+    if (boardType == 'esp32') {
+      final commentedPattern = RegExp(r'\/\/\s*BOARD_TYPE:\s*(\w+)', multiLine: true);
+      final commentedMatches = commentedPattern.allMatches(content);
+      if (commentedMatches.isNotEmpty) {
+        print('DEBUG: Found commented board types:');
+        for (final match in commentedMatches) {
+          print('DEBUG: - ${match.group(1)}');
+        }
+      }
+    }
+
+    return boardType;
+  }
+
   Future<String?> prepareFirmwareTemplate(
       String templatePath,
       String serialNumber,
       String deviceId, {
-      bool useQuotesForDefines = false,
+      bool useQuotesForDefines = true,
       }) async {
     try {
       _logService.addLog(
@@ -69,8 +114,13 @@ class TemplateService {
       }
 
       String content = await templateFile.readAsString();
+
+      // Extract board type from template
+      final boardType = extractBoardType(content);
+      print('DEBUG: Detected board type: $boardType');
+
       _logService.addLog(
-        message: 'Template file content length: ${content.length} bytes',
+        message: 'Template file content length: ${content.length} bytes, Board: $boardType',
         level: LogLevel.info,
         step: ProcessStep.templatePreparation,
         deviceId: serialNumber,
@@ -107,6 +157,7 @@ class TemplateService {
         'AP_SSID': 'AP_$serialNumber',
         'ap_ssid': 'ap_${serialNumber.toLowerCase()}',
         'ApSsid': 'AP_$serialNumber',
+        'BOARD_TYPE': boardType,
       };
 
       // First handle #define replacements
@@ -118,8 +169,9 @@ class TemplateService {
         if (replaceValue != null) {
           print('DEBUG: Replacing #define $defineName with value: $replaceValue');
 
-          // Format with or without quotes based on parameter
-          final formattedValue = useQuotesForDefines ? '"$replaceValue"' : replaceValue;
+          // Always use quotes for SERIAL_NUMBER and DEVICE_ID to avoid compile errors
+          final shouldQuote = useQuotesForDefines || defineName == 'SERIAL_NUMBER' || defineName == 'DEVICE_ID' || defineName == 'DEVICE_UUID';
+          final formattedValue = shouldQuote ? '"$replaceValue"' : replaceValue;
 
           _logService.addLog(
             message: 'Replaced #define $defineName with value: $formattedValue',
@@ -134,8 +186,38 @@ class TemplateService {
         return match.group(0)!;
       });
 
+      // Special handling for SERIAL_NUMBER and DEVICE_ID without quotes or with placeholders
+      final specialDefinePattern = RegExp(r'#define\s+(SERIAL_NUMBER|DEVICE_ID|DEVICE_UUID)\s+([^"\n\r]+)');
+      content = content.replaceAllMapped(specialDefinePattern, (match) {
+        final defineName = match.group(1);
+        final currentValue = match.group(2);
+
+        // Skip if the current value is already properly quoted
+        if (currentValue!.startsWith('"') && currentValue.endsWith('"')) {
+          return match.group(0)!;
+        }
+
+        // Choose the right replacement value based on the define name
+        final replaceValue = defineName == 'DEVICE_ID' ? deviceId : serialNumber;
+
+        print('DEBUG: Adding quotes to #define $defineName with value: $replaceValue');
+
+        // Always add quotes for these special defines
+        final formattedValue = '"$replaceValue"';
+
+        _logService.addLog(
+          message: 'Fixed quoting for #define $defineName with value: $formattedValue',
+          level: LogLevel.info,
+          step: ProcessStep.templatePreparation,
+          deviceId: serialNumber,
+          origin: 'system',
+        );
+
+        return '#define $defineName $formattedValue';
+      });
+
       // Also handle direct #define SERIAL_NUMBER "SN00001101" format (without placeholders)
-      final directDefinePattern = RegExp(r'#define\s+(\w+)\s+"([^"]+)"');
+      final directDefinePattern = RegExp(r'#define\s+(\w+)\s+"?([^"\n\r]+)"?');
       content = content.replaceAllMapped(directDefinePattern, (match) {
         final defineName = match.group(1);
         final currentValue = match.group(2);
@@ -148,8 +230,8 @@ class TemplateService {
 
           print('DEBUG: Replacing direct #define $defineName with value: $replaceValue');
 
-          // Format with or without quotes based on parameter
-          final formattedValue = useQuotesForDefines ? '"$replaceValue"' : replaceValue;
+          // Always add quotes for these special defines, regardless of useQuotesForDefines setting
+          final formattedValue = '"$replaceValue"';
 
           _logService.addLog(
             message: 'Replaced direct #define $defineName with value: $formattedValue',
@@ -182,6 +264,9 @@ class TemplateService {
         }
       });
 
+      // Update the board type directive in the template - uncomment the active one
+      content = _updateBoardTypeDirectives(content, boardType);
+
       // Validate that all placeholders were replaced
       final remainingPlaceholders = RegExp(r'{{[^}]+}}').allMatches(content);
       if (remainingPlaceholders.isNotEmpty) {
@@ -206,8 +291,11 @@ class TemplateService {
       print('DEBUG: Template processed successfully');
       print('DEBUG: Final content written to: $compilePath');
 
+      // Store board type in a metadata file to be used during compilation
+      await _saveBoardTypeMetadata(sketchDir.path, boardType);
+
       _logService.addLog(
-        message: 'Template processed successfully. Output file: $compilePath',
+        message: 'Template processed successfully. Output file: $compilePath, Board: $boardType',
         level: LogLevel.success,
         step: ProcessStep.templatePreparation,
         deviceId: serialNumber,
@@ -229,6 +317,42 @@ class TemplateService {
       );
       return null;
     }
+  }
+
+  /// Save board type metadata in a file next to the sketch
+  Future<void> _saveBoardTypeMetadata(String sketchDir, String boardType) async {
+    try {
+      final metadataFile = File(path.join(sketchDir, 'board_metadata.json'));
+      final metadata = {
+        'boardType': boardType,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+      await metadataFile.writeAsString(json.encode(metadata));
+      print('DEBUG: Saved board metadata: $boardType');
+    } catch (e) {
+      print('DEBUG: Failed to save board metadata: $e');
+    }
+  }
+
+  /// Update board type directives in the template file
+  String _updateBoardTypeDirectives(String content, String selectedBoardType) {
+    // Find all board type directives
+    final boardTypeRegex = RegExp(r'(\/\/\s*)?BOARD_TYPE:\s*(\w+)', multiLine: true);
+
+    // First, make sure all directives are commented
+    content = content.replaceAllMapped(boardTypeRegex, (match) {
+      final boardType = match.group(2)?.toLowerCase() ?? '';
+      return '// BOARD_TYPE: $boardType';
+    });
+
+    // Now add a special comment that Arduino CLI can use but won't be treated as code
+    content = content.replaceAll(
+      '// BOARD_TYPE: ${selectedBoardType.toLowerCase()}',
+      '// BOARD_TYPE: ${selectedBoardType.toLowerCase()} (ACTIVE)'
+    );
+
+    print('DEBUG: Set ${selectedBoardType.toLowerCase()} as active board type');
+    return content;
   }
 
   Future<String?> saveFirmwareTemplate(
@@ -385,3 +509,4 @@ class TemplateService {
     return false;
   }
 }
+
