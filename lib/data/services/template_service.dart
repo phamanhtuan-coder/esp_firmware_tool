@@ -50,6 +50,10 @@ class TemplateService {
         serialNumber = 'DEFAULT_SERIAL';
       }
 
+      print('DEBUG: Processing template at path: $templatePath');
+      print('DEBUG: Serial Number: $serialNumber');
+      print('DEBUG: Device ID: $deviceId');
+
       final templateFile = File(templatePath);
       if (!await templateFile.exists()) {
         _logService.addLog(
@@ -74,6 +78,8 @@ class TemplateService {
       final tempDir = await getTemporaryDirectory();
       final compilePath = path.join(tempDir.path, 'firmware_${serialNumber}_${DateTime.now().millisecondsSinceEpoch}.ino');
 
+      print('DEBUG: Output file path: $compilePath');
+
       final replacements = {
         'SERIAL_NUMBER': serialNumber,
         'serial_number': serialNumber.toLowerCase(),
@@ -89,12 +95,14 @@ class TemplateService {
         'ApSsid': 'AP_$serialNumber',
       };
 
+      // First handle #define replacements
       final definePattern = RegExp(r'#define\s+(\w+)\s+"{{([^}]+)}}"');
       content = content.replaceAllMapped(definePattern, (match) {
         final defineName = match.group(1);
         final placeholderName = match.group(2);
         final replaceValue = replacements[placeholderName];
         if (replaceValue != null) {
+          print('DEBUG: Replacing #define $defineName with value: $replaceValue');
           _logService.addLog(
             message: 'Replaced #define $defineName with value: $replaceValue',
             level: LogLevel.info,
@@ -107,10 +115,12 @@ class TemplateService {
         return match.group(0)!;
       });
 
+      // Then handle inline replacements
       replacements.forEach((key, value) {
         final before = content;
         content = content.replaceAll('{{$key}}', value);
         if (before != content) {
+          print('DEBUG: Replaced {{$key}} with: $value');
           _logService.addLog(
             message: 'Replaced placeholder {{$key}} with value: $value',
             level: LogLevel.info,
@@ -121,31 +131,29 @@ class TemplateService {
         }
       });
 
-      final compileFile = File(compilePath);
-      await compileFile.writeAsString(content);
+      // Validate that all placeholders were replaced
+      final remainingPlaceholders = RegExp(r'{{[^}]+}}').allMatches(content);
+      if (remainingPlaceholders.isNotEmpty) {
+        print('DEBUG: Found unreplaced placeholders:');
+        for (final match in remainingPlaceholders) {
+          print('  - ${match.group(0)}');
+        }
 
-      final processedContent = await compileFile.readAsString();
-      if (processedContent.contains('{{')) {
         _logService.addLog(
-          message: 'Warning: Found unreplaced placeholders in processed content',
+          message: 'Warning: Found ${remainingPlaceholders.length} unreplaced placeholders',
           level: LogLevel.warning,
           step: ProcessStep.templatePreparation,
           deviceId: serialNumber,
           origin: 'system',
         );
-        final placeholderPattern = RegExp(r'{{[^}]+}}');
-        final matches = placeholderPattern.allMatches(processedContent);
-        for (final match in matches) {
-          _logService.addLog(
-            message: 'Unreplaced placeholder: ${match.group(0)}',
-            level: LogLevel.warning,
-            step: ProcessStep.templatePreparation,
-            deviceId: serialNumber,
-            origin: 'system',
-          );
-        }
-        return null;
       }
+
+      // Write processed content to file
+      final compileFile = File(compilePath);
+      await compileFile.writeAsString(content);
+
+      print('DEBUG: Template processed successfully');
+      print('DEBUG: Final content written to: $compilePath');
 
       _logService.addLog(
         message: 'Template processed successfully. Output file: $compilePath',
@@ -157,6 +165,10 @@ class TemplateService {
 
       return compilePath;
     } catch (e, stackTrace) {
+      print('DEBUG: Error in prepareFirmwareTemplate:');
+      print('Error: $e');
+      print('Stack trace: $stackTrace');
+
       _logService.addLog(
         message: 'Error preparing template: $e\n$stackTrace',
         level: LogLevel.error,
@@ -175,22 +187,40 @@ class TemplateService {
         String? expectedHash,
       }) async {
     try {
+      print('DEBUG: Saving firmware template');
+      print('DEBUG: Firmware version: $firmwareVersion');
+      print('DEBUG: Device type: $deviceType');
+
+      if (_templatesDir == null) {
+        await _initTemplatesDir();
+      }
+
       final deviceTemplateDir = path.join(_templatesDir!, '${deviceType}_template');
+      print('DEBUG: Device template directory: $deviceTemplateDir');
+
       final directory = Directory(deviceTemplateDir);
       if (!await directory.exists()) {
         await directory.create(recursive: true);
+        print('DEBUG: Created device template directory');
       }
 
       final firmwareFolderName = firmwareVersion.replaceAll('.', '_');
       final firmwareFolderPath = path.join(deviceTemplateDir, firmwareFolderName);
+      print('DEBUG: Firmware folder path: $firmwareFolderPath');
+
       await Directory(firmwareFolderPath).create(recursive: true);
 
       final fileName = '$firmwareFolderName.ino';
       final filePath = path.join(firmwareFolderPath, fileName);
+      print('DEBUG: Final file path: $filePath');
+
       final file = File(filePath);
 
       if (expectedHash != null) {
         final contentHash = md5.convert(utf8.encode(sourceCode)).toString();
+        print('DEBUG: Content hash: $contentHash');
+        print('DEBUG: Expected hash: $expectedHash');
+
         if (contentHash != expectedHash) {
           _logService.addLog(
             message: 'Hash mismatch for firmware $firmwareVersion',
@@ -203,11 +233,26 @@ class TemplateService {
       }
 
       await file.writeAsString(sourceCode);
+      print('DEBUG: Source code written to file');
+
       await _saveMetadata(firmwareVersion, deviceType, filePath);
-      return filePath;
-    } catch (e) {
+      print('DEBUG: Metadata saved');
+
       _logService.addLog(
-        message: 'Error saving template: $e',
+        message: 'Firmware template saved successfully',
+        level: LogLevel.success,
+        step: ProcessStep.firmwareDownload,
+        origin: 'system',
+      );
+
+      return filePath;
+    } catch (e, stackTrace) {
+      print('DEBUG: Error in saveFirmwareTemplate:');
+      print('Error: $e');
+      print('Stack trace: $stackTrace');
+
+      _logService.addLog(
+        message: 'Error saving template: $e\n$stackTrace',
         level: LogLevel.error,
         step: ProcessStep.firmwareDownload,
         origin: 'system',

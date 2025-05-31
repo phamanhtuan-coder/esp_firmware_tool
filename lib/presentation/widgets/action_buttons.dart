@@ -69,17 +69,11 @@ class ActionButtons extends StatelessWidget {
                 ? null
                 : () {
               context.read<LogBloc>().add(InitiateFlashEvent(
-                deviceId: deviceSerial, // Sử dụng serial từ TextField/QR
+                deviceId: deviceSerial,
                 firmwareVersion: selectedFirmwareVersion ?? '',
                 deviceSerial: deviceSerial,
                 deviceType: 'esp32',
               ));
-              onInitiateFlash(
-                deviceSerial, // Sử dụng serial từ TextField/QR
-                selectedFirmwareVersion ?? '',
-                deviceSerial,
-                'esp32',
-              );
             },
           ),
         ],

@@ -165,7 +165,41 @@ class UsbService {
   }
 
   String? getDevicePort(String deviceId) {
-    return _connectedDevices[deviceId];
+    // Trước hết, tìm trong map đã lưu
+    final port = _connectedDevices[deviceId];
+    if (port != null) {
+      _logService.addLog(
+        message: 'Device $deviceId found on port $port',
+        level: LogLevel.info,
+        step: ProcessStep.usbCheck,
+        origin: 'system',
+      );
+      return port;
+    }
+
+    // Nếu không tìm thấy trong map, trả về port đầu tiên được tìm thấy
+    final availablePorts = getAvailablePorts();
+    if (availablePorts.isNotEmpty) {
+      final selectedPort = availablePorts.first;
+      _logService.addLog(
+        message: 'Device $deviceId not registered but port $selectedPort is available. Using it.',
+        level: LogLevel.warning,
+        step: ProcessStep.usbCheck,
+        origin: 'system',
+      );
+      // Lưu lại để sử dụng sau này
+      _connectedDevices[deviceId] = selectedPort;
+      return selectedPort;
+    }
+
+    // Nếu không có port nào, trả về null
+    _logService.addLog(
+      message: 'No ports available for device $deviceId',
+      level: LogLevel.error,
+      step: ProcessStep.usbCheck,
+      origin: 'system',
+    );
+    return null;
   }
 
   bool isDeviceConnected(String deviceId) {

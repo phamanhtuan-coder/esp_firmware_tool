@@ -90,6 +90,11 @@ class ArduinoCliService {
       // Kill any existing process
       await killActiveProcess();
 
+      print('DEBUG: Executing command: $executable ${arguments.join(' ')}');
+      if (workingDirectory.isNotEmpty) {
+        print('DEBUG: Working directory: $workingDirectory');
+      }
+
       // Start the new process
       _activeProcess = await Process.start(
         executable,
@@ -98,49 +103,49 @@ class ArduinoCliService {
         environment: environment,
       );
 
-      // Add log entry showing the command being executed if requested
       if (showCommandInLogs) {
         final commandString = '$executable ${arguments.join(' ')}';
-        print('Running: $commandString');
+        print('Running command: $commandString');
       }
 
-      // Process stdout with improved line handling
+      // Stream stdout with improved line handling
       _activeProcess!.stdout
         .transform(utf8.decoder)
         .listen((data) {
           final lines = data.split('\n');
           for (final line in lines) {
             if (line.trim().isNotEmpty) {
-              print('[STDOUT] ${line.trim()}');
+              print('[STDOUT] $line');
             }
           }
+        }, onError: (error) {
+          print('Error in stdout stream: $error');
         });
 
-      // Process stderr
+      // Stream stderr
       _activeProcess!.stderr
         .transform(utf8.decoder)
         .listen((data) {
           final lines = data.split('\n');
           for (final line in lines) {
             if (line.trim().isNotEmpty) {
-              print('[STDERR] ${line.trim()}');
+              print('[STDERR] $line');
             }
           }
+        }, onError: (error) {
+          print('Error in stderr stream: $error');
         });
 
       // Wait for process to complete
       final exitCode = await _activeProcess!.exitCode;
-
-      if (exitCode == 0) {
-        print('Process completed successfully');
-      } else {
-        print('Process failed with exit code: $exitCode');
-      }
+      print('DEBUG: Process completed with exit code: $exitCode');
 
       _activeProcess = null;
       return exitCode;
-    } catch (e) {
-      print('Failed to start process: $e');
+    } catch (e, stackTrace) {
+      print('DEBUG: Process execution failed:');
+      print('Error: $e');
+      print('Stack trace: $stackTrace');
       return -1;
     }
   }
@@ -159,36 +164,58 @@ class ArduinoCliService {
 
   /// Compile a sketch using arduino-cli
   Future<bool> compileSketch(String sketchPath, String fqbn) async {
+    print('DEBUG: Compiling sketch at $sketchPath');
+    print('DEBUG: Using FQBN: $fqbn');
+
     final exitCode = await runProcess(
       'arduino-cli',
-      ['compile', '--fqbn', fqbn, sketchPath],
+      ['compile', '--fqbn', fqbn, '--verbose', sketchPath],
       step: ProcessStep.compile,
       showCommandInLogs: true,
+      workingDirectory: Directory(sketchPath).parent.path,
     );
-    return exitCode == 0;
+
+    final success = exitCode == 0;
+    print('DEBUG: Compilation ${success ? 'succeeded' : 'failed'} with exit code $exitCode');
+    return success;
   }
 
   /// Upload a sketch to a board using arduino-cli
   Future<bool> uploadSketch(String sketchPath, String port, String fqbn) async {
+    print('DEBUG: Uploading sketch to port $port');
+    print('DEBUG: Using FQBN: $fqbn');
+    print('DEBUG: Sketch path: $sketchPath');
+
     final exitCode = await runProcess(
       'arduino-cli',
-      ['upload', '-p', port, '--fqbn', fqbn, sketchPath],
+      ['upload', '-p', port, '--fqbn', fqbn, '--verbose', sketchPath],
       step: ProcessStep.flash,
       showCommandInLogs: true,
+      workingDirectory: Directory(sketchPath).parent.path,
     );
-    return exitCode == 0;
+
+    final success = exitCode == 0;
+    print('DEBUG: Upload ${success ? 'succeeded' : 'failed'} with exit code $exitCode');
+    return success;
   }
 
   /// Check if Arduino CLI is installed and available
   Future<bool> isCliAvailable() async {
     try {
-      final process = await Process.run(
-        'arduino-cli',
-        ['version'],
-        stdoutEncoding: const Utf8Codec(),
-      );
-      return process.exitCode == 0;
+      print('DEBUG: Checking Arduino CLI availability...');
+      final result = await Process.run('arduino-cli', ['version']);
+
+      if (result.exitCode == 0) {
+        print('DEBUG: Arduino CLI is available. Version info:');
+        print(result.stdout);
+        return true;
+      } else {
+        print('DEBUG: Arduino CLI check failed with exit code ${result.exitCode}');
+        print('Error output: ${result.stderr}');
+        return false;
+      }
     } catch (e) {
+      print('DEBUG: Arduino CLI availability check failed: $e');
       return false;
     }
   }

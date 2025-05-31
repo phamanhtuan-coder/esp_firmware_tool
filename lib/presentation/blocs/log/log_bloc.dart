@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:esp_firmware_tool/data/services/arduino_cli_service.dart';
 import 'package:esp_firmware_tool/data/services/batch_service.dart';
+import 'package:esp_firmware_tool/data/services/firmware_flash_service.dart';
 import 'package:esp_firmware_tool/data/services/usb_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:esp_firmware_tool/data/models/batch.dart';
@@ -256,20 +257,130 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     emit(state.copyWith(status: 'Scanning ports...', availablePorts: ports));
   }
 
-  void _onInitiateFlash(InitiateFlashEvent event, Emitter<LogState> emit) {
-    final statusMessage = 'Flash event triggered for device ${event.deviceSerial}';
-    emit(state.copyWith(status: statusMessage));
+  void _onInitiateFlash(InitiateFlashEvent event, Emitter<LogState> emit) async {
+    try {
+      // Set flashing state
+      emit(state.copyWith(isFlashing: true, error: null));
 
-    final logEntry = LogEntry(
-      message: '$statusMessage${state.localFilePath != null ? " using local file" : " using firmware version ${event.firmwareVersion}"}',
-      timestamp: DateTime.now(),
-      level: LogLevel.info,
-      step: ProcessStep.flash,
-      origin: 'user',
-    );
-    add(AddLogEvent(logEntry));
+      // Log detailed information about the flash request
+      final logEntries = [
+        LogEntry(
+          message: 'Bắt đầu quá trình flash với:',
+          timestamp: DateTime.now(),
+          level: LogLevel.info,
+          step: ProcessStep.flash,
+          origin: 'system',
+          deviceId: event.deviceSerial,
+        ),
+        LogEntry(
+          message: '- Device ID: ${event.deviceId}',
+          timestamp: DateTime.now(),
+          level: LogLevel.info,
+          step: ProcessStep.flash,
+          origin: 'system',
+          deviceId: event.deviceSerial,
+        ),
+        LogEntry(
+          message: '- Loại thiết bị: ${event.deviceType}',
+          timestamp: DateTime.now(),
+          level: LogLevel.info,
+          step: ProcessStep.flash,
+          origin: 'system',
+          deviceId: event.deviceSerial,
+        ),
+        LogEntry(
+          message: '- Phiên bản firmware: ${event.firmwareVersion}',
+          timestamp: DateTime.now(),
+          level: LogLevel.info,
+          step: ProcessStep.flash,
+          origin: 'system',
+          deviceId: event.deviceSerial,
+        ),
+        LogEntry(
+          message: '- Sử dụng file local: ${state.localFilePath != null}',
+          timestamp: DateTime.now(),
+          level: LogLevel.info,
+          step: ProcessStep.flash,
+          origin: 'system',
+          deviceId: event.deviceSerial,
+        ),
+        LogEntry(
+          message: '- Lô đã chọn: ${state.selectedBatchId ?? "không có"}',
+          timestamp: DateTime.now(),
+          level: LogLevel.info,
+          step: ProcessStep.flash,
+          origin: 'system',
+          deviceId: event.deviceSerial,
+        ),
+        LogEntry(
+          message: '- Cổng COM đã chọn: ${state.selectedPort ?? "không có"}',
+          timestamp: DateTime.now(),
+          level: LogLevel.info,
+          step: ProcessStep.flash,
+          origin: 'system',
+          deviceId: event.deviceSerial,
+        ),
+      ];
+
+      // Add all log entries
+      for (final entry in logEntries) {
+        add(AddLogEvent(entry));
+      }
+
+      // Get the services
+      final firmware = serviceLocator<FirmwareFlashService>();
+      final arduinoCli = serviceLocator<ArduinoCliService>();
+
+      // Verify Arduino CLI is available
+      final isCliAvailable = await arduinoCli.isCliAvailable();
+      if (!isCliAvailable) {
+        throw Exception('Arduino CLI không có sẵn. Vui lòng cài đặt Arduino CLI trước.');
+      }
+
+      // Call the flash service with the selected port
+      await firmware.flash(
+        serialNumber: event.deviceSerial,
+        deviceType: event.deviceType,
+        firmwareVersion: event.firmwareVersion,
+        localFilePath: state.localFilePath,
+        selectedBatch: state.selectedBatchId,
+        selectedPort: state.selectedPort,
+        onLog: (log) => add(AddLogEvent(log)),
+      );
+
+      // Update state after flashing completes
+      emit(state.copyWith(
+        isFlashing: false,
+        status: 'Quá trình flash đã hoàn tất',
+      ));
+
+      add(AddLogEvent(LogEntry(
+        message: 'Quá trình flash đã hoàn tất thành công',
+        timestamp: DateTime.now(),
+        level: LogLevel.success,
+        step: ProcessStep.flash,
+        origin: 'system',
+        deviceId: event.deviceSerial,
+      )));
+
+    } catch (e, stackTrace) {
+      final errorMessage = 'Lỗi trong quá trình flash: $e\n$stackTrace';
+      emit(state.copyWith(
+        isFlashing: false,
+        error: errorMessage,
+        status: 'Flash thất bại'
+      ));
+
+      add(AddLogEvent(LogEntry(
+        message: errorMessage,
+        timestamp: DateTime.now(),
+        level: LogLevel.error,
+        step: ProcessStep.flash,
+        origin: 'system',
+        deviceId: event.deviceSerial,
+      )));
+    }
   }
-
 
   void _onStopProcess(StopProcessEvent event, Emitter<LogState> emit) {
     emit(state.copyWith(isFlashing: false, status: 'Process stopped', error: null));

@@ -105,9 +105,35 @@ class BatchService {
   Future<String?> fetchVersionFirmware({
     required String batchId,
   }) async {
-    return "";
-    // TODO: gọi API hoặc backend để lấy sourceCode từ phiên bản firmware
+    try {
+      _logService.addLog(
+        message: 'Fetching firmware for batch $batchId',
+        level: LogLevel.info,
+        step: ProcessStep.firmwareDownload,
+        origin: 'system',
+      );
+
+      // TODO: Implement actual API call
+      // For now, return a basic template for testing
+      return '''
+void setup() {
+  Serial.begin(115200);
+  Serial.println("Device {{SERIAL_NUMBER}} starting...");
+}
+
+void loop() {
+  Serial.println("Hello from {{DEVICE_ID}}");
+  delay(1000);
+}
+''';
+    } catch (e) {
+      _logService.addLog(
+        message: 'Error fetching firmware: $e',
+        level: LogLevel.error,
+        step: ProcessStep.firmwareDownload,
+        origin: 'system',
+      );
+      return null;
+    }
   }
-
-
 }

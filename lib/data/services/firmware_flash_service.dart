@@ -27,20 +27,37 @@ class FirmwareFlashService {
     required String? localFilePath,
     required String? selectedBatch,
     required void Function(LogEntry) onLog,
+    String? selectedPort,
   }) async {
-    onLog(LogEntry(
-      message: '🔍 Checking USB port for device $serialNumber',
-      timestamp: DateTime.now(),
-      level: LogLevel.info,
-      step: ProcessStep.systemEvent,
-      origin: 'system',
-      deviceId: serialNumber,
-    ));
+    // Kiểm tra port được chọn trước tiên
+    String? port = selectedPort;
 
-    final port = await _usbService.getDevicePort(serialNumber);
-    if (port == null) {
+    // Nếu không có port được chỉ định, tìm kiếm port từ UsbService
+    if (port == null || port.isEmpty) {
       onLog(LogEntry(
-        message: '❌ No USB port found for device $serialNumber',
+        message: '🔍 Không có cổng được chọn, đang tìm cổng tự động cho thiết bị $serialNumber',
+        timestamp: DateTime.now(),
+        level: LogLevel.warning,
+        step: ProcessStep.systemEvent,
+        origin: 'system',
+        deviceId: serialNumber,
+      ));
+
+      port = await _usbService.getDevicePort(serialNumber);
+    } else {
+      onLog(LogEntry(
+        message: '✅ Sử dụng cổng đã chọn: $port',
+        timestamp: DateTime.now(),
+        level: LogLevel.info,
+        step: ProcessStep.systemEvent,
+        origin: 'system',
+        deviceId: serialNumber,
+      ));
+    }
+
+    if (port == null || port.isEmpty) {
+      onLog(LogEntry(
+        message: '❌ Không tìm thấy cổng USB cho thiết bị $serialNumber',
         timestamp: DateTime.now(),
         level: LogLevel.error,
         step: ProcessStep.systemEvent,
@@ -52,10 +69,10 @@ class FirmwareFlashService {
 
     String? processedPath;
 
-    // If a local file is provided, use it directly
-    if (localFilePath != null) {
+    // If using a local file
+    if (localFilePath != null && localFilePath.isNotEmpty) {
       onLog(LogEntry(
-        message: '📂 Using local firmware file: $localFilePath',
+        message: '📂 Đang xử lý file local: $localFilePath',
         timestamp: DateTime.now(),
         level: LogLevel.info,
         step: ProcessStep.firmwareDownload,
@@ -63,29 +80,16 @@ class FirmwareFlashService {
         deviceId: serialNumber,
       ));
 
-      // Process the local file using the Dart method
       processedPath = await _templateService.prepareFirmwareTemplate(
         localFilePath,
         serialNumber,
-        serialNumber, // Using serialNumber as deviceId for consistency
+        serialNumber,
       );
-
-      if (processedPath == null) {
-        onLog(LogEntry(
-          message: '❌ Failed to process local file template',
-          timestamp: DateTime.now(),
-          level: LogLevel.error,
-          step: ProcessStep.templatePreparation,
-          origin: 'system',
-          deviceId: serialNumber,
-        ));
-        return;
-      }
     } else {
-      // No local file; fetch firmware from server
-      if (firmwareVersion.isEmpty || selectedBatch == null) {
+      // Using firmware version from server/batch
+      if (selectedBatch == null) {
         onLog(LogEntry(
-          message: '❌ Firmware version or batch not provided',
+          message: '❌ Không có batch được chọn cho firmware version $firmwareVersion',
           timestamp: DateTime.now(),
           level: LogLevel.error,
           step: ProcessStep.firmwareDownload,
@@ -96,7 +100,7 @@ class FirmwareFlashService {
       }
 
       onLog(LogEntry(
-        message: '🌐 Fetching firmware for version "$firmwareVersion" from batch "$selectedBatch"',
+        message: '🌐 Đang tải firmware phiên bản $firmwareVersion từ lô $selectedBatch',
         timestamp: DateTime.now(),
         level: LogLevel.info,
         step: ProcessStep.firmwareDownload,
@@ -107,7 +111,7 @@ class FirmwareFlashService {
       final sourceCode = await _batchService.fetchVersionFirmware(batchId: selectedBatch);
       if (sourceCode == null || sourceCode.isEmpty) {
         onLog(LogEntry(
-          message: '❌ No firmware source code returned from server',
+          message: '❌ Không thể tải mã nguồn firmware',
           timestamp: DateTime.now(),
           level: LogLevel.error,
           step: ProcessStep.firmwareDownload,
@@ -117,7 +121,6 @@ class FirmwareFlashService {
         return;
       }
 
-      // Save the fetched firmware as a template
       final templatePath = await _templateService.saveFirmwareTemplate(
         sourceCode,
         firmwareVersion,
@@ -126,7 +129,7 @@ class FirmwareFlashService {
 
       if (templatePath == null) {
         onLog(LogEntry(
-          message: '❌ Failed to save firmware template',
+          message: '❌ Không thể lưu template firmware',
           timestamp: DateTime.now(),
           level: LogLevel.error,
           step: ProcessStep.firmwareDownload,
@@ -136,28 +139,27 @@ class FirmwareFlashService {
         return;
       }
 
-      // Process the template using the Dart method
       processedPath = await _templateService.prepareFirmwareTemplate(
         templatePath,
         serialNumber,
         serialNumber,
       );
+    }
 
-      if (processedPath == null) {
-        onLog(LogEntry(
-          message: '❌ Failed to process template',
-          timestamp: DateTime.now(),
-          level: LogLevel.error,
-          step: ProcessStep.templatePreparation,
-          origin: 'system',
-          deviceId: serialNumber,
-        ));
-        return;
-      }
+    if (processedPath == null) {
+      onLog(LogEntry(
+        message: '❌ Không thể xử lý template firmware',
+        timestamp: DateTime.now(),
+        level: LogLevel.error,
+        step: ProcessStep.templatePreparation,
+        origin: 'system',
+        deviceId: serialNumber,
+      ));
+      return;
     }
 
     onLog(LogEntry(
-      message: '✅ Template processed at: $processedPath',
+      message: '✅ Đã xử lý template thành công',
       timestamp: DateTime.now(),
       level: LogLevel.success,
       step: ProcessStep.templatePreparation,
@@ -170,7 +172,7 @@ class FirmwareFlashService {
     );
 
     onLog(LogEntry(
-      message: '🛠 Compiling firmware...',
+      message: '🛠 Đang biên dịch firmware...',
       timestamp: DateTime.now(),
       level: LogLevel.info,
       step: ProcessStep.compile,
@@ -181,7 +183,7 @@ class FirmwareFlashService {
     final compiled = await _arduinoCliService.compileSketch(processedPath, fqbn);
     if (!compiled) {
       onLog(LogEntry(
-        message: '❌ Compilation failed',
+        message: '❌ Biên dịch thất bại',
         timestamp: DateTime.now(),
         level: LogLevel.error,
         step: ProcessStep.compile,
@@ -189,10 +191,19 @@ class FirmwareFlashService {
         deviceId: serialNumber,
       ));
       return;
+    } else {
+      onLog(LogEntry(
+        message: '✅ Biên dịch thành công',
+        timestamp: DateTime.now(),
+        level: LogLevel.success,
+        step: ProcessStep.compile,
+        origin: 'system',
+        deviceId: serialNumber,
+      ));
     }
 
     onLog(LogEntry(
-      message: '🚀 Uploading firmware to $port',
+      message: '🚀 Đang nạp firmware vào cổng $port',
       timestamp: DateTime.now(),
       level: LogLevel.info,
       step: ProcessStep.flash,
@@ -203,8 +214,8 @@ class FirmwareFlashService {
     final uploaded = await _arduinoCliService.uploadSketch(processedPath, port, fqbn);
     onLog(LogEntry(
       message: uploaded
-          ? '✅ Firmware flashed successfully for $serialNumber'
-          : '❌ Firmware flashing failed for $serialNumber',
+          ? '✅ Nạp firmware thành công'
+          : '❌ Nạp firmware thất bại',
       timestamp: DateTime.now(),
       level: uploaded ? LogLevel.success : LogLevel.error,
       step: ProcessStep.flash,
