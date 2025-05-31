@@ -28,8 +28,9 @@ class TemplateService {
   Future<String?> prepareFirmwareTemplate(
       String templatePath,
       String serialNumber,
-      String deviceId,
-      ) async {
+      String deviceId, {
+      bool useQuotesForDefines = false,
+      }) async {
     try {
       _logService.addLog(
         message: 'Starting template preparation for $serialNumber',
@@ -53,6 +54,7 @@ class TemplateService {
       print('DEBUG: Processing template at path: $templatePath');
       print('DEBUG: Serial Number: $serialNumber');
       print('DEBUG: Device ID: $deviceId');
+      print('DEBUG: Use quotes for defines: $useQuotesForDefines');
 
       final templateFile = File(templatePath);
       if (!await templateFile.exists()) {
@@ -75,8 +77,20 @@ class TemplateService {
         origin: 'system',
       );
 
+      // Get temporary directory for our work
       final tempDir = await getTemporaryDirectory();
-      final compilePath = path.join(tempDir.path, 'firmware_${serialNumber}_${DateTime.now().millisecondsSinceEpoch}.ino');
+
+      // Create a filename for our sketch
+      final sketchName = 'firmware_${serialNumber}_${DateTime.now().millisecondsSinceEpoch}';
+
+      // Create a directory with the same name as the sketch file (required by Arduino CLI)
+      final sketchDir = Directory(path.join(tempDir.path, sketchName));
+      if (!await sketchDir.exists()) {
+        await sketchDir.create(recursive: true);
+      }
+
+      // Set up the complete path including filename
+      final compilePath = path.join(sketchDir.path, '$sketchName.ino');
 
       print('DEBUG: Output file path: $compilePath');
 
@@ -103,15 +117,52 @@ class TemplateService {
         final replaceValue = replacements[placeholderName];
         if (replaceValue != null) {
           print('DEBUG: Replacing #define $defineName with value: $replaceValue');
+
+          // Format with or without quotes based on parameter
+          final formattedValue = useQuotesForDefines ? '"$replaceValue"' : replaceValue;
+
           _logService.addLog(
-            message: 'Replaced #define $defineName with value: $replaceValue',
+            message: 'Replaced #define $defineName with value: $formattedValue',
             level: LogLevel.info,
             step: ProcessStep.templatePreparation,
             deviceId: serialNumber,
             origin: 'system',
           );
-          return '#define $defineName "$replaceValue"';
+
+          return '#define $defineName $formattedValue';
         }
+        return match.group(0)!;
+      });
+
+      // Also handle direct #define SERIAL_NUMBER "SN00001101" format (without placeholders)
+      final directDefinePattern = RegExp(r'#define\s+(\w+)\s+"([^"]+)"');
+      content = content.replaceAllMapped(directDefinePattern, (match) {
+        final defineName = match.group(1);
+        final currentValue = match.group(2);
+
+        // Only replace if it matches certain keywords we want to handle specially
+        if (defineName == 'SERIAL_NUMBER' || defineName == 'DEVICE_ID' || defineName == 'DEVICE_UUID') {
+          final replaceValue = defineName == 'SERIAL_NUMBER' || defineName == 'DEVICE_UUID'
+              ? serialNumber
+              : deviceId;
+
+          print('DEBUG: Replacing direct #define $defineName with value: $replaceValue');
+
+          // Format with or without quotes based on parameter
+          final formattedValue = useQuotesForDefines ? '"$replaceValue"' : replaceValue;
+
+          _logService.addLog(
+            message: 'Replaced direct #define $defineName with value: $formattedValue',
+            level: LogLevel.info,
+            step: ProcessStep.templatePreparation,
+            deviceId: serialNumber,
+            origin: 'system',
+          );
+
+          return '#define $defineName $formattedValue';
+        }
+
+        // Don't modify other #define statements
         return match.group(0)!;
       });
 

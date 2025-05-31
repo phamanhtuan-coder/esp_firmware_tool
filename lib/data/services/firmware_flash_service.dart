@@ -28,6 +28,7 @@ class FirmwareFlashService {
     required String? selectedBatch,
     required void Function(LogEntry) onLog,
     String? selectedPort,
+    bool useQuotesForDefines = false, // Add parameter to control quotes in #define
   }) async {
     // Kiểm tra port được chọn trước tiên
     String? port = selectedPort;
@@ -84,6 +85,7 @@ class FirmwareFlashService {
         localFilePath,
         serialNumber,
         serialNumber,
+        useQuotesForDefines: useQuotesForDefines, // Pass the quote preference
       );
     } else {
       // Using firmware version from server/batch
@@ -143,6 +145,7 @@ class FirmwareFlashService {
         templatePath,
         serialNumber,
         serialNumber,
+        useQuotesForDefines: useQuotesForDefines, // Pass the quote preference
       );
     }
 

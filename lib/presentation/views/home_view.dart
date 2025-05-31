@@ -329,7 +329,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                   } else {
                                     // Serial not found in current batch
                                     _logService.addLog(
-                                      message: 'Serial $scannedSerial không tồn t���i trong lô $_selectedBatch',
+                                      message: 'Serial $scannedSerial không tồn tại trong lô $_selectedBatch',
                                       level: LogLevel.warning,
                                       step: ProcessStep.scanQrCode,
                                       origin: 'system',
@@ -556,6 +556,8 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       firmwareVersion: effectiveFirmwareVersion,
       localFilePath: logBloc.state.localFilePath,
       selectedBatch: _selectedBatch,
+      selectedPort: _selectedPort,
+      useQuotesForDefines: false, // Do not use quotes around serial numbers in #define
       onLog: log,
     );
   }

@@ -167,12 +167,20 @@ class ArduinoCliService {
     print('DEBUG: Compiling sketch at $sketchPath');
     print('DEBUG: Using FQBN: $fqbn');
 
+    // Get the directory and filename separately
+    final sketchFile = File(sketchPath);
+    final sketchDir = sketchFile.parent;
+    final sketchName = sketchFile.path;
+
+    print('DEBUG: Sketch directory: ${sketchDir.path}');
+    print('DEBUG: Sketch name: $sketchName');
+
     final exitCode = await runProcess(
       'arduino-cli',
-      ['compile', '--fqbn', fqbn, '--verbose', sketchPath],
+      ['compile', '--fqbn', fqbn, '--verbose', sketchName],
       step: ProcessStep.compile,
       showCommandInLogs: true,
-      workingDirectory: Directory(sketchPath).parent.path,
+      workingDirectory: sketchDir.path,
     );
 
     final success = exitCode == 0;
@@ -186,12 +194,20 @@ class ArduinoCliService {
     print('DEBUG: Using FQBN: $fqbn');
     print('DEBUG: Sketch path: $sketchPath');
 
+    // Get the directory and filename separately
+    final sketchFile = File(sketchPath);
+    final sketchDir = sketchFile.parent;
+    final sketchName = sketchFile.path;
+
+    print('DEBUG: Sketch directory: ${sketchDir.path}');
+    print('DEBUG: Sketch name: $sketchName');
+
     final exitCode = await runProcess(
       'arduino-cli',
-      ['upload', '-p', port, '--fqbn', fqbn, '--verbose', sketchPath],
+      ['upload', '-p', port, '--fqbn', fqbn, '--verbose', sketchName],
       step: ProcessStep.flash,
       showCommandInLogs: true,
-      workingDirectory: Directory(sketchPath).parent.path,
+      workingDirectory: sketchDir.path,
     );
 
     final success = exitCode == 0;
