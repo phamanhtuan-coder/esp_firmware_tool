@@ -7,7 +7,6 @@ import 'package:libserialport/libserialport.dart';
 import 'package:esp_firmware_tool/data/models/log_entry.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
-import 'package:http/http.dart' as http;
 
 class LogService {
   // Stream controller for broadcasting logs to UI
@@ -41,8 +40,8 @@ class LogService {
   final Map<String, bool> _connectedDevices = {};
 
   // Current batch of devices being processed
-  List<String> _currentBatchSerials = [];
-  String _currentBatchId = '';
+  final List<String> _currentBatchSerials = [];
+  final String _currentBatchId = '';
 
   // Serial port instance for native serial monitor
   SerialPort? _serialPort;

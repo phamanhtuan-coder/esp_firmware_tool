@@ -4,17 +4,18 @@ import 'package:path/path.dart' as path;
 import 'package:crypto/crypto.dart'; // Thêm để tính hash
 import 'dart:convert';
 
+import '../models/log_entry.dart';
+import 'log_service.dart';
+
 /// Service for managing firmware templates
 class TemplateService {
-  /// Base directory for storing firmware templates
+  final LogService _logService;
   String? _templatesDir;
 
-  /// Constructor initializes the templates directory
-  TemplateService() {
+  TemplateService({required LogService logService}) : _logService = logService {
     _initTemplatesDir();
   }
 
-  /// Initialize the templates directory
   Future<void> _initTemplatesDir() async {
     final appDir = await getApplicationDocumentsDirectory();
     _templatesDir = path.join(appDir.path, 'firmware_templates');
@@ -24,98 +25,197 @@ class TemplateService {
     }
   }
 
-  /// Get a firmware template - will use local if available, otherwise fetch from API
-  Future<String?> getFirmwareTemplate(
-      String firmwareVersion,
-      String deviceType,
-      String sourceCode,
-      String? hash,
-      ) async {
-    // Update deviceType handling
-    final normalizedDeviceType = deviceType.toLowerCase() == 'arduino_uno_r3' ? 'arduino_uno' : deviceType;
-    final localPath = await _getLocalTemplatePath(firmwareVersion, normalizedDeviceType);
-    if (localPath != null && await File(localPath).exists()) {
-      if (hash != null && await _verifyHash(localPath, hash)) {
-        return localPath;
-      }
-    }
-    return await _saveTemplate(firmwareVersion, normalizedDeviceType, sourceCode, hash);
-  }
-
-  /// Get the local path for a template if it exists
-  Future<String?> _getLocalTemplatePath(
-      String firmwareVersion,
-      String deviceType,
-      ) async {
-    if (_templatesDir == null) {
-      await _initTemplatesDir();
-    }
-    final deviceTypeDir = path.join(_templatesDir!, deviceType);
-    final directoryExists = await Directory(deviceTypeDir).exists();
-    if (!directoryExists) {
-      return null;
-    }
-    final fileName = '${firmwareVersion.replaceAll('.', '_')}.ino';
-    final filePath = path.join(deviceTypeDir, fileName);
-    final file = File(filePath);
-    if (await file.exists()) {
-      return filePath;
-    }
-    return null;
-  }
-
-  /// Save firmware template from API sourceCode
-  Future<String?> _saveTemplate(
-      String firmwareVersion,
-      String deviceType,
-      String sourceCode,
-      String? expectedHash,
+  Future<String?> prepareFirmwareTemplate(
+      String templatePath,
+      String serialNumber,
+      String deviceId,
       ) async {
     try {
-      final deviceTypeDir = path.join(_templatesDir!, deviceType);
-      final directory = Directory(deviceTypeDir);
+      _logService.addLog(
+        message: 'Starting template preparation for $serialNumber',
+        level: LogLevel.info,
+        step: ProcessStep.templatePreparation,
+        deviceId: serialNumber,
+        origin: 'system',
+      );
+
+      if (serialNumber.isEmpty) {
+        _logService.addLog(
+          message: 'Warning: Empty serial number passed for template replacement',
+          level: LogLevel.warning,
+          step: ProcessStep.templatePreparation,
+          deviceId: serialNumber,
+          origin: 'system',
+        );
+        serialNumber = 'DEFAULT_SERIAL';
+      }
+
+      final templateFile = File(templatePath);
+      if (!await templateFile.exists()) {
+        _logService.addLog(
+          message: 'Template file not found: $templatePath',
+          level: LogLevel.error,
+          step: ProcessStep.templatePreparation,
+          deviceId: serialNumber,
+          origin: 'system',
+        );
+        return null;
+      }
+
+      String content = await templateFile.readAsString();
+      _logService.addLog(
+        message: 'Template file content length: ${content.length} bytes',
+        level: LogLevel.info,
+        step: ProcessStep.templatePreparation,
+        deviceId: serialNumber,
+        origin: 'system',
+      );
+
+      final tempDir = await getTemporaryDirectory();
+      final compilePath = path.join(tempDir.path, 'firmware_${serialNumber}_${DateTime.now().millisecondsSinceEpoch}.ino');
+
+      final replacements = {
+        'SERIAL_NUMBER': serialNumber,
+        'serial_number': serialNumber.toLowerCase(),
+        'SerialNumber': serialNumber,
+        'DEVICE_ID': deviceId,
+        'device_id': deviceId.toLowerCase(),
+        'DeviceId': deviceId,
+        'DEVICE_UUID': serialNumber,
+        'device_uuid': serialNumber.toLowerCase(),
+        'DeviceUuid': serialNumber,
+        'AP_SSID': 'AP_$serialNumber',
+        'ap_ssid': 'ap_${serialNumber.toLowerCase()}',
+        'ApSsid': 'AP_$serialNumber',
+      };
+
+      final definePattern = RegExp(r'#define\s+(\w+)\s+"{{([^}]+)}}"');
+      content = content.replaceAllMapped(definePattern, (match) {
+        final defineName = match.group(1);
+        final placeholderName = match.group(2);
+        final replaceValue = replacements[placeholderName];
+        if (replaceValue != null) {
+          _logService.addLog(
+            message: 'Replaced #define $defineName with value: $replaceValue',
+            level: LogLevel.info,
+            step: ProcessStep.templatePreparation,
+            deviceId: serialNumber,
+            origin: 'system',
+          );
+          return '#define $defineName "$replaceValue"';
+        }
+        return match.group(0)!;
+      });
+
+      replacements.forEach((key, value) {
+        final before = content;
+        content = content.replaceAll('{{$key}}', value);
+        if (before != content) {
+          _logService.addLog(
+            message: 'Replaced placeholder {{$key}} with value: $value',
+            level: LogLevel.info,
+            step: ProcessStep.templatePreparation,
+            deviceId: serialNumber,
+            origin: 'system',
+          );
+        }
+      });
+
+      final compileFile = File(compilePath);
+      await compileFile.writeAsString(content);
+
+      final processedContent = await compileFile.readAsString();
+      if (processedContent.contains('{{')) {
+        _logService.addLog(
+          message: 'Warning: Found unreplaced placeholders in processed content',
+          level: LogLevel.warning,
+          step: ProcessStep.templatePreparation,
+          deviceId: serialNumber,
+          origin: 'system',
+        );
+        final placeholderPattern = RegExp(r'{{[^}]+}}');
+        final matches = placeholderPattern.allMatches(processedContent);
+        for (final match in matches) {
+          _logService.addLog(
+            message: 'Unreplaced placeholder: ${match.group(0)}',
+            level: LogLevel.warning,
+            step: ProcessStep.templatePreparation,
+            deviceId: serialNumber,
+            origin: 'system',
+          );
+        }
+        return null;
+      }
+
+      _logService.addLog(
+        message: 'Template processed successfully. Output file: $compilePath',
+        level: LogLevel.success,
+        step: ProcessStep.templatePreparation,
+        deviceId: serialNumber,
+        origin: 'system',
+      );
+
+      return compilePath;
+    } catch (e, stackTrace) {
+      _logService.addLog(
+        message: 'Error preparing template: $e\n$stackTrace',
+        level: LogLevel.error,
+        step: ProcessStep.templatePreparation,
+        deviceId: serialNumber,
+        origin: 'system',
+      );
+      return null;
+    }
+  }
+
+  Future<String?> saveFirmwareTemplate(
+      String sourceCode,
+      String firmwareVersion,
+      String deviceType, {
+        String? expectedHash,
+      }) async {
+    try {
+      final deviceTemplateDir = path.join(_templatesDir!, '${deviceType}_template');
+      final directory = Directory(deviceTemplateDir);
       if (!await directory.exists()) {
         await directory.create(recursive: true);
       }
-      final fileName = '${firmwareVersion.replaceAll('.', '_')}.ino';
-      final filePath = path.join(deviceTypeDir, fileName);
+
+      final firmwareFolderName = firmwareVersion.replaceAll('.', '_');
+      final firmwareFolderPath = path.join(deviceTemplateDir, firmwareFolderName);
+      await Directory(firmwareFolderPath).create(recursive: true);
+
+      final fileName = '$firmwareFolderName.ino';
+      final filePath = path.join(firmwareFolderPath, fileName);
       final file = File(filePath);
 
-      // Xác thực hash trước khi lưu
       if (expectedHash != null) {
         final contentHash = md5.convert(utf8.encode(sourceCode)).toString();
         if (contentHash != expectedHash) {
-          print('Hash mismatch for firmware $firmwareVersion');
+          _logService.addLog(
+            message: 'Hash mismatch for firmware $firmwareVersion',
+            level: LogLevel.error,
+            step: ProcessStep.firmwareDownload,
+            origin: 'system',
+          );
           return null;
         }
       }
 
-      // Lưu file
       await file.writeAsString(sourceCode);
-
-      // Lưu metadata
       await _saveMetadata(firmwareVersion, deviceType, filePath);
       return filePath;
     } catch (e) {
-      print('Error saving template: $e');
+      _logService.addLog(
+        message: 'Error saving template: $e',
+        level: LogLevel.error,
+        step: ProcessStep.firmwareDownload,
+        origin: 'system',
+      );
       return null;
     }
   }
 
-  /// Verify file hash
-  Future<bool> _verifyHash(String filePath, String expectedHash) async {
-    try {
-      final file = File(filePath);
-      final content = await file.readAsString();
-      final contentHash = md5.convert(utf8.encode(content)).toString();
-      return contentHash == expectedHash;
-    } catch (e) {
-      print('Error verifying hash: $e');
-      return false;
-    }
-  }
-
-  /// Save metadata for template
   Future<void> _saveMetadata(String firmwareVersion, String deviceType, String filePath) async {
     final metadataDir = path.join(_templatesDir!, deviceType, 'metadata');
     final metadataFile = File(path.join(metadataDir, '${firmwareVersion.replaceAll('.', '_')}.json'));
@@ -129,40 +229,28 @@ class TemplateService {
     await metadataFile.writeAsString(json.encode(metadata));
   }
 
-  /// Prepare a firmware template by replacing placeholders
-  Future<String?> prepareFirmwareTemplate(
-      String templatePath,
-      String serialNumber,
-      String deviceId,
-      ) async {
-    try {
-      final templateFile = File(templatePath);
-      if (!await templateFile.exists()) {
-        print('Template file not found: $templatePath');
-        return null;
-      }
-      String templateContent = await templateFile.readAsString();
-      // Thay thế placeholder
-      templateContent = templateContent.replaceAll('{{DEVICE_ID}}', serialNumber);
-      templateContent = templateContent.replaceAll('{{DEVICE_UUID}}', serialNumber); // Nếu cần UUID
-      templateContent = templateContent.replaceAll('{{AP_SSID}}', 'AP_$serialNumber');
-      templateContent = templateContent.replaceAll('{{SERIAL_NUMBER}}', 'AP_$serialNumber');
-
-      // Các placeholder khác nếu cần
-
-      final tempDir = await getTemporaryDirectory();
-      final compilePath = path.join(tempDir.path, 'compile_$serialNumber.ino');
-      final compileFile = File(compilePath);
-      await compileFile.writeAsString(templateContent);
-      print('Template prepared for device $serialNumber');
-      return compilePath;
-    } catch (e) {
-      print('Error preparing template: $e');
+  Future<String?> _getLocalTemplatePath(String firmwareVersion, String deviceType) async {
+    if (_templatesDir == null) {
+      await _initTemplatesDir();
+    }
+    final deviceTemplateDir = path.join(_templatesDir!, '${deviceType}_template');
+    final directoryExists = await Directory(deviceTemplateDir).exists();
+    if (!directoryExists) {
       return null;
     }
+
+    final firmwareFolderName = firmwareVersion.replaceAll('.', '_');
+    final firmwareFolderPath = path.join(deviceTemplateDir, firmwareFolderName);
+    final fileName = '$firmwareFolderName.ino';
+    final filePath = path.join(firmwareFolderPath, fileName);
+
+    final file = File(filePath);
+    if (await file.exists()) {
+      return filePath;
+    }
+    return null;
   }
 
-  /// List all available firmware versions for a device type
   Future<List<String>> listAvailableFirmwareVersions(String deviceType) async {
     final result = <String>[];
     if (_templatesDir == null) {
@@ -185,14 +273,12 @@ class TemplateService {
     return result;
   }
 
-  /// Delete a firmware template
   Future<bool> deleteTemplate(String firmwareVersion, String deviceType) async {
     final templatePath = await _getLocalTemplatePath(firmwareVersion, deviceType);
     if (templatePath != null) {
       final file = File(templatePath);
       if (await file.exists()) {
         await file.delete();
-        // Xóa metadata tương ứng
         final metadataFile = File(path.join(_templatesDir!, deviceType, 'metadata', '${firmwareVersion.replaceAll('.', '_')}.json'));
         if (await metadataFile.exists()) {
           await metadataFile.delete();

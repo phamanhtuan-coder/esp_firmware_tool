@@ -20,11 +20,11 @@ class SerialMonitorTerminalWidget extends StatefulWidget {
   final bool autoStart;
 
   const SerialMonitorTerminalWidget({
-    Key? key,
+    super.key,
     this.initialPort,
     this.initialBaudRate = 115200,
     this.autoStart = false,
-  }) : super(key: key);
+  });
 
   @override
   State<SerialMonitorTerminalWidget> createState() => _SerialMonitorTerminalWidgetState();

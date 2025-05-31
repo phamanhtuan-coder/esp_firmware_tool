@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:esp_firmware_tool/data/services/firmware_flash_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide SearchBar;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -72,15 +73,24 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     await _logService.initialize();
     _usbService.deviceStream.listen((event) {
       context.read<LogBloc>().add(ScanUsbPortsEvent());
-      if (event.connected) {
-        _batchService.registerUsbConnection(event.deviceId, event.port);
-      } else {
-        _batchService.registerUsbDisconnection(event.deviceId);
-      }
+
+      context.read<LogBloc>().add(
+        AddLogEvent(
+          LogEntry(
+            message: event.connected
+                ? '🔌 USB device connected: ${event.deviceId} on port ${event.port}'
+                : '❌ USB device disconnected: ${event.deviceId}',
+            timestamp: DateTime.now(),
+            level: LogLevel.info,
+            step: ProcessStep.systemEvent,
+            origin: 'system',
+            deviceId: event.deviceId,
+          ),
+        ),
+      );
     });
-    _logService.logStream.listen((log) {
-      context.read<LogBloc>().add(FilterLogEvent(filter: _searchController.text));
-    });
+
+
   }
 
   @override
@@ -319,7 +329,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                   } else {
                                     // Serial not found in current batch
                                     _logService.addLog(
-                                      message: 'Serial $scannedSerial không tồn tại trong lô $_selectedBatch',
+                                      message: 'Serial $scannedSerial không tồn t���i trong lô $_selectedBatch',
                                       level: LogLevel.warning,
                                       step: ProcessStep.scanQrCode,
                                       origin: 'system',
@@ -489,7 +499,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                           ..._baudRates.map((baud) => DropdownMenuItem(
                             value: baud,
                             child: Text(baud.toString()),
-                          )).toList(),
+                          )),
                         ],
                         onChanged: (value) {
                           setState(() => _selectedBaudRate = value ?? 0);
@@ -521,127 +531,33 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     );
   }
 
-  void _flashFirmware(String deviceId, String firmwareVersion, String serialNumber, String deviceType) async {
-    final port = await _arduinoCliService.getPortForDevice(serialNumber);
-    if (port == null) {
-      _logService.addLog(
-        message: 'No port found for device $serialNumber',
-        level: LogLevel.error,
-        step: ProcessStep.flash,
-        deviceId: serialNumber,
-        origin: 'system',
-      );
-      return;
-    }
+  void _flashFirmware(
+      String deviceId,
+      String firmwareVersion,
+      String serialNumber,
+      String deviceType,
+      ) async {
+    final logBloc = context.read<LogBloc>();
+    log(LogEntry entry) => logBloc.add(AddLogEvent(entry));
 
-    String? preparedPath;
-    final logState = context.read<LogBloc>().state;
+    final flashService = FirmwareFlashService(
+      _arduinoCliService,
+      _templateService,
+      _batchService,
+      _usbService,
+    );
 
-    if (logState.localFilePath != null) {
-      _logService.addLog(
-        message: 'Using local firmware file: ${logState.localFilePath}',
-        level: LogLevel.info,
-        step: ProcessStep.firmwareDownload,
-        deviceId: serialNumber,
-        origin: 'system',
-      );
+    // Use a default firmware version if none is selected (to avoid empty string issues)
+    final effectiveFirmwareVersion = firmwareVersion.isEmpty ? "default" : firmwareVersion;
 
-      preparedPath = await _templateService.prepareFirmwareTemplate(
-        logState.localFilePath!,
-        serialNumber,
-        deviceId,
-      );
-
-      if (preparedPath == null) {
-        _logService.addLog(
-          message: 'Failed to prepare local firmware template for $serialNumber',
-          level: LogLevel.error,
-          step: ProcessStep.templatePreparation,
-          deviceId: serialNumber,
-          origin: 'system',
-        );
-        return;
-      }
-    } else if (firmwareVersion.isNotEmpty) {
-      final firmwareData = await _batchService.fetchBatchFirmware(_selectedBatch ?? '');
-      if (firmwareData.isEmpty) {
-        _logService.addLog(
-          message: 'No firmware data found for batch $_selectedBatch',
-          level: LogLevel.error,
-          step: ProcessStep.firmwareDownload,
-          deviceId: serialNumber,
-          origin: 'system',
-        );
-        return;
-      }
-
-      final sourceCode = firmwareData['sourceCode']!;
-      final templatePath = await _templateService.getFirmwareTemplate(
-        firmwareVersion,
-        deviceType,
-        sourceCode,
-        null,
-      );
-
-      if (templatePath == null) {
-        _logService.addLog(
-          message: 'Failed to get firmware template for $firmwareVersion',
-          level: LogLevel.error,
-          step: ProcessStep.firmwareDownload,
-          deviceId: serialNumber,
-          origin: 'system',
-        );
-        return;
-      }
-
-      preparedPath = await _templateService.prepareFirmwareTemplate(
-        templatePath,
-        serialNumber,
-        deviceId,
-      );
-
-      if (preparedPath == null) {
-        _logService.addLog(
-          message: 'Failed to prepare firmware template for $serialNumber',
-          level: LogLevel.error,
-          step: ProcessStep.templatePreparation,
-          deviceId: serialNumber,
-          origin: 'system',
-        );
-        return;
-      }
-    } else {
-      _logService.addLog(
-        message: 'No firmware version or local file selected',
-        level: LogLevel.error,
-        step: ProcessStep.firmwareDownload,
-        deviceId: serialNumber,
-        origin: 'system',
-      );
-      return;
-    }
-
-    final fqbn = _arduinoCliService.getBoardFqbn(deviceType.toLowerCase() == 'arduino uno r3' ? 'arduino_uno_r3' : deviceType);
-    final success = await _batchService.compileAndFlash(preparedPath, port, fqbn, serialNumber);
-
-    if (success) {
-      _batchService.markDeviceProcessed(serialNumber, true);
-      _logService.addLog(
-        message: 'Firmware flashed successfully for $serialNumber',
-        level: LogLevel.success,
-        step: ProcessStep.flash,
-        deviceId: serialNumber,
-        origin: 'system',
-      );
-    } else {
-      _batchService.markDeviceProcessed(serialNumber, false);
-      _logService.addLog(
-        message: 'Failed to flash firmware for $serialNumber',
-        level: LogLevel.error,
-        step: ProcessStep.flash,
-        deviceId: serialNumber,
-        origin: 'system',
-      );
-    }
+    await flashService.flash(
+      serialNumber: serialNumber,
+      deviceType: deviceType,
+      firmwareVersion: effectiveFirmwareVersion,
+      localFilePath: logBloc.state.localFilePath,
+      selectedBatch: _selectedBatch,
+      onLog: log,
+    );
   }
+
 }

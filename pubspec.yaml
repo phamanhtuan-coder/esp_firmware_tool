@@ -48,6 +48,8 @@ dependencies:
   libserialport: ^0.3.0+1
   cli_util: 0.4.2
 
+  path: any
+  crypto: any
 dev_dependencies:
   flutter_test:
     sdk: flutter

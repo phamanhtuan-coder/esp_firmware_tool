@@ -256,103 +256,20 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     emit(state.copyWith(status: 'Scanning ports...', availablePorts: ports));
   }
 
-  Future<void> _onInitiateFlash(InitiateFlashEvent event, Emitter<LogState> emit) async {
-    emit(state.copyWith(isFlashing: true, status: 'Compiling firmware for ${event.deviceSerial}...'));
+  void _onInitiateFlash(InitiateFlashEvent event, Emitter<LogState> emit) {
+    final statusMessage = 'Flash event triggered for device ${event.deviceSerial}';
+    emit(state.copyWith(status: statusMessage));
 
-    final arduinoCliService = serviceLocator<ArduinoCliService>();
-
-    const String deviceType = 'arduino_uno_r3';
-    final String fqbn = arduinoCliService.getBoardFqbn(deviceType);
-
-    final String? selectedPort = state.selectedPort;
-
-    if (selectedPort == null || selectedPort.isEmpty) {
-      emit(state.copyWith(
-        isFlashing: false,
-        error: 'No COM port selected',
-        status: 'Please select a COM port first'
-      ));
-      return;
-    }
-
-    final String sketchPath = state.localFilePath ?? 'lib/firmware_template/template.ino';
-
-    final compileStartLog = LogEntry(
-      message: 'Starting compilation of $sketchPath for Arduino UNO R3 ($fqbn)',
-      timestamp: DateTime.now(),
-      level: LogLevel.info,
-      step: ProcessStep.compile,
-      origin: 'system',
-    );
-    add(AddLogEvent(compileStartLog));
-
-    emit(state.copyWith(status: 'Compiling Arduino UNO R3 firmware...'));
-    final bool compileSuccess = await arduinoCliService.compileSketch(sketchPath, fqbn);
-
-    if (!compileSuccess) {
-      final compileFailLog = LogEntry(
-        message: 'Compilation failed for $sketchPath',
-        timestamp: DateTime.now(),
-        level: LogLevel.error,
-        step: ProcessStep.compile,
-        origin: 'system',
-      );
-      add(AddLogEvent(compileFailLog));
-
-      emit(state.copyWith(
-        isFlashing: false,
-        error: 'Compilation failed',
-        status: 'Failed to compile firmware for ${event.deviceSerial}'
-      ));
-      return;
-    }
-
-    final compileSuccessLog = LogEntry(
-      message: 'Compilation successful, starting upload to device on port $selectedPort',
+    final logEntry = LogEntry(
+      message: '$statusMessage${state.localFilePath != null ? " using local file" : " using firmware version ${event.firmwareVersion}"}',
       timestamp: DateTime.now(),
       level: LogLevel.info,
       step: ProcessStep.flash,
-      origin: 'system',
+      origin: 'user',
     );
-    add(AddLogEvent(compileSuccessLog));
-
-    emit(state.copyWith(status: 'Uploading firmware to ${event.deviceSerial} on port $selectedPort...'));
-
-    final bool uploadSuccess = await arduinoCliService.uploadSketch(sketchPath, selectedPort, fqbn);
-
-    if (!uploadSuccess) {
-      final uploadFailLog = LogEntry(
-        message: 'Upload failed to device ${event.deviceSerial} on port $selectedPort',
-        timestamp: DateTime.now(),
-        level: LogLevel.error,
-        step: ProcessStep.flash,
-        origin: 'system',
-      );
-      add(AddLogEvent(uploadFailLog));
-
-      emit(state.copyWith(
-        isFlashing: false,
-        error: 'Upload failed',
-        status: 'Failed to upload firmware to ${event.deviceSerial}'
-      ));
-      return;
-    }
-
-    final uploadSuccessLog = LogEntry(
-      message: 'Successfully flashed firmware to device ${event.deviceSerial} on port $selectedPort',
-      timestamp: DateTime.now(),
-      level: LogLevel.success,
-      step: ProcessStep.flash,
-      origin: 'system',
-    );
-    add(AddLogEvent(uploadSuccessLog));
-
-    emit(state.copyWith(
-      isFlashing: false,
-      status: 'Successfully flashed firmware to ${event.deviceSerial}',
-      error: null
-    ));
+    add(AddLogEvent(logEntry));
   }
+
 
   void _onStopProcess(StopProcessEvent event, Emitter<LogState> emit) {
     emit(state.copyWith(isFlashing: false, status: 'Process stopped', error: null));

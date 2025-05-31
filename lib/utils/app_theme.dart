@@ -33,63 +33,63 @@ class AppTheme {
     colorScheme: ColorScheme.light(
       primary: AppColors.primary,
       secondary: AppColors.accent,
-      background: AppColors.background,
+      surface: AppColors.background,
     ),
 
     // Enhanced Button Themes with consistent styling and feedback effects
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ButtonStyle(
-        elevation: MaterialStateProperty.resolveWith<double>((states) {
-          if (states.contains(MaterialState.pressed)) return 1;
+        elevation: WidgetStateProperty.resolveWith<double>((states) {
+          if (states.contains(WidgetState.pressed)) return 1;
           return 4;
         }),
-        shape: MaterialStateProperty.all(
+        shape: WidgetStateProperty.all(
           RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
         ),
-        padding: MaterialStateProperty.all(
+        padding: WidgetStateProperty.all(
           const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         ),
-        textStyle: MaterialStateProperty.all(
+        textStyle: WidgetStateProperty.all(
           const TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 16,
           ),
         ),
-        backgroundColor: MaterialStateProperty.resolveWith<Color>((states) {
-          if (states.contains(MaterialState.disabled)) return AppColors.buttonDisabled;
-          if (states.contains(MaterialState.pressed)) return AppColors.buttonPressed;
-          if (states.contains(MaterialState.hovered)) return AppColors.buttonHover;
+        backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+          if (states.contains(WidgetState.disabled)) return AppColors.buttonDisabled;
+          if (states.contains(WidgetState.pressed)) return AppColors.buttonPressed;
+          if (states.contains(WidgetState.hovered)) return AppColors.buttonHover;
           return AppColors.primary;
         }),
-        foregroundColor: MaterialStateProperty.all(Colors.white),
-        overlayColor: MaterialStateProperty.all(Colors.white.withOpacity(0.1)),
+        foregroundColor: WidgetStateProperty.all(Colors.white),
+        overlayColor: WidgetStateProperty.all(Colors.white.withOpacity(0.1)),
       ),
     ),
 
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: ButtonStyle(
-        shape: MaterialStateProperty.all(
+        shape: WidgetStateProperty.all(
           RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
         ),
-        padding: MaterialStateProperty.all(
+        padding: WidgetStateProperty.all(
           const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         ),
-        side: MaterialStateProperty.resolveWith<BorderSide>((states) {
-          if (states.contains(MaterialState.disabled)) {
+        side: WidgetStateProperty.resolveWith<BorderSide>((states) {
+          if (states.contains(WidgetState.disabled)) {
             return BorderSide(color: AppColors.buttonDisabled);
           }
-          if (states.contains(MaterialState.pressed)) {
+          if (states.contains(WidgetState.pressed)) {
             return BorderSide(color: AppColors.buttonPressed, width: 2);
           }
           return BorderSide(color: AppColors.primary);
         }),
-        foregroundColor: MaterialStateProperty.resolveWith<Color>((states) {
-          if (states.contains(MaterialState.disabled)) return AppColors.buttonDisabled;
-          if (states.contains(MaterialState.pressed)) return AppColors.buttonPressed;
+        foregroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+          if (states.contains(WidgetState.disabled)) return AppColors.buttonDisabled;
+          if (states.contains(WidgetState.pressed)) return AppColors.buttonPressed;
           return AppColors.primary;
         }),
       ),
@@ -120,7 +120,7 @@ class AppTheme {
       elevation: 8,
       backgroundColor: AppColors.cardBackground,
       indicatorColor: AppColors.primary.withOpacity(0.12),
-      labelTextStyle: MaterialStateProperty.all(
+      labelTextStyle: WidgetStateProperty.all(
         TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w500,
