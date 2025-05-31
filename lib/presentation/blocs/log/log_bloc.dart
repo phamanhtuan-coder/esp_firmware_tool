@@ -227,13 +227,50 @@ class LogBloc extends Bloc<LogEvent, LogState> {
   }
 
   void _onMarkDeviceDefective(MarkDeviceDefectiveEvent event, Emitter<LogState> emit) {
+    // Find the device to be updated
+    final deviceToUpdate = state.devices.firstWhere(
+      (device) => device.id.toString() == event.deviceId,
+      orElse: () => state.devices.firstWhere(
+        (device) => device.serial == event,
+        orElse: () => Device(id: -1, batchId: -1, serial: ''),
+      ),
+    );
+
+    if (deviceToUpdate.id == -1) {
+      // Device not found
+      emit(state.copyWith(status: 'Device not found: ${event.deviceId}'));
+      return;
+    }
+
+    // Check if it's a Device object with status already set (from API)
+    if (event is Device) {
+      final Device deviceWithStatus = event as Device;
+      final updatedDevices = state.devices.map((device) {
+        if (device.id == deviceWithStatus.id) {
+          return deviceWithStatus; // Use the pre-configured device with status
+        }
+        return device;
+      }).toList();
+
+      emit(state.copyWith(
+        devices: updatedDevices,
+        status: 'Device ${deviceWithStatus.serial} status updated to ${deviceWithStatus.status}'
+      ));
+      return;
+    }
+
+    // Standard handling for marking a device as defective
     final updatedDevices = state.devices.map((device) {
       if (device.id.toString() == event.deviceId) {
         return device.copyWith(status: 'defective', reason: event.reason);
       }
       return device;
     }).toList();
-    emit(state.copyWith(devices: updatedDevices, status: 'Device ${event.deviceId} marked as defective'));
+
+    emit(state.copyWith(
+      devices: updatedDevices,
+      status: 'Device ${event.deviceId} marked as defective'
+    ));
   }
 
   void _onSelectUsbPort(SelectUsbPortEvent event, Emitter<LogState> emit) {
