@@ -6,6 +6,8 @@ import 'package:esp_firmware_tool/data/services/template_service.dart';
 import 'package:esp_firmware_tool/data/services/batch_service.dart';
 import 'package:esp_firmware_tool/data/services/serial_monitor_service.dart';
 import 'package:esp_firmware_tool/data/services/firmware_flash_service.dart';
+import 'package:esp_firmware_tool/data/services/api_client.dart';
+import 'package:esp_firmware_tool/data/services/device_status_service.dart';
 import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
 
 final GetIt serviceLocator = GetIt.instance;
@@ -17,6 +19,9 @@ void setupServiceLocator() {
   serviceLocator.registerLazySingleton<UsbService>(() => UsbService());
   serviceLocator.registerLazySingleton<SerialMonitorService>(() => SerialMonitorService());
 
+  // Register API client
+  serviceLocator.registerLazySingleton<ApiClient>(() => ApiClient());
+
   // Services with dependencies
   serviceLocator.registerLazySingleton<TemplateService>(() => TemplateService(
     logService: serviceLocator<LogService>(),
@@ -25,6 +30,12 @@ void setupServiceLocator() {
   serviceLocator.registerLazySingleton<BatchService>(() => BatchService(
     logService: serviceLocator<LogService>(),
     arduinoCliService: serviceLocator<ArduinoCliService>(),
+  ));
+
+  // Device status service
+  serviceLocator.registerLazySingleton<DeviceStatusService>(() => DeviceStatusService(
+    apiClient: serviceLocator<ApiClient>(),
+    logService: serviceLocator<LogService>(),
   ));
 
   // FirmwareFlashService depends on multiple services
@@ -38,3 +49,4 @@ void setupServiceLocator() {
   // Bloc registration
   serviceLocator.registerFactory<LogBloc>(() => LogBloc());
 }
+

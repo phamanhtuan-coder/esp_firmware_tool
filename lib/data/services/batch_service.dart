@@ -96,9 +96,9 @@ class BatchService {
 
     // Returning mock data for now
     return [
-      'SN00001$batchId',
-      'SN00002$batchId',
-      'SN00003$batchId',
+      'SN001',
+      'SN002',
+      'SN003',
     ];
   }
 

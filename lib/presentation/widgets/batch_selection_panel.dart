@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:esp_firmware_tool/data/models/device.dart';
 import 'package:esp_firmware_tool/data/models/batch.dart';
 import 'package:esp_firmware_tool/utils/app_colors.dart';
+import 'package:esp_firmware_tool/data/services/device_status_service.dart';
+import 'package:esp_firmware_tool/di/service_locator.dart';
 
 class BatchSelectionPanel extends StatelessWidget {
   final List<Batch> batches;
@@ -139,9 +141,32 @@ class BatchSelectionPanel extends StatelessWidget {
                                               : AppColors.warning,
                                         ),
                                       ),
-                                      trailing: IconButton(
-                                        icon: const Icon(Icons.error, color: Colors.red),
-                                        onPressed: device.status == 'defective' ? null : () => _showErrorDialog(context, device),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          // Success button
+                                          IconButton(
+                                            icon: const Icon(Icons.check_circle, color: Colors.green),
+                                            tooltip: 'Đánh dấu thành công',
+                                            onPressed: device.status == 'defective' ? null :
+                                                () => _showStatusConfirmationDialog(
+                                                  context,
+                                                  device,
+                                                  isSuccess: true
+                                                ),
+                                          ),
+                                          // Error button
+                                          IconButton(
+                                            icon: const Icon(Icons.error, color: Colors.red),
+                                            tooltip: 'Đánh dấu lỗi',
+                                            onPressed: device.status == 'defective' ? null :
+                                                () => _showStatusConfirmationDialog(
+                                                  context,
+                                                  device,
+                                                  isSuccess: false
+                                                ),
+                                          ),
+                                        ],
                                       ),
                                       selected: selectedDevice == device.id.toString(),
                                       selectedTileColor: isDarkTheme ? Colors.blue[900]!.withOpacity(0.2) : Colors.blue[50],
@@ -163,48 +188,104 @@ class BatchSelectionPanel extends StatelessWidget {
     );
   }
 
-  void _showErrorDialog(BuildContext context, Device device) {
-    String reason = '';
+  // Show confirmation dialog for status update (success or error)
+  void _showStatusConfirmationDialog(BuildContext context, Device device, {required bool isSuccess}) {
+    final String title = isSuccess ? 'Xác nhận thành công' : 'Xác nhận lỗi';
+    final String message = isSuccess
+        ? 'Bạn có chắc chắn muốn đánh dấu thiết bị ${device.serial} là Nạp firmware thành công không?'
+        : 'Bạn có chắc chắn muốn đánh dấu thiết bị ${device.serial} là hư hỏng không?';
+    final String confirmButtonText = isSuccess ? 'Xác nhận thành công' : 'Xác nhận lỗi';
+    final Color confirmButtonColor = isSuccess ? Colors.green : Colors.red;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Báo cáo lỗi thiết bị'),
+        title: Text(title),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Serial Number'),
             const SizedBox(height: 4),
-            Container(padding: const EdgeInsets.all(8), color: isDarkTheme ? AppColors.idle : AppColors.dividerColor, child: Text(device.serial)),
-            const SizedBox(height: 8),
-            const Text('Lý do lỗi *'),
-            const SizedBox(height: 4),
-            TextField(
-              onChanged: (value) => reason = value,
-              decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'Nhập lý do lỗi'),
-              maxLines: 3,
+            Container(
+              padding: const EdgeInsets.all(8),
+              color: isDarkTheme ? AppColors.idle : AppColors.dividerColor,
+              child: Text(device.serial)
             ),
             const SizedBox(height: 8),
-            const Text('Ảnh minh chứng (tùy chọn)'),
-            const SizedBox(height: 4),
-            TextField(
-              decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'Chọn file ảnh'),
-            ),
+            Text(message),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy')),
           TextButton(
-            onPressed: reason.isNotEmpty
-                ? () {
-              onDeviceMarkDefective(device);
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () {
               Navigator.pop(context);
-            }
-                : null,
-            child: const Text('Báo lỗi', style: TextStyle(color: Colors.red)),
+              _updateDeviceStatus(context, device, isSuccess);
+            },
+            child: Text(
+              confirmButtonText,
+              style: TextStyle(color: confirmButtonColor),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  // Update device status via API
+  Future<void> _updateDeviceStatus(BuildContext context, Device device, bool isSuccess) async {
+    final deviceStatusService = serviceLocator<DeviceStatusService>();
+
+    // Show loading indicator
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    scaffoldMessenger.showSnackBar(
+      const SnackBar(
+        content: Text('Đang cập nhật trạng thái thiết bị...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+
+    try {
+      // Call API to update status
+      final result = await deviceStatusService.updateDeviceStatus(
+        deviceSerial: device.serial,
+        isSuccessful: isSuccess,
+      );
+
+      // Show success or error message based on API response
+      if (result['success'] == true) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('Cập nhật trạng thái thành công: ${result['message'] ?? 'Thành công!'}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Update local state by calling the callback
+        if (!isSuccess) {
+          // Only call the defective callback if it's an error
+          onDeviceMarkDefective(device);
+        }
+      } else {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('Cập nhật trạng thái thất bại: ${result['message'] ?? 'Lỗi không xác định'}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      // Show error message if exception occurs
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('Lỗi khi cập nhật trạng thái: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }

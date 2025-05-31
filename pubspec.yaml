@@ -49,6 +49,7 @@ dependencies:
   cli_util: 0.4.2
   path: any
   crypto: any
+  http: ^1.4.0
 
 dev_dependencies:
   flutter_test:
