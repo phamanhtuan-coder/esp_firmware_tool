@@ -6,6 +6,7 @@ import 'package:esp_firmware_tool/presentation/views/home_view.dart';
 import 'package:esp_firmware_tool/utils/app_routes.dart';
 import 'package:esp_firmware_tool/utils/app_theme.dart';
 import 'presentation/views/login_view.dart';
+import 'presentation/views/splash_screen.dart';
 import 'package:window_manager/window_manager.dart';
 
 void main() async {
@@ -14,9 +15,10 @@ void main() async {
 
   // Configure window to start maximized with standard controls
   WindowOptions windowOptions = const WindowOptions(
-    title: 'SmartNet Solution - Firmware Deployment Tool',
+    title: 'Firmware Deployment Tool',
     titleBarStyle: TitleBarStyle.normal, // Preserve standard window controls
     size: Size(1600,900), // Initial size, will be maximized later
+    center: true, // Make sure window is centered on screen
   );
   await windowManager.waitUntilReadyToShow(windowOptions, () async {
     await windowManager.maximize(); // Start in maximized mode
@@ -39,10 +41,11 @@ class MyApp extends StatelessWidget {
         BlocProvider<LogBloc>(create: (context) => serviceLocator<LogBloc>()),
       ],
       child: MaterialApp(
-        title: 'ESP Firmware Tool',
+        title: 'Firmware Deployment Tool',
         theme: AppTheme.lightTheme,
-        home: const LoginView(),
+        home: const SplashScreen(),
         routes: {
+          AppRoutes.login: (context) => const LoginView(),
           AppRoutes.home: (context) => const HomeView(),
         },
         debugShowCheckedModeBanner: false,
@@ -50,3 +53,4 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+
