@@ -14,7 +14,7 @@ import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
 import 'package:esp_firmware_tool/presentation/widgets/action_buttons.dart';
 import 'package:esp_firmware_tool/presentation/widgets/app_header.dart';
 import 'package:esp_firmware_tool/presentation/widgets/batch_selection_panel.dart';
-import 'package:esp_firmware_tool/presentation/widgets/console_log_view.dart';
+import 'package:esp_firmware_tool/presentation/widgets/console_terminal_widget.dart';
 import 'package:esp_firmware_tool/presentation/widgets/firmware_control_panel.dart';
 import 'package:esp_firmware_tool/presentation/widgets/search_bar.dart';
 import 'package:esp_firmware_tool/presentation/widgets/serial_monitor_terminal_widget.dart';
@@ -377,24 +377,18 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                               handleData: (log, sink) {
                                                 final currentLogs = state.filteredLogs.toList();
                                                 currentLogs.add(log);
-                                                sink.add(currentLogs
-                                                    .where((l) =>
-                                                l.deviceId == state.serialNumber ||
-                                                    l.deviceId.isEmpty)
-                                                    .toList());
+                                                sink.add(currentLogs);
                                               },
                                             ),
                                           ),
                                           builder: (context, snapshot) {
-                                            final logs = snapshot.data ??
-                                                state.filteredLogs
-                                                    .where((log) =>
-                                                log.deviceId == state.serialNumber ||
-                                                    log.deviceId.isEmpty)
-                                                    .toList();
-                                            return ConsoleLogView(
-                                              logs: logs,
-                                              scrollController: _scrollController,
+                                            final logs = snapshot.data ?? state.filteredLogs;
+                                            return Container(
+                                              padding: const EdgeInsets.all(8.0),
+                                              child: ConsoleTerminalWidget(
+                                                logs: logs,
+                                                scrollController: _scrollController,
+                                              ),
                                             );
                                           },
                                         ),
@@ -563,3 +557,4 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   }
 
 }
+

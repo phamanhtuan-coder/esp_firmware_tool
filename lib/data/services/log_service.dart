@@ -170,93 +170,88 @@ class LogService {
 
   // Handle process output and convert to log entries with improved Arduino CLI output parsing
   void _processOutput(String output, ProcessStep step, String deviceId, {String? origin}) {
-    // Handle serial monitor output specifically
-    if (origin == 'serial-monitor') {
+    // Special handling for Arduino CLI output
+    if (output.startsWith('[STDOUT]') || output.startsWith('[STDERR]')) {
+      var logLevel = LogLevel.info;
+      var message = output.substring(output.indexOf(']') + 1).trim();
+
+      // Determine log level based on content
+      if (output.toLowerCase().contains('error') || output.toLowerCase().contains('failed')) {
+        logLevel = LogLevel.error;
+      } else if (output.toLowerCase().contains('warning')) {
+        logLevel = LogLevel.warning;
+      } else if (output.contains('Sketch uses') ||
+                 output.contains('bytes written') ||
+                 output.contains('Uploading...done')) {
+        logLevel = LogLevel.success;
+      } else if (output.contains('avrdude:') ||
+                 output.contains('Reading |') ||
+                 output.contains('Writing |')) {
+        logLevel = LogLevel.verbose;
+      }
+
       addLog(
-        message: output.trim(),
-        level: LogLevel.serialOutput,
+        message: message,
+        level: logLevel,
         step: step,
         deviceId: deviceId,
-        origin: origin,
+        origin: 'arduino-cli',
         rawOutput: output,
       );
       return;
     }
 
-    // Handle console log output specifically
-    if (origin == 'console-log') {
+    // Handle other output types based on content
+    if (output.toLowerCase().contains('error') || output.toLowerCase().contains('failed')) {
       addLog(
-        message: output.trim(),
-        level: LogLevel.consoleOutput,
-        step: step,
-        deviceId: deviceId,
-        origin: origin,
-        rawOutput: output,
-      );
-      return;
-    }
-
-    // Check for common Arduino CLI error patterns with more specific detection
-    if (output.contains('error:') || output.contains('Error:') || output.contains('ERROR:') ||
-        output.contains('failed') || output.contains('Failed') || output.contains('FAILED')) {
-      addLog(
-        message: output.trim(),
+        message: output,
         level: LogLevel.error,
         step: step,
         deviceId: deviceId,
-        origin: origin ?? 'arduino-cli',
+        origin: origin ?? 'system',
         rawOutput: output,
       );
-    }
-    // Warning patterns
-    else if (output.contains('warning:') || output.contains('Warning:') || output.contains('WARNING:')) {
+    } else if (output.toLowerCase().contains('warning')) {
       addLog(
-        message: output.trim(),
+        message: output,
         level: LogLevel.warning,
         step: step,
         deviceId: deviceId,
-        origin: origin ?? 'arduino-cli',
+        origin: origin ?? 'system',
         rawOutput: output,
       );
-    }
-    // Success patterns with more specific detection
-    else if (output.contains('Success') || output.contains('success') ||
-             output.contains('Done') || output.contains('done') ||
-             output.contains('Uploaded') || output.contains('uploaded') ||
-             output.contains('Installed') || output.contains('installed') ||
-             output.contains('Compiled') || output.contains('compiled') ||
-             output.contains('Sketch uses') && output.contains('bytes')) {
+    } else if (output.contains('Success') ||
+               output.contains('Done') ||
+               output.contains('Uploaded') ||
+               output.contains('bytes written')) {
       addLog(
-        message: output.trim(),
+        message: output,
         level: LogLevel.success,
         step: step,
         deviceId: deviceId,
-        origin: origin ?? 'arduino-cli',
+        origin: origin ?? 'system',
         rawOutput: output,
       );
-    }
-    // Progress/verbose information
-    else if (output.contains('Compiling') || output.contains('compiling') ||
-             output.contains('Uploading') || output.contains('uploading') ||
-             output.contains('Verifying') || output.contains('verifying') ||
-             output.contains('Installing') || output.contains('installing')) {
+    } else if (output.contains('Starting upload') ||
+               output.contains('Compiling') ||
+               output.contains('Verifying') ||
+               output.contains('Reading') ||
+               output.contains('Writing')) {
       addLog(
-        message: output.trim(),
+        message: output,
         level: LogLevel.verbose,
         step: step,
         deviceId: deviceId,
-        origin: origin ?? 'arduino-cli',
+        origin: origin ?? 'system',
         rawOutput: output,
       );
-    }
-    // Default case - info log
-    else {
+    } else {
       addLog(
-        message: output.trim(),
+        message: output,
         level: LogLevel.info,
         step: step,
         deviceId: deviceId,
-        origin: origin ?? 'arduino-cli',
+        origin: origin ?? 'system',
         rawOutput: output,
       );
     }
@@ -975,3 +970,4 @@ class LogService {
     }
   }
 }
+

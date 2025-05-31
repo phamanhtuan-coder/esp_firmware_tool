@@ -262,109 +262,74 @@ class LogBloc extends Bloc<LogEvent, LogState> {
       // Set flashing state
       emit(state.copyWith(isFlashing: true, error: null));
 
-      // Log detailed information about the flash request
-      final logEntries = [
-        LogEntry(
-          message: 'Bắt đầu quá trình flash với:',
-          timestamp: DateTime.now(),
-          level: LogLevel.info,
-          step: ProcessStep.flash,
-          origin: 'system',
-          deviceId: event.deviceSerial,
-        ),
-        LogEntry(
-          message: '- Device ID: ${event.deviceId}',
-          timestamp: DateTime.now(),
-          level: LogLevel.info,
-          step: ProcessStep.flash,
-          origin: 'system',
-          deviceId: event.deviceSerial,
-        ),
-        LogEntry(
-          message: '- Loại thiết bị: ${event.deviceType}',
-          timestamp: DateTime.now(),
-          level: LogLevel.info,
-          step: ProcessStep.flash,
-          origin: 'system',
-          deviceId: event.deviceSerial,
-        ),
-        LogEntry(
-          message: '- Phiên bản firmware: ${event.firmwareVersion}',
-          timestamp: DateTime.now(),
-          level: LogLevel.info,
-          step: ProcessStep.flash,
-          origin: 'system',
-          deviceId: event.deviceSerial,
-        ),
-        LogEntry(
-          message: '- Sử dụng file local: ${state.localFilePath != null}',
-          timestamp: DateTime.now(),
-          level: LogLevel.info,
-          step: ProcessStep.flash,
-          origin: 'system',
-          deviceId: event.deviceSerial,
-        ),
-        LogEntry(
-          message: '- Lô đã chọn: ${state.selectedBatchId ?? "không có"}',
-          timestamp: DateTime.now(),
-          level: LogLevel.info,
-          step: ProcessStep.flash,
-          origin: 'system',
-          deviceId: event.deviceSerial,
-        ),
-        LogEntry(
-          message: '- Cổng COM đã chọn: ${state.selectedPort ?? "không có"}',
-          timestamp: DateTime.now(),
-          level: LogLevel.info,
-          step: ProcessStep.flash,
-          origin: 'system',
-          deviceId: event.deviceSerial,
-        ),
-      ];
+      // Clear previous logs related to flashing
+      final filteredLogs = state.filteredLogs.where((log) => log.step != ProcessStep.flash).toList();
+      emit(state.copyWith(filteredLogs: filteredLogs));
 
-      // Add all log entries
-      for (final entry in logEntries) {
-        add(AddLogEvent(entry));
-      }
+      // Add start flashing notification
+      add(AddLogEvent(LogEntry(
+        message: '🔄 Bắt đầu quá trình flash firmware',
+        timestamp: DateTime.now(),
+        level: LogLevel.info,
+        step: ProcessStep.flash,
+        deviceId: event.deviceSerial,
+        origin: 'system',
+      )));
 
       // Get the services
       final firmware = serviceLocator<FirmwareFlashService>();
       final arduinoCli = serviceLocator<ArduinoCliService>();
 
-      // Verify Arduino CLI is available
+      // Verify Arduino CLI
       final isCliAvailable = await arduinoCli.isCliAvailable();
       if (!isCliAvailable) {
         throw Exception('Arduino CLI không có sẵn. Vui lòng cài đặt Arduino CLI trước.');
       }
 
-      // Call the flash service with the selected port
-      await firmware.flash(
+      // Call flash service
+      final success = await firmware.flash(
         serialNumber: event.deviceSerial,
         deviceType: event.deviceType,
         firmwareVersion: event.firmwareVersion,
         localFilePath: state.localFilePath,
         selectedBatch: state.selectedBatchId,
         selectedPort: state.selectedPort,
-        onLog: (log) => add(AddLogEvent(log)),
+        onLog: (log) {
+          // Add all logs directly
+          add(AddLogEvent(log));
+        },
       );
 
-      // Update state after flashing completes
+      // Update state and show final status
       emit(state.copyWith(
         isFlashing: false,
-        status: 'Quá trình flash đã hoàn tất',
+        status: success ? 'Flash thành công' : 'Flash thất bại',
       ));
 
-      add(AddLogEvent(LogEntry(
-        message: 'Quá trình flash đã hoàn tất thành công',
-        timestamp: DateTime.now(),
-        level: LogLevel.success,
-        step: ProcessStep.flash,
-        origin: 'system',
-        deviceId: event.deviceSerial,
-      )));
+      // Add completion notification with clear success/failure indication
+      if (success) {
+        add(AddLogEvent(LogEntry(
+          message: '✅ FLASH THÀNH CÔNG: Firmware đã được cài đặt cho thiết bị ${event.deviceSerial}',
+          timestamp: DateTime.now(),
+          level: LogLevel.success,
+          step: ProcessStep.flash,
+          deviceId: event.deviceSerial,
+          origin: 'system',
+        )));
+      } else {
+        add(AddLogEvent(LogEntry(
+          message: '❌ FLASH THẤT BẠI: Không thể cài đặt firmware cho thiết bị ${event.deviceSerial}',
+          timestamp: DateTime.now(),
+          level: LogLevel.error,
+          step: ProcessStep.flash,
+          deviceId: event.deviceSerial,
+          origin: 'system',
+        )));
+      }
 
     } catch (e, stackTrace) {
-      final errorMessage = 'Lỗi trong quá trình flash: $e\n$stackTrace';
+      final errorMessage = 'Lỗi trong quá trình flash: $e';
+
       emit(state.copyWith(
         isFlashing: false,
         error: errorMessage,
@@ -372,12 +337,12 @@ class LogBloc extends Bloc<LogEvent, LogState> {
       ));
 
       add(AddLogEvent(LogEntry(
-        message: errorMessage,
+        message: '❌ FLASH THẤT BẠI: $errorMessage',
         timestamp: DateTime.now(),
         level: LogLevel.error,
         step: ProcessStep.flash,
-        origin: 'system',
         deviceId: event.deviceSerial,
+        origin: 'system',
       )));
     }
   }
@@ -435,3 +400,4 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     ));
   }
 }
+

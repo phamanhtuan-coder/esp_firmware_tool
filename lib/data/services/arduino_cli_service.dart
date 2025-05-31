@@ -34,6 +34,7 @@ class ArduinoCliService {
         return null;
     }
   }
+
   /// Map to track detected device ports
   final Map<String, String> _devicePorts = {};
 
@@ -163,56 +164,220 @@ class ArduinoCliService {
   }
 
   /// Compile a sketch using arduino-cli
-  Future<bool> compileSketch(String sketchPath, String fqbn) async {
-    print('DEBUG: Compiling sketch at $sketchPath');
-    print('DEBUG: Using FQBN: $fqbn');
+  Future<bool> compileSketch(String sketchPath, String fqbn, {void Function(LogEntry)? onLog}) async {
+    try {
+      if (onLog != null) {
+        onLog(LogEntry(
+          message: '🔨 Bắt đầu biên dịch sketch...',
+          timestamp: DateTime.now(),
+          level: LogLevel.info,
+          step: ProcessStep.compile,
+          origin: 'arduino-cli',
+        ));
+      }
 
-    // Get the directory and filename separately
-    final sketchFile = File(sketchPath);
-    final sketchDir = sketchFile.parent;
-    final sketchName = sketchFile.path;
+      _activeProcess = await Process.start(
+        'arduino-cli',
+        ['compile', '--fqbn', fqbn, '--verbose', sketchPath],
+        runInShell: true,
+      );
 
-    print('DEBUG: Sketch directory: ${sketchDir.path}');
-    print('DEBUG: Sketch name: $sketchName');
+      final completer = Completer<bool>();
 
-    final exitCode = await runProcess(
-      'arduino-cli',
-      ['compile', '--fqbn', fqbn, '--verbose', sketchName],
-      step: ProcessStep.compile,
-      showCommandInLogs: true,
-      workingDirectory: sketchDir.path,
-    );
+      // Handle stdout
+      _activeProcess!.stdout.transform(utf8.decoder).listen((output) {
+        if (onLog != null) {
+          // Split output by lines to handle each line separately
+          for (var line in output.split('\n')) {
+            if (line.trim().isNotEmpty) {
+              onLog(LogEntry(
+                message: line,
+                timestamp: DateTime.now(),
+                level: _getLogLevelFromOutput(line),
+                step: ProcessStep.compile,
+                origin: 'arduino-cli',
+                rawOutput: line,
+              ));
+            }
+          }
+        }
+      });
 
-    final success = exitCode == 0;
-    print('DEBUG: Compilation ${success ? 'succeeded' : 'failed'} with exit code $exitCode');
-    return success;
+      // Handle stderr
+      _activeProcess!.stderr.transform(utf8.decoder).listen((output) {
+        if (onLog != null) {
+          for (var line in output.split('\n')) {
+            if (line.trim().isNotEmpty) {
+              onLog(LogEntry(
+                message: line,
+                timestamp: DateTime.now(),
+                level: LogLevel.error,
+                step: ProcessStep.compile,
+                origin: 'arduino-cli',
+                rawOutput: line,
+              ));
+            }
+          }
+        }
+      });
+
+      final exitCode = await _activeProcess!.exitCode;
+      _activeProcess = null;
+
+      if (exitCode == 0) {
+        if (onLog != null) {
+          onLog(LogEntry(
+            message: '✅ Biên dịch thành công',
+            timestamp: DateTime.now(),
+            level: LogLevel.success,
+            step: ProcessStep.compile,
+            origin: 'arduino-cli',
+          ));
+        }
+        return true;
+      } else {
+        if (onLog != null) {
+          onLog(LogEntry(
+            message: '❌ Biên dịch thất bại (exit code: $exitCode)',
+            timestamp: DateTime.now(),
+            level: LogLevel.error,
+            step: ProcessStep.compile,
+            origin: 'arduino-cli',
+          ));
+        }
+        return false;
+      }
+
+    } catch (e) {
+      if (onLog != null) {
+        onLog(LogEntry(
+          message: '❌ Lỗi trong quá trình biên dịch: $e',
+          timestamp: DateTime.now(),
+          level: LogLevel.error,
+          step: ProcessStep.compile,
+          origin: 'arduino-cli',
+        ));
+      }
+      return false;
+    }
   }
 
-  /// Upload a sketch to a board using arduino-cli
-  Future<bool> uploadSketch(String sketchPath, String port, String fqbn) async {
-    print('DEBUG: Uploading sketch to port $port');
-    print('DEBUG: Using FQBN: $fqbn');
-    print('DEBUG: Sketch path: $sketchPath');
+  /// Upload a sketch using arduino-cli
+  Future<bool> uploadSketch(String sketchPath, String port, String fqbn, {void Function(LogEntry)? onLog}) async {
+    try {
+      if (onLog != null) {
+        onLog(LogEntry(
+          message: '📤 Bắt đầu upload sketch...',
+          timestamp: DateTime.now(),
+          level: LogLevel.info,
+          step: ProcessStep.flash,
+          origin: 'arduino-cli',
+        ));
+      }
 
-    // Get the directory and filename separately
-    final sketchFile = File(sketchPath);
-    final sketchDir = sketchFile.parent;
-    final sketchName = sketchFile.path;
+      _activeProcess = await Process.start(
+        'arduino-cli',
+        ['upload', '-p', port, '--fqbn', fqbn, '--verbose', sketchPath],
+        runInShell: true,
+      );
 
-    print('DEBUG: Sketch directory: ${sketchDir.path}');
-    print('DEBUG: Sketch name: $sketchName');
+      final completer = Completer<bool>();
 
-    final exitCode = await runProcess(
-      'arduino-cli',
-      ['upload', '-p', port, '--fqbn', fqbn, '--verbose', sketchName],
-      step: ProcessStep.flash,
-      showCommandInLogs: true,
-      workingDirectory: sketchDir.path,
-    );
+      // Handle stdout
+      _activeProcess!.stdout.transform(utf8.decoder).listen((output) {
+        if (onLog != null) {
+          for (var line in output.split('\n')) {
+            if (line.trim().isNotEmpty) {
+              onLog(LogEntry(
+                message: line,
+                timestamp: DateTime.now(),
+                level: _getLogLevelFromOutput(line),
+                step: ProcessStep.flash,
+                origin: 'arduino-cli',
+                rawOutput: line,
+              ));
+            }
+          }
+        }
+      });
 
-    final success = exitCode == 0;
-    print('DEBUG: Upload ${success ? 'succeeded' : 'failed'} with exit code $exitCode');
-    return success;
+      // Handle stderr
+      _activeProcess!.stderr.transform(utf8.decoder).listen((output) {
+        if (onLog != null) {
+          for (var line in output.split('\n')) {
+            if (line.trim().isNotEmpty) {
+              onLog(LogEntry(
+                message: line,
+                timestamp: DateTime.now(),
+                level: LogLevel.error,
+                step: ProcessStep.flash,
+                origin: 'arduino-cli',
+                rawOutput: line,
+              ));
+            }
+          }
+        }
+      });
+
+      final exitCode = await _activeProcess!.exitCode;
+      _activeProcess = null;
+
+      if (exitCode == 0) {
+        if (onLog != null) {
+          onLog(LogEntry(
+            message: '✅ Upload thành công',
+            timestamp: DateTime.now(),
+            level: LogLevel.success,
+            step: ProcessStep.flash,
+            origin: 'arduino-cli',
+          ));
+        }
+        return true;
+      } else {
+        if (onLog != null) {
+          onLog(LogEntry(
+            message: '❌ Upload thất bại (exit code: $exitCode)',
+            timestamp: DateTime.now(),
+            level: LogLevel.error,
+            step: ProcessStep.flash,
+            origin: 'arduino-cli',
+          ));
+        }
+        return false;
+      }
+
+    } catch (e) {
+      if (onLog != null) {
+        onLog(LogEntry(
+          message: '❌ Lỗi trong quá trình upload: $e',
+          timestamp: DateTime.now(),
+          level: LogLevel.error,
+          step: ProcessStep.flash,
+          origin: 'arduino-cli',
+        ));
+      }
+      return false;
+    }
+  }
+
+  LogLevel _getLogLevelFromOutput(String output) {
+    final lower = output.toLowerCase();
+    if (lower.contains('error') || lower.contains('failed')) {
+      return LogLevel.error;
+    } else if (lower.contains('warning')) {
+      return LogLevel.warning;
+    } else if (lower.contains('success') ||
+              lower.contains('done') ||
+              lower.contains('uploaded') ||
+              (lower.contains('bytes') && lower.contains('written'))) {
+      return LogLevel.success;
+    } else if (lower.contains('avrdude') ||
+              lower.contains('compiling') ||
+              lower.contains('writing') ||
+              lower.contains('reading')) {
+      return LogLevel.verbose;
+    }
+    return LogLevel.info;
   }
 
   /// Check if Arduino CLI is installed and available
@@ -277,3 +442,4 @@ class ArduinoCliService {
     _devicePorts.remove(deviceId);
   }
 }
+
