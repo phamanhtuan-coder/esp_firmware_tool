@@ -99,10 +99,11 @@ class DeviceStatusService {
         stackTrace: stackTrace,
       );
 
+      // Return an error response to ensure the method always completes
       return {
         'success': false,
-        'errorCode': 'service_error',
-        'message': errorMessage,
+        'message': 'Error updating device status: $e',
+        'errorCode': 'exception',
       };
     }
   }
