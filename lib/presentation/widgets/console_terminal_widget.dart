@@ -35,7 +35,7 @@ class ConsoleLineDisplay {
       case LogLevel.success:
         return const Color(0xFF4CAF50);
       case LogLevel.info:
-        return isDarkTheme ? Colors.white : Colors.black;
+        return isDarkTheme ? Colors.lightGreenAccent : Colors.black;
       case LogLevel.verbose:
         return const Color(0xFF757575);
       default:
@@ -71,11 +71,13 @@ class ConsoleLineDisplay {
 class ConsoleTerminalWidget extends StatefulWidget {
   final List<LogEntry> logs;
   final ScrollController scrollController;
+  final bool isActiveTab;
 
   const ConsoleTerminalWidget({
     super.key,
     required this.logs,
     required this.scrollController,
+    this.isActiveTab = true,
   });
 
   @override
@@ -85,19 +87,49 @@ class ConsoleTerminalWidget extends StatefulWidget {
 class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
   final List<ConsoleLineDisplay> _displayLines = [];
   bool _isAutoScrollEnabled = true;
+  bool _isListening = false;
+  StreamSubscription? _logsSubscription;
 
   @override
   void initState() {
     super.initState();
     _processLogs();
+    if (widget.isActiveTab) {
+      _startListening();
+    }
   }
 
   @override
   void didUpdateWidget(ConsoleTerminalWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
+
     if (widget.logs != oldWidget.logs) {
       _processLogs();
     }
+
+    // Handle tab activation/deactivation
+    if (widget.isActiveTab != oldWidget.isActiveTab) {
+      if (widget.isActiveTab) {
+        _startListening();
+      } else {
+        _stopListening();
+      }
+    }
+  }
+
+  void _startListening() {
+    if (_isListening) return;
+
+    _isListening = true;
+    // Additional listener logic if needed
+  }
+
+  void _stopListening() {
+    if (!_isListening) return;
+
+    _isListening = false;
+    _logsSubscription?.cancel();
+    _logsSubscription = null;
   }
 
   void _processLogs() {
@@ -137,10 +169,11 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: isDarkTheme ? Colors.black : Colors.white,
+                color: Colors.black,  // Consistent with SerialMonitorTerminalWidget
                 borderRadius: BorderRadius.circular(8.0),
                 border: Border.all(
                   color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
+                  width: 1,
                 ),
               ),
               child: Padding(
@@ -151,69 +184,71 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(Icons.terminal,
-                                size: 48, color: Colors.grey[400]),
+                                size: 48,
+                                color: Colors.grey[700]),
                             const SizedBox(height: 16),
                             Text(
-                              'No output to display',
-                              style: TextStyle(color: Colors.grey[400]),
+                              'No console output',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 15,
+                              ),
                             ),
                           ],
                         ),
                       )
                     : SingleChildScrollView(
                         controller: widget.scrollController,
-                        child: SelectableText.rich(
-                          TextSpan(
-                            children: _displayLines.map((line) {
-                              final icon = line.getIcon();
-                              return TextSpan(
-                                children: [
-                                  // Icon if available
-                                  if (icon != null)
-                                    WidgetSpan(
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(right: 8),
-                                        child: Icon(
-                                          icon,
-                                          size: 16,
-                                          color: line.getColor(isDarkTheme),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: SelectableText.rich(
+                            TextSpan(
+                              children: _displayLines.map((line) {
+                                final icon = line.getIcon();
+                                return TextSpan(
+                                  children: [
+                                    // Icon for message type
+                                    if (icon != null)
+                                      WidgetSpan(
+                                        alignment: PlaceholderAlignment.middle,
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(right: 8),
+                                          child: Icon(
+                                            icon,
+                                            size: 14,
+                                            color: line.getColor(isDarkTheme),
+                                          ),
                                         ),
                                       ),
+                                    // Timestamp with same style as SerialMonitorTerminalWidget
+                                    TextSpan(
+                                      text: '[${line.timestamp}] ',
+                                      style: TextStyle(
+                                        color: line.isSystemMessage
+                                            ? Colors.yellow.withOpacity(0.8)
+                                            : Colors.grey.withOpacity(0.7),
+                                        fontFamily: 'Courier New',
+                                        fontSize: 12.0,
+                                        height: 1.5,
+                                      ),
                                     ),
-                                  // Timestamp
-                                  TextSpan(
-                                    text: '[${line.timestamp}] ',
-                                    style: TextStyle(
-                                      color: isDarkTheme
-                                          ? Colors.grey[500]
-                                          : Colors.grey[600],
-                                      fontFamily: 'Consolas',
-                                      fontSize: 12,
-                                      height: 1.5,
+                                    // Message content with similar style to SerialMonitorTerminalWidget
+                                    TextSpan(
+                                      text: '${line.content}\n',
+                                      style: TextStyle(
+                                        color: line.isSystemMessage
+                                            ? Colors.yellow
+                                            : line.getColor(true), // Always use dark theme colors on black background
+                                        fontFamily: 'Courier New',
+                                        fontSize: 14.0,
+                                        height: 1.5,
+                                        fontWeight: _getLineWeight(line),
+                                      ),
                                     ),
-                                  ),
-                                  // Content
-                                  TextSpan(
-                                    text: '${line.content}\n',
-                                    style: TextStyle(
-                                      color: line.getColor(isDarkTheme),
-                                      fontFamily: 'Consolas',
-                                      fontSize: 13,
-                                      height: 1.5,
-                                      fontWeight: line.level == LogLevel.success ||
-                                              line.level == LogLevel.error ||
-                                              (line.origin == 'arduino-cli' &&
-                                                  (line.content
-                                                          .contains('Sketch uses') ||
-                                                      line.content.contains(
-                                                          'bytes written')))
-                                          ? FontWeight.bold
-                                          : FontWeight.normal,
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }).toList(),
+                                  ],
+                                );
+                              }).toList(),
+                            ),
                           ),
                         ),
                       ),
@@ -221,7 +256,7 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
             ),
           ),
 
-          // Control bar
+          // Control bar - similar to SerialMonitorTerminalWidget
           Container(
             margin: const EdgeInsets.only(top: 8.0),
             child: Row(
@@ -232,8 +267,7 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
                     color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color:
-                          isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
+                      color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
                     ),
                   ),
                   child: IconButton(
@@ -243,14 +277,10 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
                       });
                     },
                     icon: Icon(
-                      _isAutoScrollEnabled
-                          ? Icons.vertical_align_bottom
-                          : Icons.vertical_align_center,
+                      _isAutoScrollEnabled ? Icons.vertical_align_bottom : Icons.vertical_align_center,
                       color: _isAutoScrollEnabled ? Colors.blue : Colors.grey,
                     ),
-                    tooltip: _isAutoScrollEnabled
-                        ? 'Auto-scroll enabled'
-                        : 'Auto-scroll disabled',
+                    tooltip: _isAutoScrollEnabled ? 'Auto-scroll enabled' : 'Auto-scroll disabled',
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -259,8 +289,7 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
                     color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color:
-                          isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
+                      color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
                     ),
                   ),
                   child: IconButton(
@@ -280,5 +309,24 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
         ],
       ),
     );
+  }
+
+  FontWeight _getLineWeight(ConsoleLineDisplay line) {
+    if (line.level == LogLevel.success || line.level == LogLevel.error) {
+      return FontWeight.w600;
+    }
+    if (line.origin == 'arduino-cli' &&
+        (line.content.contains('Sketch uses') ||
+         line.content.contains('bytes written') ||
+         line.content.contains('Upload complete'))) {
+      return FontWeight.w600;
+    }
+    return FontWeight.normal;
+  }
+
+  @override
+  void dispose() {
+    _stopListening();
+    super.dispose();
   }
 }

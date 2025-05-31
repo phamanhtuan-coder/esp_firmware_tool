@@ -18,12 +18,15 @@ class SerialMonitorTerminalWidget extends StatefulWidget {
   final String? initialPort;
   final int initialBaudRate;
   final bool autoStart;
+  final bool isActiveTab;  // Thêm dòng này
 
   const SerialMonitorTerminalWidget({
     super.key,
     this.initialPort,
     this.initialBaudRate = 115200,
     this.autoStart = false,
+    this.isActiveTab = true,  // Thêm dòng này
+
   });
 
   @override
@@ -86,6 +89,15 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
   @override
   void didUpdateWidget(SerialMonitorTerminalWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    // Xử lý khi tab được kích hoạt/vô hiệu hóa
+    if (widget.isActiveTab != oldWidget.isActiveTab) {
+      if (widget.isActiveTab) {
+        _initializeMonitor();
+      } else {
+        _monitorService.stopMonitor();
+      }
+    }
 
     // Restart monitor if port or baud rate changes
     if (oldWidget.initialPort != widget.initialPort ||

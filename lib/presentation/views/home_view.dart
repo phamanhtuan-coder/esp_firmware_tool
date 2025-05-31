@@ -388,6 +388,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                               child: ConsoleTerminalWidget(
                                                 logs: logs,
                                                 scrollController: _scrollController,
+                                                isActiveTab: _tabController.index == 0,  // Thêm dòng này
                                               ),
                                             );
                                           },
@@ -511,6 +512,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         ),
 
         // Terminal Widget fills remaining space
+
         Expanded(
           child: Container(
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -518,6 +520,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
               initialPort: _selectedPort,
               initialBaudRate: _selectedBaudRate,
               autoStart: hasPortSelected && _selectedBaudRate != 0,
+              isActiveTab: _tabController.index == 1,  // Thêm dòng này
             ),
           ),
         ),
