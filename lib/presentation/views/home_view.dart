@@ -67,6 +67,26 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         context.read<LogBloc>().add(AutoScrollEvent());
       }
     });
+
+    // Lắng nghe sự kiện thay đổi tab để theo dõi tab nào đang active
+    _tabController.addListener(_handleTabChange);
+  }
+
+  // Theo dõi khi tab thay đổi
+  void _handleTabChange() {
+    // Đảm bảo không render lại UI khi tab index không thay đổi
+    if (!mounted) return;
+    setState(() {
+      // Kích hoạt render lại để các tab biết trạng thái active của chúng
+    });
+
+    // Ghi log để debug
+    _logService.addLog(
+      message: 'Đã chuyển sang tab ${_tabController.index == 0 ? "Console Log" : "Serial Monitor"}',
+      level: LogLevel.debug,
+      step: _tabController.index == 0 ? ProcessStep.consoleLog : ProcessStep.serialMonitor,
+      origin: 'system',
+    );
   }
 
   Future<void> _initializeServices() async {
@@ -99,6 +119,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     _serialController.dispose();
     _searchController.dispose();
     _scrollController.dispose();
+    _tabController.removeListener(_handleTabChange); // Loại bỏ listener khi dispose
     _tabController.dispose();
     _usbService.dispose();
     _logService.dispose();
@@ -498,7 +519,8 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                         ],
                         onChanged: (value) {
                           setState(() => _selectedBaudRate = value ?? 0);
-                          if (_selectedPort != null && _selectedPort!.isNotEmpty && value != null) {
+                          // Chỉ khởi động lại monitor khi tab đang active
+                          if (_selectedPort != null && _selectedPort!.isNotEmpty && value != null && _tabController.index == 1) {
                             _startSerialMonitor(_serialController.text);
                           }
                         },
@@ -512,7 +534,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         ),
 
         // Terminal Widget fills remaining space
-
         Expanded(
           child: Container(
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -520,7 +541,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
               initialPort: _selectedPort,
               initialBaudRate: _selectedBaudRate,
               autoStart: hasPortSelected && _selectedBaudRate != 0,
-              isActiveTab: _tabController.index == 1,  // Thêm dòng này
+              isActiveTab: _tabController.index == 1,  // Truyền trạng thái tab active
             ),
           ),
         ),

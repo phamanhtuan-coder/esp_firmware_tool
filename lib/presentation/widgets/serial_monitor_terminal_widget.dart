@@ -18,44 +18,52 @@ class SerialMonitorTerminalWidget extends StatefulWidget {
   final String? initialPort;
   final int initialBaudRate;
   final bool autoStart;
-  final bool isActiveTab;  // Thêm dòng này
+  final bool isActiveTab; // Nhận biết tab có đang active không
 
   const SerialMonitorTerminalWidget({
     super.key,
     this.initialPort,
     this.initialBaudRate = 115200,
     this.autoStart = false,
-    this.isActiveTab = true,  // Thêm dòng này
-
+    this.isActiveTab = true,
   });
 
   @override
-  State<SerialMonitorTerminalWidget> createState() => _SerialMonitorTerminalWidgetState();
+  State<SerialMonitorTerminalWidget> createState() =>
+      _SerialMonitorTerminalWidgetState();
 }
 
-class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidget> {
-  final SerialMonitorService _monitorService = GetIt.instance<SerialMonitorService>();
+class _SerialMonitorTerminalWidgetState
+    extends State<SerialMonitorTerminalWidget> {
+  final SerialMonitorService _monitorService =
+      GetIt.instance<SerialMonitorService>();
   final List<LineDisplay> _lines = [];
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   late final Ansi _ansi;
   bool _isAutoScrollEnabled = true;
   StreamSubscription? _subscription;
+  bool _isMonitorActive = false;
+  bool _wasActiveBefore = false; // Lưu trạng thái trước đó
 
   @override
   void initState() {
     super.initState();
     _ansi = Ansi(Ansi.terminalSupportsAnsi);
+    _wasActiveBefore = widget.isActiveTab;
 
     // Thêm welcome message
     final timestamp = DateTime.now().toString().split('.').first;
-    _lines.add(LineDisplay(timestamp, 'Welcome to Serial Monitor', isSystemMessage: true));
-    _lines.add(LineDisplay(timestamp, 'Select COM port and baud rate to start monitoring', isSystemMessage: true));
+    _lines.add(LineDisplay(timestamp, 'Welcome to Serial Monitor',
+        isSystemMessage: true));
+    _lines.add(LineDisplay(timestamp,
+        'Select COM port and baud rate to start monitoring',
+        isSystemMessage: true));
 
-    // Cancel any existing subscription
+    // Đảm bảo hủy subscription hiện có
     _subscription?.cancel();
 
-    // Listen to the broadcast stream
+    // Lắng nghe stream đầu ra
     _subscription = _monitorService.outputStream.listen(
       (data) {
         if (mounted) {
@@ -69,20 +77,46 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
       },
     );
 
-    // Start monitor if port is available
-    _initializeMonitor();
+    // Khởi tạo monitor nếu tab đang active
+    if (widget.isActiveTab) {
+      _initializeMonitor();
+    } else {
+      _addLine('Serial monitor paused - tab not active',
+          isSystemMessage: true);
+    }
   }
 
   void _initializeMonitor() {
-    if (widget.initialPort != null && widget.initialPort!.isNotEmpty && widget.initialBaudRate > 0) {
-      // Add slight delay to ensure port is ready
+    if (!widget.isActiveTab) {
+      _addLine('Not starting monitor - tab not active', isSystemMessage: true);
+      return;
+    }
+
+    if (widget.initialPort != null &&
+        widget.initialPort!.isNotEmpty &&
+        widget.initialBaudRate > 0) {
+      // Dừng kết nối hiện tại trước
+      _stopMonitor();
+
+      // Thêm độ trễ nhỏ để đảm bảo cổng được giải phóng
       Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted) {
-          _monitorService.stopMonitor(); // Stop any existing monitor
-          _monitorService.startMonitor(widget.initialPort!, widget.initialBaudRate);
-          _addLine('Starting monitor on ${widget.initialPort} at ${widget.initialBaudRate} baud...', isSystemMessage: true);
+        if (mounted && widget.isActiveTab) {
+          _monitorService.startMonitor(
+              widget.initialPort!, widget.initialBaudRate);
+          _isMonitorActive = true;
+          _addLine(
+              'Starting monitor on ${widget.initialPort} at ${widget.initialBaudRate} baud...',
+              isSystemMessage: true);
         }
       });
+    }
+  }
+
+  void _stopMonitor() {
+    if (_isMonitorActive) {
+      _monitorService.stopMonitor();
+      _isMonitorActive = false;
+      _addLine('Serial monitor stopped', isSystemMessage: true);
     }
   }
 
@@ -90,18 +124,28 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
   void didUpdateWidget(SerialMonitorTerminalWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // Xử lý khi tab được kích hoạt/vô hiệu hóa
+    // Xử lý sự thay đổi trạng thái active
     if (widget.isActiveTab != oldWidget.isActiveTab) {
       if (widget.isActiveTab) {
-        _initializeMonitor();
+        // Tab vừa được kích hoạt
+        _wasActiveBefore = true;
+        _addLine('Tab activated - initializing monitor...',
+            isSystemMessage: true);
+        // Đợi một khoảng thời gian để cổng COM được giải phóng hoàn toàn
+        Future.delayed(const Duration(milliseconds: 500), _initializeMonitor);
       } else {
-        _monitorService.stopMonitor();
+        // Tab vừa bị vô hiệu hóa
+        _wasActiveBefore = false;
+        _addLine('Tab deactivated - stopping monitor...', isSystemMessage: true);
+        _stopMonitor();
       }
     }
-
-    // Restart monitor if port or baud rate changes
-    if (oldWidget.initialPort != widget.initialPort ||
-        oldWidget.initialBaudRate != widget.initialBaudRate) {
+    // Xử lý khi có thay đổi cổng hoặc tốc độ baud
+    else if (widget.isActiveTab &&
+        (oldWidget.initialPort != widget.initialPort ||
+            oldWidget.initialBaudRate != widget.initialBaudRate)) {
+      _addLine('Port or baud rate changed - restarting monitor...',
+          isSystemMessage: true);
       _initializeMonitor();
     }
   }
@@ -114,7 +158,8 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
       final processedLine = _processAnsiCodes(line);
 
       // Thêm dòng mới với timestamp và nội dung
-      _lines.add(LineDisplay(timestamp, processedLine, isSystemMessage: isSystemMessage));
+      _lines.add(LineDisplay(timestamp, processedLine,
+          isSystemMessage: isSystemMessage));
 
       // Giữ kích thước buffer trong giới hạn
       while (_lines.length > 1000) {
@@ -161,7 +206,7 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
   @override
   void dispose() {
     _subscription?.cancel();
-    _monitorService.stopMonitor(); // Make sure to stop monitor when disposing
+    _stopMonitor(); // Đảm bảo dừng monitor khi dispose
     _inputController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -182,7 +227,9 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
                 color: Colors.black,
                 borderRadius: BorderRadius.circular(8.0),
                 border: Border.all(
-                  color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
+                  color: isDarkTheme
+                      ? Colors.grey.shade700
+                      : Colors.grey.shade300,
                   width: 1,
                 ),
               ),
@@ -197,21 +244,25 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
                         children: _lines.map((line) {
                           return TextSpan(
                             children: [
-                              // Timestamp with slight opacity
+                              // Timestamp với độ mờ nhẹ
                               TextSpan(
                                 text: '[${line.timestamp}] ',
                                 style: TextStyle(
-                                  color: line.isSystemMessage ? Colors.yellow.withOpacity(0.8) : Colors.grey.withOpacity(0.7),
+                                  color: line.isSystemMessage
+                                      ? Colors.yellow.withOpacity(0.8)
+                                      : Colors.grey.withOpacity(0.7),
                                   fontFamily: 'Courier New',
                                   fontSize: 12.0,
                                   height: 1.5,
                                 ),
                               ),
-                              // Actual content
+                              // Nội dung thực tế
                               TextSpan(
                                 text: '${line.content}\n',
                                 style: TextStyle(
-                                  color: line.isSystemMessage ? Colors.yellow : Colors.lightGreenAccent,
+                                  color: line.isSystemMessage
+                                      ? Colors.yellow
+                                      : Colors.lightGreenAccent,
                                   fontFamily: 'Courier New',
                                   fontSize: 14.0,
                                   height: 1.5,
@@ -228,7 +279,7 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
             ),
           ),
 
-          // Command input area
+          // Khu vực nhập lệnh
           Container(
             margin: const EdgeInsets.only(top: 8.0),
             child: Row(
@@ -245,21 +296,28 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: BorderSide(
-                          color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
+                          color: isDarkTheme
+                              ? Colors.grey.shade700
+                              : Colors.grey.shade300,
                         ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: BorderSide(
-                          color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
+                          color: isDarkTheme
+                              ? Colors.grey.shade700
+                              : Colors.grey.shade300,
                         ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Colors.blue, width: 2),
+                        borderSide:
+                            const BorderSide(color: Colors.blue, width: 2),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      fillColor: isDarkTheme ? Colors.grey.shade800 : Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      fillColor:
+                          isDarkTheme ? Colors.grey.shade800 : Colors.white,
                       filled: true,
                     ),
                     onSubmitted: (_) => _sendCommand(),
@@ -271,7 +329,9 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
                     color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
+                      color: isDarkTheme
+                          ? Colors.grey.shade700
+                          : Colors.grey.shade300,
                     ),
                   ),
                   child: IconButton(
@@ -281,10 +341,14 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
                       });
                     },
                     icon: Icon(
-                      _isAutoScrollEnabled ? Icons.vertical_align_bottom : Icons.vertical_align_center,
+                      _isAutoScrollEnabled
+                          ? Icons.vertical_align_bottom
+                          : Icons.vertical_align_center,
                       color: _isAutoScrollEnabled ? Colors.blue : Colors.grey,
                     ),
-                    tooltip: _isAutoScrollEnabled ? 'Auto-scroll enabled' : 'Auto-scroll disabled',
+                    tooltip: _isAutoScrollEnabled
+                        ? 'Auto-scroll enabled'
+                        : 'Auto-scroll disabled',
                   ),
                 ),
                 const SizedBox(width: 8.0),
@@ -293,7 +357,8 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -308,3 +373,4 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
     );
   }
 }
+
