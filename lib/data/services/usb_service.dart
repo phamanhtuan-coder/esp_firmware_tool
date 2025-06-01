@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'package:esp_firmware_tool/data/services/log_service.dart';
+import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 import 'package:flutter_libserialport/flutter_libserialport.dart';
-import 'package:esp_firmware_tool/data/models/log_entry.dart';
-import 'package:esp_firmware_tool/di/service_locator.dart';
+import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
+import 'package:smart_net_firmware_loader/di/service_locator.dart';
 
 class UsbDeviceEvent {
   final String deviceId;

@@ -2,11 +2,11 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 
-import 'package:esp_firmware_tool/data/models/log_entry.dart';
-import 'package:esp_firmware_tool/data/services/arduino_cli_service.dart';
-import 'package:esp_firmware_tool/data/services/batch_service.dart';
-import 'package:esp_firmware_tool/data/services/template_service.dart';
-import 'package:esp_firmware_tool/data/services/usb_service.dart';
+import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
+import 'package:smart_net_firmware_loader/data/services/arduino_cli_service.dart';
+import 'package:smart_net_firmware_loader/data/services/batch_service.dart';
+import 'package:smart_net_firmware_loader/data/services/template_service.dart';
+import 'package:smart_net_firmware_loader/data/services/usb_service.dart';
 import 'package:path/path.dart' as path;
 
 class FirmwareFlashService {

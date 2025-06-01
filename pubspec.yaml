@@ -1,4 +1,4 @@
-name: esp_firmware_tool
+name: smart_net_firmware_loader
 description: "Firmware Deployment Tool for SmartNet Solution."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.

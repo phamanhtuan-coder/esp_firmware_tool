@@ -4,7 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:libserialport/libserialport.dart';
 
-import 'package:esp_firmware_tool/data/models/log_entry.dart';
+import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 

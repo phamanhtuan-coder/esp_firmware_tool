@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:esp_firmware_tool/utils/app_colors.dart';
+import 'package:smart_net_firmware_loader/utils/app_colors.dart';
 
 class WarningDialog extends StatelessWidget {
   final bool isDarkTheme;

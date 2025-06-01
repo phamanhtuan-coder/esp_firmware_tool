@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
-import 'package:esp_firmware_tool/data/models/log_entry.dart';
+import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 
 /// Service for interacting with the Arduino CLI
 class ArduinoCliService {

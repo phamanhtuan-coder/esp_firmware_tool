@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:esp_firmware_tool/di/service_locator.dart';
-import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
-import 'package:esp_firmware_tool/presentation/views/home_view.dart';
-import 'package:esp_firmware_tool/utils/app_routes.dart';
-import 'package:esp_firmware_tool/utils/app_theme.dart';
+import 'package:smart_net_firmware_loader/di/service_locator.dart';
+import 'package:smart_net_firmware_loader/presentation/blocs/log/log_bloc.dart';
+import 'package:smart_net_firmware_loader/presentation/views/home_view.dart';
+import 'package:smart_net_firmware_loader/utils/app_routes.dart';
+import 'package:smart_net_firmware_loader/utils/app_theme.dart';
 import 'presentation/views/login_view.dart';
 import 'presentation/views/splash_screen.dart';
 import 'package:window_manager/window_manager.dart';

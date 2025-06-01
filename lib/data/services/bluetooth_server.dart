@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:esp_firmware_tool/data/models/log_entry.dart';
-import 'package:esp_firmware_tool/data/services/log_service.dart';
-import 'package:esp_firmware_tool/utils/debug_logger.dart';
+import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
+import 'package:smart_net_firmware_loader/data/services/log_service.dart';
+import 'package:smart_net_firmware_loader/utils/debug_logger.dart';
 
 class BluetoothServer {
   final LogService logService;

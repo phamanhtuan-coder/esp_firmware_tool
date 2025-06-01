@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:esp_firmware_tool/utils/app_colors.dart';
+import 'package:smart_net_firmware_loader/utils/app_colors.dart';
 
 class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   final bool isDarkTheme;
@@ -16,7 +16,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     return AppBar(
       backgroundColor: isDarkTheme ? AppColors.darkHeaderBackground : AppColors.accent,
-      title: const Text('Firmware Deployment Tool', style: TextStyle(color: Colors.white)),
+      title: const Text('SmartNet Firmware Loader ', style: TextStyle(color: Colors.white)),
       actions: [
         IconButton(
           icon: const Icon(Icons.fullscreen),

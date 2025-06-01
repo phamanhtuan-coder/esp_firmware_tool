@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
-import 'package:esp_firmware_tool/utils/app_colors.dart';
+import 'package:smart_net_firmware_loader/presentation/blocs/log/log_bloc.dart';
+import 'package:smart_net_firmware_loader/utils/app_colors.dart';
 
 class SearchBar extends StatelessWidget {
   final TextEditingController controller;

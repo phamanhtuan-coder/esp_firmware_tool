@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:esp_firmware_tool/utils/app_colors.dart';
-import 'package:esp_firmware_tool/utils/app_routes.dart';
+import 'package:smart_net_firmware_loader/utils/app_colors.dart';
+import 'package:smart_net_firmware_loader/utils/app_routes.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -70,7 +70,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             FadeTransition(
               opacity: _fadeAnimation,
               child: const Text(
-                'Firmware Deployment Tool',
+                'SmartNet Firmware Loader ',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,

@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:esp_firmware_tool/data/models/log_entry.dart';
-import 'package:esp_firmware_tool/data/services/arduino_cli_service.dart';
-import 'package:esp_firmware_tool/data/services/log_service.dart';
-import 'package:esp_firmware_tool/data/services/template_service.dart';
+import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
+import 'package:smart_net_firmware_loader/data/services/arduino_cli_service.dart';
+import 'package:smart_net_firmware_loader/data/services/log_service.dart';
+import 'package:smart_net_firmware_loader/data/services/template_service.dart';
 
 /// Service responsible for managing batches, devices, and firmware operations
 class BatchService {

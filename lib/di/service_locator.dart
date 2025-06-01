@@ -1,16 +1,16 @@
-import 'package:esp_firmware_tool/data/services/bluetooth_server.dart';
-import 'package:esp_firmware_tool/data/services/qr_code_service.dart';
+import 'package:smart_net_firmware_loader/data/services/bluetooth_server.dart';
+import 'package:smart_net_firmware_loader/data/services/qr_code_service.dart';
 import 'package:get_it/get_it.dart';
-import 'package:esp_firmware_tool/data/services/log_service.dart';
-import 'package:esp_firmware_tool/data/services/arduino_cli_service.dart';
-import 'package:esp_firmware_tool/data/services/usb_service.dart';
-import 'package:esp_firmware_tool/data/services/template_service.dart';
-import 'package:esp_firmware_tool/data/services/batch_service.dart';
-import 'package:esp_firmware_tool/data/services/serial_monitor_service.dart';
-import 'package:esp_firmware_tool/data/services/firmware_flash_service.dart';
-import 'package:esp_firmware_tool/data/services/api_client.dart';
-import 'package:esp_firmware_tool/data/services/device_status_service.dart';
-import 'package:esp_firmware_tool/presentation/blocs/log/log_bloc.dart';
+import 'package:smart_net_firmware_loader/data/services/log_service.dart';
+import 'package:smart_net_firmware_loader/data/services/arduino_cli_service.dart';
+import 'package:smart_net_firmware_loader/data/services/usb_service.dart';
+import 'package:smart_net_firmware_loader/data/services/template_service.dart';
+import 'package:smart_net_firmware_loader/data/services/batch_service.dart';
+import 'package:smart_net_firmware_loader/data/services/serial_monitor_service.dart';
+import 'package:smart_net_firmware_loader/data/services/firmware_flash_service.dart';
+import 'package:smart_net_firmware_loader/data/services/api_client.dart';
+import 'package:smart_net_firmware_loader/data/services/device_status_service.dart';
+import 'package:smart_net_firmware_loader/presentation/blocs/log/log_bloc.dart';
 
 final GetIt serviceLocator = GetIt.instance;
 

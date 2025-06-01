@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:esp_firmware_tool/data/models/device.dart';
-import 'package:esp_firmware_tool/data/models/batch.dart';
-import 'package:esp_firmware_tool/utils/app_colors.dart';
-import 'package:esp_firmware_tool/data/services/device_status_service.dart';
-import 'package:esp_firmware_tool/di/service_locator.dart';
+import 'package:smart_net_firmware_loader/data/models/device.dart';
+import 'package:smart_net_firmware_loader/data/models/batch.dart';
+import 'package:smart_net_firmware_loader/utils/app_colors.dart';
+import 'package:smart_net_firmware_loader/data/services/device_status_service.dart';
+import 'package:smart_net_firmware_loader/di/service_locator.dart';
 
 class BatchSelectionPanel extends StatelessWidget {
   final List<Batch> batches;

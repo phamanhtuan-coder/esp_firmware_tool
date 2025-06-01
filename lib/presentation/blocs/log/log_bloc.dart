@@ -1,14 +1,14 @@
 import 'package:equatable/equatable.dart';
-import 'package:esp_firmware_tool/data/services/arduino_cli_service.dart';
-import 'package:esp_firmware_tool/data/services/batch_service.dart';
-import 'package:esp_firmware_tool/data/services/firmware_flash_service.dart';
-import 'package:esp_firmware_tool/data/services/usb_service.dart';
+import 'package:smart_net_firmware_loader/data/services/arduino_cli_service.dart';
+import 'package:smart_net_firmware_loader/data/services/batch_service.dart';
+import 'package:smart_net_firmware_loader/data/services/firmware_flash_service.dart';
+import 'package:smart_net_firmware_loader/data/services/usb_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:esp_firmware_tool/data/models/batch.dart';
-import 'package:esp_firmware_tool/data/models/device.dart';
-import 'package:esp_firmware_tool/data/models/log_entry.dart';
-import 'package:esp_firmware_tool/di/service_locator.dart';
-import 'package:esp_firmware_tool/data/services/log_service.dart';
+import 'package:smart_net_firmware_loader/data/models/batch.dart';
+import 'package:smart_net_firmware_loader/data/models/device.dart';
+import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
+import 'package:smart_net_firmware_loader/di/service_locator.dart';
+import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 
 class LogEvent extends Equatable {
   const LogEvent();
