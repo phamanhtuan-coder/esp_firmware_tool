@@ -1,3 +1,5 @@
+import 'package:esp_firmware_tool/data/services/bluetooth_server.dart';
+import 'package:esp_firmware_tool/data/services/qr_code_service.dart';
 import 'package:get_it/get_it.dart';
 import 'package:esp_firmware_tool/data/services/log_service.dart';
 import 'package:esp_firmware_tool/data/services/arduino_cli_service.dart';
@@ -44,6 +46,17 @@ void setupServiceLocator() {
     serviceLocator<TemplateService>(),
     serviceLocator<BatchService>(),
     serviceLocator<UsbService>(),
+  ));
+
+  // Bluetooth server service
+  serviceLocator.registerLazySingleton<BluetoothServer>(() => BluetoothServer(
+    logService: serviceLocator<LogService>(),
+  ));
+
+  // QR Code service
+  serviceLocator.registerLazySingleton<QrCodeService>(() => QrCodeService(
+    logService: serviceLocator<LogService>(),
+    bluetoothServer: serviceLocator<BluetoothServer>(),
   ));
 
   // Bloc registration

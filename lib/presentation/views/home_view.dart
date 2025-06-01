@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'package:esp_firmware_tool/data/services/bluetooth_server.dart';
 import 'package:esp_firmware_tool/data/services/firmware_flash_service.dart';
+import 'package:esp_firmware_tool/data/services/qr_code_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide SearchBar;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -54,6 +56,8 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   final ArduinoCliService _arduinoCliService = serviceLocator<ArduinoCliService>();
   final TemplateService _templateService = serviceLocator<TemplateService>();
   final BatchService _batchService = serviceLocator<BatchService>();
+  final BluetoothServer _bluetoothServer = serviceLocator<BluetoothServer>();
+  final QrCodeService _qrCodeService = serviceLocator<QrCodeService>();
 
   @override
   void initState() {
@@ -109,17 +113,26 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         ),
       );
     });
+  }
 
-
+  // Helper method to log messages
+  void _log(String message, {LogLevel level = LogLevel.info, String origin = 'system'}) {
+    _logService.addLog(
+      message: message,
+      level: level,
+      step: ProcessStep.scanQrCode,
+      origin: origin,
+    );
   }
 
   @override
   void dispose() {
+    _qrCodeService.stopScanning();
     _serialInputController.dispose();
     _serialController.dispose();
     _searchController.dispose();
     _scrollController.dispose();
-    _tabController.removeListener(_handleTabChange); // Loại bỏ listener khi dispose
+    _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
     _usbService.dispose();
     _logService.dispose();
@@ -331,30 +344,32 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                   _startSerialMonitor(value);
                                 }
                               },
-                              onQrCodeScan: () {
-                                final scannedSerial = 'SN-${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}';
-                                _serialController.text = scannedSerial;
+                              onQrCodeScan: () async {
+                                final scannedSerial = await _qrCodeService.scanQrCode();
+                                if (scannedSerial != null) {
+                                  _serialController.text = scannedSerial;
 
-                                // Check if the scanned serial exists in current batch
-                                if (_selectedBatch != null) {
-                                  final matchingDevice = state.devices.firstWhere(
-                                    (device) => device.serial == scannedSerial,
-                                    orElse: () => Device(id: -1, batchId: -1, serial: ''),
-                                  );
-
-                                  if (matchingDevice.id != -1) {
-                                    // Serial found in the batch, select the device
-                                    setState(() => _selectedDevice = matchingDevice.id.toString());
-                                    context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id.toString()));
-                                    context.read<LogBloc>().add(SelectSerialEvent(scannedSerial));
-                                  } else {
-                                    // Serial not found in current batch
-                                    _logService.addLog(
-                                      message: 'Serial $scannedSerial không tồn tại trong lô $_selectedBatch',
-                                      level: LogLevel.warning,
-                                      step: ProcessStep.scanQrCode,
-                                      origin: 'system',
+                                  // Check if the scanned serial exists in current batch
+                                  if (_selectedBatch != null) {
+                                    final matchingDevice = state.devices.firstWhere(
+                                      (device) => device.serial == scannedSerial,
+                                      orElse: () => Device(id: -1, batchId: -1, serial: ''),
                                     );
+
+                                    if (matchingDevice.id != -1) {
+                                      // Serial found in the batch, select the device
+                                      setState(() => _selectedDevice = matchingDevice.id.toString());
+                                      context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id.toString()));
+                                      context.read<LogBloc>().add(SelectSerialEvent(scannedSerial));
+                                    } else {
+                                      // Serial not found in current batch
+                                      _logService.addLog(
+                                        message: 'Serial $scannedSerial không tồn tại trong lô $_selectedBatch',
+                                        level: LogLevel.warning,
+                                        step: ProcessStep.scanQrCode,
+                                        origin: 'system',
+                                      );
+                                    }
                                   }
                                 }
                               },
@@ -581,4 +596,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   }
 
 }
+
+
 
