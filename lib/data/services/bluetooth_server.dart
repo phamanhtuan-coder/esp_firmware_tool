@@ -88,7 +88,24 @@ class BluetoothServer {
           origin: 'bluetooth-server',
         );
 
-        if (_isValidSerial(message)) {
+        String? serialNumber;
+        bool isValid = false;
+
+        try {
+          // Try to parse as JSON and extract serial number
+          Map<String, dynamic> jsonData = json.decode(message);
+          if (jsonData.containsKey('type') && jsonData['type'] == 'serial_data' &&
+              jsonData.containsKey('data')) {
+            serialNumber = jsonData['data'].toString();
+            isValid = serialNumber.isNotEmpty && serialNumber.length >= 3;
+          }
+        } catch (e) {
+          // If parsing fails, use the raw message as fallback
+          serialNumber = message;
+          isValid = serialNumber.isNotEmpty && serialNumber.length >= 3;
+        }
+
+        if (isValid && serialNumber != null) {
           DebugLogger.i('Valid serial received: $message');
           logService.addLog(
             message: '✅ Valid serial received: $message',
@@ -98,8 +115,9 @@ class BluetoothServer {
           );
 
           if (_onSerialReceived != null) {
-            DebugLogger.d('Calling onSerialReceived callback', className: 'BluetoothServer');
-            _onSerialReceived!(message);
+            DebugLogger.d('Calling onSerialReceived callback with extracted serial: $serialNumber',
+              className: 'BluetoothServer');
+            _onSerialReceived!(serialNumber);
           }
 
           // Send acknowledgment back to client
@@ -162,15 +180,6 @@ class BluetoothServer {
         origin: 'bluetooth-server',
       );
     }
-  }
-
-  bool _isValidSerial(String serial) {
-    // Add your validation logic here
-    // For example, checking format, length, or pattern
-    DebugLogger.d('Validating serial: $serial',
-      className: 'BluetoothServer', methodName: '_isValidSerial');
-
-    return serial.isNotEmpty && serial.length >= 3;
   }
 
   Future<void> stop() async {
