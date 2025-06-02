@@ -1,6 +1,6 @@
 class Device {
-  final int id;
-  final int batchId;
+  final String id;
+  final String batchId;
   final String serial;
   final String status;
   final String? reason;
@@ -16,8 +16,8 @@ class Device {
   });
 
   Device copyWith({
-    int? id,
-    int? batchId,
+    String? id,
+    String? batchId,
     String? serial,
     String? status,
     String? reason,
@@ -33,11 +33,34 @@ class Device {
     );
   }
 
+  factory Device.fromJson(Map<String, dynamic> json) {
+    return Device(
+      id: json['device_serial']?.toString() ?? '',
+      batchId: json['production_batch_id']?.toString() ?? '',
+      serial: json['device_serial']?.toString() ?? '',
+      status: json['status']?.toString() ?? 'pending',
+      reason: json['reason']?.toString(),
+      imageUrl: json['image_url']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'device_serial': id,
+      'production_batch_id': batchId,
+      'serial': serial,
+      'status': status,
+      'reason': reason,
+      'image_url': imageUrl,
+    };
+  }
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-          other is Device && runtimeType == other.runtimeType && id == other.id;
+      other is Device && runtimeType == other.runtimeType && id == other.id;
 
   @override
   int get hashCode => id.hashCode;
 }
+

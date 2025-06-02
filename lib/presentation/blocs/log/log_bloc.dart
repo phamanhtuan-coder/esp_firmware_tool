@@ -222,26 +222,33 @@ class LogBloc extends Bloc<LogEvent, LogState> {
 
   Future<void> _onSelectBatch(SelectBatchEvent event, Emitter<LogState> emit) async {
     final serials = await _batchService.fetchSerialsForBatch(event.batchId);
-    final devices = serials.map((serial) => Device(id: serial.hashCode, batchId: int.parse(event.batchId), serial: serial)).toList();
+    final devices = serials.map((serial) => Device(
+      id: serial,
+      batchId: event.batchId,
+      serial: serial,
+    )).toList();
     emit(state.copyWith(selectedBatchId: event.batchId, devices: devices));
   }
 
   void _onSelectDevice(SelectDeviceEvent event, Emitter<LogState> emit) {
-    final device = state.devices.firstWhere((device) => device.id.toString() == event.deviceId);
+    final device = state.devices.firstWhere(
+      (device) => device.id == event.deviceId,
+      orElse: () => Device(id: '', batchId: '', serial: ''),
+    );
     emit(state.copyWith(selectedDeviceId: event.deviceId, serialNumber: device.serial));
   }
 
   void _onMarkDeviceDefective(MarkDeviceDefectiveEvent event, Emitter<LogState> emit) {
     // Find the device to be updated
     final deviceToUpdate = state.devices.firstWhere(
-      (device) => device.id.toString() == event.deviceId,
+      (device) => device.id == event.deviceId,
       orElse: () => state.devices.firstWhere(
-        (device) => device.serial == event,
-        orElse: () => Device(id: -1, batchId: -1, serial: ''),
+        (device) => device.serial == event.deviceId,
+        orElse: () => Device(id: '', batchId: '', serial: ''),
       ),
     );
 
-    if (deviceToUpdate.id == -1) {
+    if (deviceToUpdate.id.isEmpty) {
       // Device not found
       emit(state.copyWith(status: 'Device not found: ${event.deviceId}'));
       return;
@@ -266,7 +273,7 @@ class LogBloc extends Bloc<LogEvent, LogState> {
 
     // Standard handling for marking a device as defective
     final updatedDevices = state.devices.map((device) {
-      if (device.id.toString() == event.deviceId) {
+      if (device.id == event.deviceId) {
         return device.copyWith(status: 'defective', reason: event.reason);
       }
       return device;
