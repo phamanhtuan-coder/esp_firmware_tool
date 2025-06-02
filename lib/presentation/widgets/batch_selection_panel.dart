@@ -405,10 +405,12 @@ class _BatchSelectionPanelState extends State<BatchSelectionPanel> {
                   device.status == 'defective' ? 'Chờ sửa chữa' :
                   device.status == 'firmware_failed' ? 'Chờ sửa chữa' :
                   device.status == 'firmware_uploading' ? 'Đã nạp firmware' :
+                  device.status == 'firmware_upload' ? 'Chờ nạp firmware' :
                   device.status == 'processing' ? 'Đang xử lý' : 'Chờ xử lý',
                   style: TextStyle(
                     color: device.status == 'defective' || device.status == 'firmware_failed' ? AppColors.error
                         : device.status == 'firmware_uploading' ? AppColors.success
+                        : device.status == 'firmware_upload' ? AppColors.connected
                         : device.status == 'processing' ? AppColors.connected
                         : AppColors.warning,
                   ),

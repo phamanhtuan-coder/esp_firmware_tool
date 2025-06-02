@@ -399,6 +399,17 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                 }
                               },
                               onQrCodeScan: () async {
+                                // Check if batch is selected (this is also checked in FirmwareControlPanel, but added here as a safeguard)
+                                if (_selectedBatch == null) {
+                                  _logService.addLog(
+                                    message: 'Vui lòng chọn lô sản xuất trước khi quét QR code',
+                                    level: LogLevel.warning,
+                                    step: ProcessStep.scanQrCode,
+                                    origin: 'system',
+                                  );
+                                  return;
+                                }
+
                                 // Phương thức này sẽ được gọi khi nút Quét QR được nhấn
                                 final completer = Completer<String?>();
 
@@ -431,28 +442,13 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                 if (scannedSerial != null) {
                                   _serialController.text = scannedSerial;
 
-                                  // Check if the scanned serial exists in current batch
-                                  if (_selectedBatch != null) {
-                                    final matchingDevice = state.devices.firstWhere(
-                                      (device) => device.serial == scannedSerial,
-                                      orElse: () => Device(id: '', batchId: '', serial: ''),
-                                    );
-
-                                    if (matchingDevice.id.isNotEmpty) {
-                                      // Serial found in the batch, select the device
-                                      setState(() => _selectedDevice = matchingDevice.id);
-                                      context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id));
-                                      context.read<LogBloc>().add(SelectSerialEvent(scannedSerial));
-                                    } else {
-                                      // Serial not found in current batch
-                                      _logService.addLog(
-                                        message: 'Serial $scannedSerial không tồn tại trong lô $_selectedBatch',
-                                        level: LogLevel.warning,
-                                        step: ProcessStep.scanQrCode,
-                                        origin: 'system',
-                                      );
-                                    }
-                                  }
+                                  // Log để debug
+                                  _logService.addLog(
+                                    message: 'Đã nhận và xác thực serial từ QR code: $scannedSerial',
+                                    level: LogLevel.debug,
+                                    step: ProcessStep.scanQrCode,
+                                    origin: 'system',
+                                  );
                                 }
                               },
                               availablePorts: _usbService.getAvailablePorts(),

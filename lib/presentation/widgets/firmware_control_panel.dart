@@ -126,12 +126,62 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
   }
 
   void _handleQrScan() {
+    // Check if batch is selected first
+    final state = context.read<LogBloc>().state;
+    if (state.selectedBatchId == null) {
+      setState(() {
+        _serialErrorText = 'Vui lòng chọn lô sản xuất trước khi quét QR';
+        _serialSuccessText = null;
+        _isSerialValid = false;
+      });
+
+      // Add a log entry to notify the user
+      context.read<LogBloc>().add(
+        AddLogEvent(
+          LogEntry(
+            message: 'Vui lòng chọn lô sản xuất trước khi quét QR code',
+            timestamp: DateTime.now(),
+            level: LogLevel.warning,
+            step: ProcessStep.scanQrCode,
+            origin: 'system',
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isQrCodeButtonLoading = true;
       // Clear any existing validation messages
       _serialErrorText = null;
       _serialSuccessText = null;
     });
+
+    // Show a SnackBar to inform the user what to do while scanning is in progress
+    final snackBar = SnackBar(
+      content: Row(
+        children: [
+          const CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            strokeWidth: 2,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              'Đã bật chế độ nhận thông tin. Hãy dùng app mobile và quét mã sản phẩm muốn nạp firmware trong lô ${state.selectedBatchId}',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+      duration: const Duration(days: 1), // Very long duration - will be dismissed manually when scan completes
+      backgroundColor: Colors.blue.shade700,
+    );
+
+    // Show the snackbar
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    scaffoldMessenger.hideCurrentSnackBar();
+    scaffoldMessenger.showSnackBar(snackBar);
 
     // Store previous value to check if it changed after scan
     final previousValue = widget.serialController.text;
@@ -149,6 +199,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
       // Stop checking if widget is no longer mounted
       if (!mounted) {
         timer.cancel();
+        scaffoldMessenger.hideCurrentSnackBar(); // Hide snackbar if not mounted
         return;
       }
 
@@ -161,10 +212,11 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
         // Validate the new serial
         _validateReceivedSerial(newValue);
 
-        // End loading state
+        // End loading state and hide snackbar
         setState(() {
           _isQrCodeButtonLoading = false;
         });
+        scaffoldMessenger.hideCurrentSnackBar();
       }
 
       // Add a timeout to eventually cancel the loading state after 62 seconds
@@ -174,6 +226,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
           setState(() {
             _isQrCodeButtonLoading = false;
           });
+          scaffoldMessenger.hideCurrentSnackBar();
         }
       }
     });
@@ -183,25 +236,15 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
   void _validateReceivedSerial(String value) {
     if (!mounted) return;
 
-    final state = context.read<LogBloc>().state;
-    final deviceExists = state.devices.any(
-      (device) =>
-          device.serial == value &&
-          (state.selectedBatchId == null ||
-              device.batchId.toString() == state.selectedBatchId),
-    );
+    // Use the more comprehensive validation method for consistency
+    _validateSerial(value);
 
-    setState(() {
-      if (deviceExists) {
-        _serialSuccessText = 'Serial hợp lệ: $value';
-        _serialErrorText = null;
-        _isSerialValid = true;
-      } else {
-        _serialErrorText = 'Serial không tồn tại trong lô hiện tại';
-        _serialSuccessText = null;
-        _isSerialValid = false;
-      }
-    });
+    // End QR code loading status if it's still active
+    if (_isQrCodeButtonLoading) {
+      setState(() {
+        _isQrCodeButtonLoading = false;
+      });
+    }
   }
 
   // Enhanced method to validate serial input with detailed status messages
