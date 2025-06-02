@@ -41,7 +41,7 @@ class MyApp extends StatelessWidget {
         BlocProvider<LogBloc>(create: (context) => serviceLocator<LogBloc>()),
       ],
       child: MaterialApp(
-        title: 'Firmware Deployment Tool',
+        title: 'SmartNet Firmware Loader',
         theme: AppTheme.lightTheme,
         home: const SplashScreen(),
         routes: {
