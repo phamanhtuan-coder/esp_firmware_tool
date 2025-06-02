@@ -1,5 +1,5 @@
 name: smart_net_firmware_loader
-description: "Firmware Deployment Tool for SmartNet Solution."
+description: "Firmware Loader Tool for SmartNet Solution."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -89,4 +89,4 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/
-
+    - assets/app_icon.png

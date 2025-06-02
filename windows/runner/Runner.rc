@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.sns.esp_firmware_tool" "\0"
-            VALUE "FileDescription", "esp_firmware_tool" "\0"
+            VALUE "CompanyName", "com.sns.smart_net_firmware_loader" "\0"
+            VALUE "FileDescription", "SmartNet Firmware Loader" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "esp_firmware_tool" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2025 com.sns.esp_firmware_tool. All rights reserved." "\0"
-            VALUE "OriginalFilename", "esp_firmware_tool.exe" "\0"
-            VALUE "ProductName", "esp_firmware_tool" "\0"
+            VALUE "InternalName", "smart_net_firmware_loader" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2025 SmartNet Solutions. All rights reserved." "\0"
+            VALUE "OriginalFilename", "smart_net_firmware_loader.exe" "\0"
+            VALUE "ProductName", "SmartNet Firmware Loader" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
