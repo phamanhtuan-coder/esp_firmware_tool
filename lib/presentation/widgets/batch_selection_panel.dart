@@ -3,9 +3,10 @@ import 'package:smart_net_firmware_loader/data/models/device.dart';
 import 'package:smart_net_firmware_loader/data/models/batch.dart';
 import 'package:smart_net_firmware_loader/utils/app_colors.dart';
 import 'package:smart_net_firmware_loader/data/services/device_status_service.dart';
+import 'package:smart_net_firmware_loader/data/services/planning_service.dart';
 import 'package:smart_net_firmware_loader/di/service_locator.dart';
 
-class BatchSelectionPanel extends StatelessWidget {
+class BatchSelectionPanel extends StatefulWidget {
   final List<Batch> batches;
   final List<Device> devices;
   final String? selectedBatch;
@@ -17,15 +18,7 @@ class BatchSelectionPanel extends StatelessWidget {
   final Function(Device) onDeviceMarkDefective;
   final bool isDarkTheme;
 
-  // List of available plannings
-  final List<Map<String, String>> plannings = [
-    {'id': '1', 'name': 'Planning 2025 Q1'},
-    {'id': '2', 'name': 'Planning 2025 Q2'},
-    {'id': '3', 'name': 'Planning 2025 Q3'},
-    {'id': '4', 'name': 'Planning 2025 Q4'},
-  ];
-
-  BatchSelectionPanel({
+  const BatchSelectionPanel({
     super.key,
     required this.batches,
     required this.devices,
@@ -40,11 +33,100 @@ class BatchSelectionPanel extends StatelessWidget {
   });
 
   @override
+  State<BatchSelectionPanel> createState() => _BatchSelectionPanelState();
+}
+
+class _BatchSelectionPanelState extends State<BatchSelectionPanel> {
+  List<Map<String, String>> _plannings = [];
+  List<Batch> _batches = [];
+  List<Device> _devices = [];
+  bool _isLoadingPlannings = true;
+  bool _isLoadingBatches = false;
+  bool _isLoadingDevices = false;
+  String? _errorMessage;
+  String? _batchErrorMessage;
+  String? _deviceErrorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPlannings();
+  }
+
+  Future<void> _loadPlannings() async {
+    setState(() {
+      _isLoadingPlannings = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final planningService = serviceLocator<PlanningService>();
+      final plannings = await planningService.fetchPlannings();
+
+      setState(() {
+        _plannings = plannings;
+        _isLoadingPlannings = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Không thể tải dữ liệu kế hoạch: $e';
+        _isLoadingPlannings = false;
+      });
+    }
+  }
+
+  Future<void> _loadBatchesForPlanning(String planningId) async {
+    setState(() {
+      _isLoadingBatches = true;
+      _batchErrorMessage = null;
+      _batches = []; // Clear existing batches
+    });
+
+    try {
+      final planningService = serviceLocator<PlanningService>();
+      final batches = await planningService.fetchBatches(planningId);
+
+      setState(() {
+        _batches = batches;
+        _isLoadingBatches = false;
+      });
+    } catch (e) {
+      setState(() {
+        _batchErrorMessage = 'Không thể tải danh sách lô: $e';
+        _isLoadingBatches = false;
+      });
+    }
+  }
+
+  Future<void> _loadDevicesForBatch(String batchId) async {
+    setState(() {
+      _isLoadingDevices = true;
+      _deviceErrorMessage = null;
+      _devices = []; // Clear existing devices
+    });
+
+    try {
+      final planningService = serviceLocator<PlanningService>();
+      final devices = await planningService.fetchDevices(batchId);
+
+      setState(() {
+        _devices = devices;
+        _isLoadingDevices = false;
+      });
+    } catch (e) {
+      setState(() {
+        _deviceErrorMessage = 'Không thể tải danh sách thiết bị: $e';
+        _isLoadingDevices = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: isDarkTheme ? AppColors.darkSurface : AppColors.cardBackground,
+        color: widget.isDarkTheme ? AppColors.darkSurface : AppColors.cardBackground,
         borderRadius: BorderRadius.circular(8),
         boxShadow: [BoxShadow(color: AppColors.shadowColor, blurRadius: 8)],
       ),
@@ -58,42 +140,14 @@ class BatchSelectionPanel extends StatelessWidget {
                 // Planning Dropdown
                 const Text('Chọn kế hoạch', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 4),
-                DropdownButtonFormField<String>(
-                  value: selectedPlanning,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    fillColor: isDarkTheme ? AppColors.darkCardBackground : Colors.white,
-                    filled: true,
-                  ),
-                  items: plannings.map((planning) => DropdownMenuItem(
-                    value: planning['id'],
-                    child: Text(planning['name']!),
-                  )).toList(),
-                  onChanged: onPlanningSelected,
-                  hint: const Text('-- Chọn kế hoạch --'),
-                ),
+                _buildPlanningDropdown(),
 
                 const SizedBox(height: 16),
 
                 // Batch Dropdown
                 const Text('Chọn lô (Batch)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 4),
-                DropdownButtonFormField<String>(
-                  value: selectedBatch,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    fillColor: isDarkTheme ? AppColors.darkCardBackground : Colors.white,
-                    filled: true,
-                  ),
-                  items: batches.map((batch) => DropdownMenuItem(
-                    value: batch.id.toString(),
-                    child: Text(batch.name),
-                  )).toList(),
-                  onChanged: onBatchSelected,
-                  hint: const Text('-- Chọn lô --'),
-                ),
+                _buildBatchDropdown(),
               ],
             ),
           ),
@@ -106,82 +160,19 @@ class BatchSelectionPanel extends StatelessWidget {
                   const Text('Danh sách thiết bị trong lô', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
                   const SizedBox(height: 8),
                   Expanded(
-                    child: selectedBatch != null && devices.isNotEmpty
-                        ? Container(
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: isDarkTheme ? Colors.grey[700]! : Colors.grey[300]!,
-                                width: 1,
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: ListView.builder(
-                                itemCount: devices.length,
-                                itemBuilder: (context, index) {
-                                  final device = devices[index];
-                                  return Container(
-                                    decoration: BoxDecoration(
-                                      border: Border(
-                                        bottom: BorderSide(
-                                          color: isDarkTheme ? Colors.grey[700]! : Colors.grey[300]!,
-                                          width: index != devices.length - 1 ? 1 : 0,
-                                        ),
-                                      ),
-                                    ),
-                                    child: ListTile(
-                                      leading: Text('${index + 1}'),
-                                      title: Text(device.serial),
-                                      subtitle: Text(
-                                        device.status == 'defective' ? 'Chờ sửa chữa' :
-                                        device.status == 'firmware_failed' ? 'Chờ sửa chữa' :
-                                        device.status == 'firmware_uploading' ? 'Đã nạp firmware' :
-                                        device.status == 'processing' ? 'Đang xử lý' : 'Chờ xử lý',
-                                        style: TextStyle(
-                                          color: device.status == 'defective' || device.status == 'firmware_failed' ? AppColors.error
-                                              : device.status == 'firmware_uploading' ? AppColors.success
-                                              : device.status == 'processing' ? AppColors.connected
-                                              : AppColors.warning,
-                                        ),
-                                      ),
-                                      trailing: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          // Success button
-                                          IconButton(
-                                            icon: const Icon(Icons.check_circle, color: Colors.green),
-                                            tooltip: 'Đánh dấu thành công',
-                                            onPressed: device.status == 'defective' ? null :
-                                                () => _showStatusConfirmationDialog(
-                                                  context,
-                                                  device,
-                                                  isSuccess: true
-                                                ),
-                                          ),
-                                          // Error button
-                                          IconButton(
-                                            icon: const Icon(Icons.error, color: Colors.red),
-                                            tooltip: 'Đánh dấu lỗi',
-                                            onPressed: device.status == 'defective' ? null :
-                                                () => _showStatusConfirmationDialog(
-                                                  context,
-                                                  device,
-                                                  isSuccess: false
-                                                ),
-                                          ),
-                                        ],
-                                      ),
-                                      selected: selectedDevice == device.id.toString(),
-                                      selectedTileColor: isDarkTheme ? Colors.blue[900]!.withOpacity(0.2) : Colors.blue[50],
-                                      onTap: () => onDeviceSelected(device.id.toString()),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          )
-                        : const Center(child: Text('Vui lòng chọn lô để xem danh sách thiết bị', style: TextStyle(color: Colors.grey))),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: widget.isDarkTheme ? Colors.grey[700]! : Colors.grey[300]!,
+                          width: 1,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: _buildDeviceList(),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -192,7 +183,236 @@ class BatchSelectionPanel extends StatelessWidget {
     );
   }
 
-  // Show confirmation dialog for status update (success or error)
+  Widget _buildPlanningDropdown() {
+    if (_isLoadingPlannings) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 8.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: AppColors.error.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.error_outline, color: AppColors.error),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _errorMessage!,
+                style: const TextStyle(color: AppColors.error),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _loadPlannings,
+              color: AppColors.error,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return DropdownButtonFormField<String>(
+      value: widget.selectedPlanning,
+      decoration: InputDecoration(
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        fillColor: widget.isDarkTheme ? AppColors.darkCardBackground : Colors.white,
+        filled: true,
+      ),
+      items: _plannings.map((planning) => DropdownMenuItem(
+        value: planning['id'],
+        child: Text(planning['name']!),
+      )).toList(),
+      onChanged: (value) {
+        if (value != null) {
+          widget.onPlanningSelected(value);
+          _loadBatchesForPlanning(value);
+        }
+      },
+      hint: const Text('-- Chọn kế hoạch --'),
+    );
+  }
+
+  Widget _buildBatchDropdown() {
+    if (_isLoadingBatches) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 8.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_batchErrorMessage != null) {
+      return Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: AppColors.error.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.error_outline, color: AppColors.error),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _batchErrorMessage!,
+                style: const TextStyle(color: AppColors.error),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: widget.selectedPlanning != null
+                ? () => _loadBatchesForPlanning(widget.selectedPlanning!)
+                : null,
+              color: AppColors.error,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return DropdownButtonFormField<String>(
+      value: widget.selectedBatch,
+      decoration: InputDecoration(
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        fillColor: widget.isDarkTheme ? AppColors.darkCardBackground : Colors.white,
+        filled: true,
+      ),
+      items: _batches.map((batch) => DropdownMenuItem(
+        value: batch.id,
+        child: Text(batch.name),
+      )).toList(),
+      onChanged: (value) {
+        if (value != null) {
+          widget.onBatchSelected(value);
+          _loadDevicesForBatch(value);
+        }
+      },
+      hint: const Text('-- Chọn lô --'),
+    );
+  }
+
+  Widget _buildDeviceList() {
+    if (_isLoadingDevices) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_deviceErrorMessage != null) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.error.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.error_outline, color: AppColors.error),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _deviceErrorMessage!,
+                style: const TextStyle(color: AppColors.error),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: widget.selectedBatch != null
+                ? () => _loadDevicesForBatch(widget.selectedBatch!)
+                : null,
+              color: AppColors.error,
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_devices.isEmpty) {
+      return const Center(
+        child: Text(
+          'Không có thiết bị nào trong lô này',
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: _devices.length,
+      itemBuilder: (context, index) {
+        final device = _devices[index];
+        return Container(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: widget.isDarkTheme ? Colors.grey[700]! : Colors.grey[300]!,
+                width: index != _devices.length - 1 ? 1 : 0,
+              ),
+            ),
+          ),
+          child: ListTile(
+            leading: Text('${index + 1}'),
+            title: Text(device.serial),
+            subtitle: Text(
+              device.status == 'defective' ? 'Chờ sửa chữa' :
+              device.status == 'firmware_failed' ? 'Chờ sửa chữa' :
+              device.status == 'firmware_uploading' ? 'Đã nạp firmware' :
+              device.status == 'processing' ? 'Đang xử lý' : 'Chờ xử lý',
+              style: TextStyle(
+                color: device.status == 'defective' || device.status == 'firmware_failed' ? AppColors.error
+                    : device.status == 'firmware_uploading' ? AppColors.success
+                    : device.status == 'processing' ? AppColors.connected
+                    : AppColors.warning,
+              ),
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.check_circle, color: Colors.green),
+                  tooltip: 'Đánh dấu thành công',
+                  onPressed: device.status == 'defective' ? null :
+                      () => _showStatusConfirmationDialog(
+                        context,
+                        device,
+                        isSuccess: true
+                      ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.error, color: Colors.red),
+                  tooltip: 'Đánh dấu lỗi',
+                  onPressed: device.status == 'defective' ? null :
+                      () => _showStatusConfirmationDialog(
+                        context,
+                        device,
+                        isSuccess: false
+                      ),
+                ),
+              ],
+            ),
+            selected: widget.selectedDevice == device.id.toString(),
+            selectedTileColor: widget.isDarkTheme ? Colors.blue[900]!.withOpacity(0.2) : Colors.blue[50],
+            onTap: () => widget.onDeviceSelected(device.id.toString()),
+          ),
+        );
+      },
+    );
+  }
+
   void _showStatusConfirmationDialog(BuildContext context, Device device, {required bool isSuccess}) {
     final String title = isSuccess ? 'Xác nhận thành công' : 'Xác nhận lỗi';
     final String message = isSuccess
@@ -205,7 +425,7 @@ class BatchSelectionPanel extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        backgroundColor: isDarkTheme ? AppColors.darkCardBackground : Colors.white,
+        backgroundColor: widget.isDarkTheme ? AppColors.darkCardBackground : Colors.white,
         title: Row(
           children: [
             Icon(dialogIcon, color: iconColor, size: 28),
@@ -214,7 +434,7 @@ class BatchSelectionPanel extends StatelessWidget {
               child: Text(
                 title,
                 style: TextStyle(
-                  color: isDarkTheme ? AppColors.darkTextPrimary : AppColors.text
+                  color: widget.isDarkTheme ? AppColors.darkTextPrimary : AppColors.text
                 ),
               ),
             ),
@@ -233,17 +453,17 @@ class BatchSelectionPanel extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: isDarkTheme ? AppColors.darkPanelBackground : AppColors.dividerColor,
+                color: widget.isDarkTheme ? AppColors.darkPanelBackground : AppColors.dividerColor,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: isDarkTheme ? AppColors.darkDivider : Colors.grey.shade300,
+                  color: widget.isDarkTheme ? AppColors.darkDivider : Colors.grey.shade300,
                 ),
               ),
               child: Text(
                 device.serial,
                 style: TextStyle(
                   fontWeight: FontWeight.w500,
-                  color: isDarkTheme ? AppColors.darkTextPrimary : AppColors.text,
+                  color: widget.isDarkTheme ? AppColors.darkTextPrimary : AppColors.text,
                 ),
               ),
             ),
@@ -251,7 +471,7 @@ class BatchSelectionPanel extends StatelessWidget {
             Text(
               message,
               style: TextStyle(
-                color: isDarkTheme ? AppColors.darkTextSecondary : Colors.grey.shade700,
+                color: widget.isDarkTheme ? AppColors.darkTextSecondary : Colors.grey.shade700,
               ),
             ),
           ],
@@ -260,7 +480,7 @@ class BatchSelectionPanel extends StatelessWidget {
           TextButton(
             onPressed: () => Navigator.pop(context),
             style: TextButton.styleFrom(
-              foregroundColor: isDarkTheme ? AppColors.darkTextSecondary : Colors.grey.shade700,
+              foregroundColor: widget.isDarkTheme ? AppColors.darkTextSecondary : Colors.grey.shade700,
             ),
             child: const Text('Hủy'),
           ),
@@ -283,7 +503,6 @@ class BatchSelectionPanel extends StatelessWidget {
     );
   }
 
-  // Show API result dialog after getting response
   void _showApiResultDialog(BuildContext context, Map<String, dynamic> result, String deviceSerial) {
     final bool isSuccess = result['success'] == true;
     final String title = isSuccess ? 'Cập nhật thành công' : 'Cập nhật thất bại';
@@ -291,19 +510,17 @@ class BatchSelectionPanel extends StatelessWidget {
     final IconData dialogIcon = isSuccess ? Icons.check_circle_outline : Icons.error_outline;
     final Color iconColor = isSuccess ? AppColors.success : AppColors.error;
 
-    // Log that we're showing the dialog
     print('Showing API result dialog: success=$isSuccess, message=$message');
 
-    // Use Future.delayed to ensure this runs after any frame rebuilds
     Future.delayed(Duration.zero, () {
       if (!context.mounted) return;
 
       showDialog(
         context: context,
-        barrierDismissible: false, // Force user to interact with dialog
+        barrierDismissible: false,
         builder: (context) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          backgroundColor: isDarkTheme ? AppColors.darkCardBackground : Colors.white,
+          backgroundColor: widget.isDarkTheme ? AppColors.darkCardBackground : Colors.white,
           title: Row(
             children: [
               Icon(dialogIcon, color: iconColor, size: 28),
@@ -312,7 +529,7 @@ class BatchSelectionPanel extends StatelessWidget {
                 child: Text(
                   title,
                   style: TextStyle(
-                    color: isDarkTheme ? AppColors.darkTextPrimary : AppColors.text,
+                    color: widget.isDarkTheme ? AppColors.darkTextPrimary : AppColors.text,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -323,7 +540,6 @@ class BatchSelectionPanel extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Device serial
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -331,7 +547,7 @@ class BatchSelectionPanel extends StatelessWidget {
                     'Thiết bị: ',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: isDarkTheme ? AppColors.darkTextSecondary : Colors.grey.shade700,
+                      color: widget.isDarkTheme ? AppColors.darkTextSecondary : Colors.grey.shade700,
                     ),
                   ),
                   Expanded(
@@ -339,21 +555,19 @@ class BatchSelectionPanel extends StatelessWidget {
                       deviceSerial,
                       style: TextStyle(
                         fontWeight: FontWeight.w500,
-                        color: isDarkTheme ? AppColors.darkTextPrimary : AppColors.text,
+                        color: widget.isDarkTheme ? AppColors.darkTextPrimary : AppColors.text,
                       ),
                     ),
                   ),
                 ],
               ),
-
-              // Message from server
               const SizedBox(height: 12),
               Text(
                 'Thông báo từ máy chủ:',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: isDarkTheme ? AppColors.darkTextSecondary : Colors.grey.shade700,
+                  color: widget.isDarkTheme ? AppColors.darkTextSecondary : Colors.grey.shade700,
                 ),
               ),
               const SizedBox(height: 8),
@@ -361,7 +575,7 @@ class BatchSelectionPanel extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: isDarkTheme
+                  color: widget.isDarkTheme
                       ? isSuccess ? AppColors.success.withOpacity(0.1) : AppColors.error.withOpacity(0.1)
                       : isSuccess ? Colors.green.shade50 : Colors.red.shade50,
                   borderRadius: BorderRadius.circular(8),
@@ -373,13 +587,11 @@ class BatchSelectionPanel extends StatelessWidget {
                 child: Text(
                   message,
                   style: TextStyle(
-                    color: isDarkTheme ? AppColors.darkTextPrimary : AppColors.text,
+                    color: widget.isDarkTheme ? AppColors.darkTextPrimary : AppColors.text,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
-
-              // Error code if present
               if (result['errorCode'] != null) ...[
                 const SizedBox(height: 12),
                 Row(
@@ -389,7 +601,7 @@ class BatchSelectionPanel extends StatelessWidget {
                       'Mã lỗi: ',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: isDarkTheme ? AppColors.darkTextSecondary : Colors.grey.shade700,
+                        color: widget.isDarkTheme ? AppColors.darkTextSecondary : Colors.grey.shade700,
                       ),
                     ),
                     Expanded(
@@ -424,26 +636,22 @@ class BatchSelectionPanel extends StatelessWidget {
     });
   }
 
-  // Update device status via API
   Future<void> _updateDeviceStatus(BuildContext context, Device device, bool isSuccess) async {
     final deviceStatusService = serviceLocator<DeviceStatusService>();
 
     print('DEBUG: Starting _updateDeviceStatus for ${device.serial}');
 
-    // Store the context safely - make it nullable
     BuildContext? dialogContext;
 
-    // Show a simple loading dialog that captures its own context
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext ctx) {
-        // Store dialog context for later dismissal
         dialogContext = ctx;
 
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          backgroundColor: isDarkTheme ? AppColors.darkCardBackground : Colors.white,
+          backgroundColor: widget.isDarkTheme ? AppColors.darkCardBackground : Colors.white,
           content: Row(
             children: [
               SizedBox(
@@ -451,7 +659,7 @@ class BatchSelectionPanel extends StatelessWidget {
                 height: 24,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: isDarkTheme ? AppColors.accent : AppColors.primary,
+                  color: widget.isDarkTheme ? AppColors.accent : AppColors.primary,
                 ),
               ),
               const SizedBox(width: 16),
@@ -473,7 +681,6 @@ class BatchSelectionPanel extends StatelessWidget {
 
     try {
       print('DEBUG: Calling deviceStatusService.updateDeviceStatus');
-      // Set a timeout for the API call
       result = await deviceStatusService.updateDeviceStatus(
         deviceSerial: device.serial,
         isSuccessful: isSuccess,
@@ -499,7 +706,6 @@ class BatchSelectionPanel extends StatelessWidget {
     } finally {
       print('DEBUG: In finally block, dismissing dialog');
 
-      // Dismiss the loading dialog safely - check for null first
       if (dialogContext != null) {
         try {
           Navigator.of(dialogContext!).pop();
@@ -508,17 +714,14 @@ class BatchSelectionPanel extends StatelessWidget {
         }
       }
 
-      // Create updated device with new status
       final String newStatus = isSuccess ? 'firmware_uploading' : 'firmware_failed';
       final updatedDevice = device.copyWith(status: newStatus);
 
-      // Update local state if API call was successful
       if (result['success'] == true) {
         print('DEBUG: API call was successful, updating device state');
-        onDeviceMarkDefective(updatedDevice);
+        widget.onDeviceMarkDefective(updatedDevice);
       }
 
-      // Show result dialog
       if (context.mounted) {
         print('DEBUG: Context is still mounted, showing result dialog');
         _showApiResultDialog(context, result, device.serial);

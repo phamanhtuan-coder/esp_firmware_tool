@@ -11,6 +11,7 @@ import 'package:smart_net_firmware_loader/data/services/firmware_flash_service.d
 import 'package:smart_net_firmware_loader/data/services/api_client.dart';
 import 'package:smart_net_firmware_loader/data/services/device_status_service.dart';
 import 'package:smart_net_firmware_loader/presentation/blocs/log/log_bloc.dart';
+import 'package:smart_net_firmware_loader/data/services/planning_service.dart';
 
 final GetIt serviceLocator = GetIt.instance;
 
@@ -57,6 +58,12 @@ void setupServiceLocator() {
   serviceLocator.registerLazySingleton<QrCodeService>(() => QrCodeService(
     logService: serviceLocator<LogService>(),
     bluetoothServer: serviceLocator<BluetoothServer>(),
+  ));
+
+  // Planning service
+  serviceLocator.registerLazySingleton<PlanningService>(() => PlanningService(
+    apiClient: serviceLocator<ApiClient>(),
+    logService: serviceLocator<LogService>(),
   ));
 
   // Bloc registration

@@ -8,7 +8,7 @@ class ApiClient {
 
   ApiClient({
     // this.baseUrl = 'http://localhost:3000/api',
-    this.baseUrl = 'https://d7ba-14-183-169-129.ngrok-free.app/api',
+    this.baseUrl = ' https://a92b-171-250-162-57.ngrok-free.app /api',
 
     http.Client? httpClient,
   }) : _httpClient = httpClient ?? http.Client();

@@ -210,7 +210,12 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     final batches = await _batchService.fetchBatches();
     final ports = _usbService.getAvailablePorts();
     emit(state.copyWith(
-      batches: batches.map((b) => Batch(id: int.parse(b['id']!), name: b['name']!)).toList(),
+      batches: batches.map((b) => Batch(
+        id: b['id']!,
+        name: b['name']!,
+        planningId: b['planning_id'] ?? '',
+        templateId: b['template_id'] ?? '',
+      )).toList(),
       availablePorts: ports,
     ));
   }
@@ -433,7 +438,12 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     final batches = await _batchService.fetchBatchesForPlanning(event.planningId);
     emit(state.copyWith(
       selectedPlanningId: event.planningId,
-      batches: batches.map((b) => Batch(id: int.parse(b['id']!), name: b['name']!)).toList(),
+      batches: batches.map((b) => Batch(
+        id: b['id']!,
+        name: b['name']!,
+        planningId: b['planning_id'] ?? event.planningId, // Use planning ID from event if not in response
+        templateId: b['template_id'] ?? '', // Default empty string if not provided
+      )).toList(),
     ));
   }
 }
