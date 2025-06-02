@@ -2,6 +2,7 @@ import 'package:equatable/equatable.dart';
 import 'package:smart_net_firmware_loader/data/services/arduino_cli_service.dart';
 import 'package:smart_net_firmware_loader/data/services/batch_service.dart';
 import 'package:smart_net_firmware_loader/data/services/firmware_flash_service.dart';
+import 'package:smart_net_firmware_loader/data/services/planning_service.dart';
 import 'package:smart_net_firmware_loader/data/services/usb_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_net_firmware_loader/data/models/batch.dart';
@@ -221,13 +222,21 @@ class LogBloc extends Bloc<LogEvent, LogState> {
   }
 
   Future<void> _onSelectBatch(SelectBatchEvent event, Emitter<LogState> emit) async {
-    final serials = await _batchService.fetchSerialsForBatch(event.batchId);
-    final devices = serials.map((serial) => Device(
-      id: serial,
-      batchId: event.batchId,
-      serial: serial,
-    )).toList();
-    emit(state.copyWith(selectedBatchId: event.batchId, devices: devices));
+    try {
+      final planningService = serviceLocator<PlanningService>();
+      final devices = await planningService.fetchDevices(event.batchId);
+      emit(state.copyWith(
+        selectedBatchId: event.batchId,
+        devices: devices,
+      ));
+    } catch (e) {
+      // Log error but don't rethrow to prevent UI from breaking
+      print('Error fetching devices for batch: $e');
+      emit(state.copyWith(
+        selectedBatchId: event.batchId,
+        devices: [], // Clear devices list on error
+      ));
+    }
   }
 
   void _onSelectDevice(SelectDeviceEvent event, Emitter<LogState> emit) {
@@ -235,7 +244,10 @@ class LogBloc extends Bloc<LogEvent, LogState> {
       (device) => device.id == event.deviceId,
       orElse: () => Device(id: '', batchId: '', serial: ''),
     );
-    emit(state.copyWith(selectedDeviceId: event.deviceId, serialNumber: device.serial));
+    emit(state.copyWith(
+      selectedDeviceId: event.deviceId,
+      serialNumber: device.serial
+    ));
   }
 
   void _onMarkDeviceDefective(MarkDeviceDefectiveEvent event, Emitter<LogState> emit) {
@@ -251,23 +263,6 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     if (deviceToUpdate.id.isEmpty) {
       // Device not found
       emit(state.copyWith(status: 'Device not found: ${event.deviceId}'));
-      return;
-    }
-
-    // Check if it's a Device object with status already set (from API)
-    if (event is Device) {
-      final Device deviceWithStatus = event as Device;
-      final updatedDevices = state.devices.map((device) {
-        if (device.id == deviceWithStatus.id) {
-          return deviceWithStatus; // Use the pre-configured device with status
-        }
-        return device;
-      }).toList();
-
-      emit(state.copyWith(
-        devices: updatedDevices,
-        status: 'Device ${deviceWithStatus.serial} status updated to ${deviceWithStatus.status}'
-      ));
       return;
     }
 

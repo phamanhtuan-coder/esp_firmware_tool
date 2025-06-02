@@ -12,9 +12,11 @@ class Batch {
   });
 
   factory Batch.fromJson(Map<String, dynamic> json) {
+    final batchId = json['production_batch_id']?.toString() ?? '';
     return Batch(
-      id: json['production_batch_id']?.toString() ?? '',
-      name: json['name']?.toString() ?? '',
+      id: batchId,
+      // Use the ID as name if name isn't provided in the API response
+      name: json['name']?.toString() ?? batchId,
       planningId: json['planning_id']?.toString() ?? '',
       templateId: json['template_id']?.toString() ?? '',
     );

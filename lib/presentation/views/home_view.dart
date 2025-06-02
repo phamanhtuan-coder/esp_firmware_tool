@@ -318,19 +318,29 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                               onSerialSubmitted: (value) {
                                 if (value.isNotEmpty) {
                                   context.read<LogBloc>().add(SelectSerialEvent(value));
+                                  _serialController.text = value; // Update the controller text
 
                                   // Check if the entered serial exists in current batch
                                   if (_selectedBatch != null) {
+                                    // Debug log to check the device list and input
+                                    print('Checking serial: $value');
+                                    print('Available devices: ${state.devices.map((d) => d.serial).toList()}');
+
                                     final matchingDevice = state.devices.firstWhere(
-                                      (device) => device.serial == value,
-                                      orElse: () => Device(id: -1, batchId: -1, serial: ''),
+                                      (device) {
+                                        print('Comparing: ${device.serial} with $value');
+                                        return device.serial.trim().toLowerCase() == value.trim().toLowerCase();
+                                      },
+                                      orElse: () => Device(id: '', batchId: '', serial: ''),
                                     );
 
-                                    if (matchingDevice.id != -1) {
+                                    if (matchingDevice.id.isNotEmpty) {
+                                      print('Found matching device: ${matchingDevice.serial}');
                                       // Serial found in the batch, select the device
-                                      setState(() => _selectedDevice = matchingDevice.id.toString());
-                                      context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id.toString()));
+                                      setState(() => _selectedDevice = matchingDevice.id);
+                                      context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id));
                                     } else {
+                                      print('No matching device found for serial: $value');
                                       // Serial not found in current batch
                                       _logService.addLog(
                                         message: 'Serial $value không tồn tại trong lô $_selectedBatch',
@@ -357,7 +367,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                       // Nếu đã nhận được kết quả thành công hoặc timeout/lỗi
                                       // và completer chưa hoàn thành
                                       if (!completer.isCompleted) {
-                                        // Hoàn thành completer nếu có serial, null nếu timeout/l��i
+                                        // Hoàn thành completer nếu có serial, null nếu timeout/lỗi
                                         if (status == QrScanStatus.success) {
                                           // Lưu ý: Serial đã được cập nhật thông qua callback onSerialReceived
                                           // trong QrCodeService, không cần complete với giá trị
@@ -381,13 +391,13 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                   if (_selectedBatch != null) {
                                     final matchingDevice = state.devices.firstWhere(
                                       (device) => device.serial == scannedSerial,
-                                      orElse: () => Device(id: -1, batchId: -1, serial: ''),
+                                      orElse: () => Device(id: '', batchId: '', serial: ''),
                                     );
 
-                                    if (matchingDevice.id != -1) {
+                                    if (matchingDevice.id.isNotEmpty) {
                                       // Serial found in the batch, select the device
-                                      setState(() => _selectedDevice = matchingDevice.id.toString());
-                                      context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id.toString()));
+                                      setState(() => _selectedDevice = matchingDevice.id);
+                                      context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id));
                                       context.read<LogBloc>().add(SelectSerialEvent(scannedSerial));
                                     } else {
                                       // Serial not found in current batch
