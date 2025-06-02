@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -123,7 +124,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     }
   }
 
-  void _handleQrScan() async {
+  void _handleQrScan() {
     setState(() {
       _isQrCodeButtonLoading = true;
       // Clear any existing validation messages
@@ -131,43 +132,75 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
       _serialSuccessText = null;
     });
 
-    try {
-      // Store previous value to check if it changed
-      final previousValue = widget.serialController.text;
-      widget.onQrCodeScan();
+    // Store previous value to check if it changed after scan
+    final previousValue = widget.serialController.text;
 
-      // After onQrCodeScan completes, check if serial value changed
-      // and validate the new value
-      final newValue = widget.serialController.text;
-      if (newValue != previousValue) {
-        // Check if the scanned serial exists in the batch using BLoC state
-        final state = context.read<LogBloc>().state;
-        final deviceExists = state.devices.any(
-          (device) =>
-              device.serial == newValue &&
-              (state.selectedBatchId == null ||
-                  device.batchId.toString() == state.selectedBatchId),
-        );
+    // Start time to track timeout
+    final startTime = DateTime.now();
+    const timeoutDuration = Duration(seconds: 62); // 62 seconds timeout
 
-        setState(() {
-          if (deviceExists) {
-            _serialSuccessText = 'Serial hợp lệ: $newValue';
-            _serialErrorText = null;
-            _isSerialValid = true;
-          } else {
-            _serialErrorText = 'Serial không tồn tại trong lô hiện tại';
-            _serialSuccessText = null;
-            _isSerialValid = false;
-          }
-        });
+    // Invoke the QR scan callback, which will update the controller text if scan succeeds
+    widget.onQrCodeScan();
+
+    // Create a timer to periodically check if the serial value has changed
+    // This solves the async issue without needing to modify the parent widget's callback type
+    Timer.periodic(const Duration(milliseconds: 200), (timer) {
+      // Stop checking if widget is no longer mounted
+      if (!mounted) {
+        timer.cancel();
+        return;
       }
-    } finally {
-      if (mounted) {
+
+      final newValue = widget.serialController.text;
+
+      // If the value has changed, the scan was successful
+      if (newValue != previousValue && newValue.isNotEmpty) {
+        timer.cancel();
+
+        // Validate the new serial
+        _validateReceivedSerial(newValue);
+
+        // End loading state
         setState(() {
           _isQrCodeButtonLoading = false;
         });
       }
-    }
+
+      // Add a timeout to eventually cancel the loading state after 62 seconds
+      if (DateTime.now().difference(startTime) > timeoutDuration) {
+        timer.cancel();
+        if (mounted) {
+          setState(() {
+            _isQrCodeButtonLoading = false;
+          });
+        }
+      }
+    });
+  }
+
+  // New method to validate a received serial number
+  void _validateReceivedSerial(String value) {
+    if (!mounted) return;
+
+    final state = context.read<LogBloc>().state;
+    final deviceExists = state.devices.any(
+      (device) =>
+          device.serial == value &&
+          (state.selectedBatchId == null ||
+              device.batchId.toString() == state.selectedBatchId),
+    );
+
+    setState(() {
+      if (deviceExists) {
+        _serialSuccessText = 'Serial hợp lệ: $value';
+        _serialErrorText = null;
+        _isSerialValid = true;
+      } else {
+        _serialErrorText = 'Serial không tồn tại trong lô hiện tại';
+        _serialSuccessText = null;
+        _isSerialValid = false;
+      }
+    });
   }
 
   // New method to validate serial input on change
@@ -231,17 +264,16 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     return SizedBox(
       height: 48,
       child: ElevatedButton.icon(
-        icon:
-            isLoading
-                ? SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-                : Icon(icon, size: 20),
+        icon: isLoading
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : Icon(icon, size: 20),
         label: Text(isLoading ? 'Đang xử lý...' : text),
         style: ElevatedButton.styleFrom(
           backgroundColor: backgroundColor,
@@ -259,10 +291,9 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     return BlocBuilder<LogBloc, LogState>(
       builder: (context, state) {
         final hasLocalFile = state.localFilePath != null;
-        final fileName =
-            state.localFilePath != null
-                ? state.localFilePath!.split(Platform.pathSeparator).last
-                : '';
+        final fileName = state.localFilePath != null
+            ? state.localFilePath!.split(Platform.pathSeparator).last
+            : '';
 
         return Padding(
           padding: const EdgeInsets.all(16),
@@ -295,18 +326,16 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                               horizontal: 12,
                               vertical: 14,
                             ),
-                            fillColor:
-                                widget.isDarkTheme
-                                    ? hasLocalFile
-                                        ? AppColors.darkCardBackground
-                                            .withOpacity(
-                                              0.5,
-                                            ) // Dimmed when disabled
-                                        : AppColors.darkCardBackground
-                                    : hasLocalFile
+                            fillColor: widget.isDarkTheme
+                                ? hasLocalFile
+                                    ? AppColors.darkCardBackground.withOpacity(
+                                        0.5,
+                                      ) // Dimmed when disabled
+                                    : AppColors.darkCardBackground
+                                : hasLocalFile
                                     ? AppColors.cardBackground.withOpacity(
-                                      0.5,
-                                    ) // Dimmed when disabled
+                                        0.5,
+                                      ) // Dimmed when disabled
                                     : AppColors.cardBackground,
                             filled: true,
                             enabled:
@@ -326,10 +355,9 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                               child: Text('2.0.0'),
                             ),
                           ],
-                          onChanged:
-                              hasLocalFile
-                                  ? null
-                                  : widget.onFirmwareVersionSelected,
+                          onChanged: hasLocalFile
+                              ? null
+                              : widget.onFirmwareVersionSelected,
                           hint: Text(
                             hasLocalFile
                                 ? 'Không khả dụng khi chọn file local'
@@ -399,10 +427,9 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                               horizontal: 12,
                               vertical: 14,
                             ),
-                            fillColor:
-                                widget.isDarkTheme
-                                    ? AppColors.darkCardBackground
-                                    : AppColors.cardBackground,
+                            fillColor: widget.isDarkTheme
+                                ? AppColors.darkCardBackground
+                                : AppColors.cardBackground,
                             filled: true,
                           ),
                         ),
@@ -451,38 +478,35 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
                               borderSide: BorderSide(
-                                color:
-                                    _serialErrorText != null
-                                        ? Colors.red
-                                        : _serialSuccessText != null
+                                color: _serialErrorText != null
+                                    ? Colors.red
+                                    : _serialSuccessText != null
                                         ? Colors.green
                                         : widget.isDarkTheme
-                                        ? Colors.grey
-                                        : Colors.black12,
+                                            ? Colors.grey
+                                            : Colors.black12,
                                 width: 1.0,
                               ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
                               borderSide: BorderSide(
-                                color:
-                                    _serialErrorText != null
-                                        ? Colors.red
-                                        : _serialSuccessText != null
+                                color: _serialErrorText != null
+                                    ? Colors.red
+                                    : _serialSuccessText != null
                                         ? Colors.green
                                         : widget.isDarkTheme
-                                        ? Colors.grey
-                                        : Colors.black12,
+                                            ? Colors.grey
+                                            : Colors.black12,
                                 width: 1.0,
                               ),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
                               borderSide: BorderSide(
-                                color:
-                                    _serialErrorText != null
-                                        ? Colors.red
-                                        : _serialSuccessText != null
+                                color: _serialErrorText != null
+                                    ? Colors.red
+                                    : _serialSuccessText != null
                                         ? Colors.green
                                         : Colors.blue,
                                 width: 2.0,
@@ -492,21 +516,19 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                               horizontal: 12,
                               vertical: 14,
                             ),
-                            fillColor:
-                                widget.isDarkTheme
-                                    ? AppColors.darkCardBackground
-                                    : AppColors.cardBackground,
+                            fillColor: widget.isDarkTheme
+                                ? AppColors.darkCardBackground
+                                : AppColors.cardBackground,
                             filled: true,
                             errorText: _serialErrorText,
                             errorStyle: const TextStyle(color: Colors.red),
                             // Add suffix for success message
-                            suffixIcon:
-                                _serialSuccessText != null
-                                    ? const Icon(
-                                      Icons.check_circle,
-                                      color: Colors.green,
-                                    )
-                                    : null,
+                            suffixIcon: _serialSuccessText != null
+                                ? const Icon(
+                                    Icons.check_circle,
+                                    color: Colors.green,
+                                  )
+                                : null,
                           ),
                           onSubmitted: widget.onSerialSubmitted,
                           onChanged: _validateSerial,
@@ -573,27 +595,24 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                               horizontal: 12,
                               vertical: 14,
                             ),
-                            fillColor:
-                                widget.isDarkTheme
-                                    ? AppColors.darkCardBackground
-                                    : AppColors.cardBackground,
+                            fillColor: widget.isDarkTheme
+                                ? AppColors.darkCardBackground
+                                : AppColors.cardBackground,
                             filled: true,
-                            errorText:
-                                widget.availablePorts.isEmpty
-                                    ? 'Không tìm thấy cổng COM nào'
-                                    : widget.selectedPort == null
+                            errorText: widget.availablePorts.isEmpty
+                                ? 'Không tìm thấy cổng COM nào'
+                                : widget.selectedPort == null
                                     ? 'Cần chọn cổng COM để nạp firmware'
                                     : null,
                           ),
-                          items:
-                              widget.availablePorts
-                                  .map(
-                                    (port) => DropdownMenuItem(
-                                      value: port,
-                                      child: Text(port),
-                                    ),
-                                  )
-                                  .toList(),
+                          items: widget.availablePorts
+                              .map(
+                                (port) => DropdownMenuItem(
+                                  value: port,
+                                  child: Text(port),
+                                ),
+                              )
+                              .toList(),
                           onChanged: widget.onUsbPortSelected,
                           hint: const Text('-- Chọn cổng --'),
                         ),
@@ -621,3 +640,4 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     );
   }
 }
+
