@@ -30,6 +30,8 @@ enum ProcessStep {
   firmwareDownload,    // New step for firmware template download
   templatePreparation, // New step for preparing templates with serial numbers
   systemEvent,         // New step for system events like USB connect/disconnect
+  systemStart,         // New step for system initialization
+  batchSelection,      // New step for batch selection process
 }
 
 enum DataDisplayMode {
@@ -158,21 +160,3 @@ class InputRequestLogEntry extends LogEntry {
         );
 }
 
-// Special log entry for serial monitor input
-class SerialInputLogEntry extends LogEntry {
-  final String prompt;
-  final Function(String) onSerialInput;
-
-  SerialInputLogEntry({
-    required this.prompt,
-    required this.onSerialInput,
-    required super.step,
-    super.deviceId,
-  }) : super(
-          message: prompt,
-          timestamp: DateTime.now(),
-          level: LogLevel.info,
-          requiresInput: true,
-          origin: 'serial-monitor',
-        );
-}

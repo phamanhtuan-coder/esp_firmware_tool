@@ -5,6 +5,9 @@ import 'package:smart_net_firmware_loader/utils/app_colors.dart';
 import 'package:smart_net_firmware_loader/data/services/device_status_service.dart';
 import 'package:smart_net_firmware_loader/data/services/planning_service.dart';
 import 'package:smart_net_firmware_loader/di/service_locator.dart';
+import 'package:provider/provider.dart';
+
+import '../blocs/log/log_bloc.dart';
 
 class BatchSelectionPanel extends StatefulWidget {
   final List<Batch> batches;
@@ -235,6 +238,14 @@ class _BatchSelectionPanelState extends State<BatchSelectionPanel> {
       onChanged: (value) {
         if (value != null) {
           widget.onPlanningSelected(value);
+
+          // Reset batches and devices when planning changes
+          setState(() {
+            _batches = [];
+            _devices = []; // Reset device list when planning changes
+            _deviceErrorMessage = null;
+          });
+
           _loadBatchesForPlanning(value);
         }
       },
@@ -351,12 +362,27 @@ class _BatchSelectionPanelState extends State<BatchSelectionPanel> {
       );
     }
 
+    // Get the current serial from the state or context
+    final logBloc = context.read<LogBloc>();
+    final currentSerial = logBloc.state.serialNumber ?? '';
+
     return ListView.builder(
       itemCount: _devices.length,
       itemBuilder: (context, index) {
         final device = _devices[index];
+
+        // Check if this device matches the currently entered serial
+        final bool isSerialMatch = currentSerial.isNotEmpty &&
+            device.serial.trim().toLowerCase() == currentSerial.trim().toLowerCase();
+
+        // Highlight the row with a more visible background if it matches the current serial
+        final Color? highlightColor = isSerialMatch
+            ? (widget.isDarkTheme ? Colors.blue[800]!.withOpacity(0.4) : Colors.blue[200])
+            : null;
+
         return Container(
           decoration: BoxDecoration(
+            color: isSerialMatch ? highlightColor : null,
             border: Border(
               bottom: BorderSide(
                 color: widget.isDarkTheme ? Colors.grey[700]! : Colors.grey[300]!,
@@ -366,18 +392,41 @@ class _BatchSelectionPanelState extends State<BatchSelectionPanel> {
           ),
           child: ListTile(
             leading: Text('${index + 1}'),
-            title: Text(device.serial),
-            subtitle: Text(
-              device.status == 'defective' ? 'Chờ sửa chữa' :
-              device.status == 'firmware_failed' ? 'Chờ sửa chữa' :
-              device.status == 'firmware_uploading' ? 'Đã nạp firmware' :
-              device.status == 'processing' ? 'Đang xử lý' : 'Chờ xử lý',
+            title: Text(
+              device.serial,
               style: TextStyle(
-                color: device.status == 'defective' || device.status == 'firmware_failed' ? AppColors.error
-                    : device.status == 'firmware_uploading' ? AppColors.success
-                    : device.status == 'processing' ? AppColors.connected
-                    : AppColors.warning,
+                fontWeight: isSerialMatch ? FontWeight.bold : FontWeight.normal,
               ),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  device.status == 'defective' ? 'Chờ sửa chữa' :
+                  device.status == 'firmware_failed' ? 'Chờ sửa chữa' :
+                  device.status == 'firmware_uploading' ? 'Đã nạp firmware' :
+                  device.status == 'processing' ? 'Đang xử lý' : 'Chờ xử lý',
+                  style: TextStyle(
+                    color: device.status == 'defective' || device.status == 'firmware_failed' ? AppColors.error
+                        : device.status == 'firmware_uploading' ? AppColors.success
+                        : device.status == 'processing' ? AppColors.connected
+                        : AppColors.warning,
+                  ),
+                ),
+                // Add status indicator for matching serial
+                if (isSerialMatch)
+                  Text(
+                    device.status == 'firmware_uploading' ? 'Thiết bị sẵn sàng cho Serial Monitor' :
+                    device.status == 'firmware_failed' ? 'Thiết bị đã được đánh dấu lỗi firmware' :
+                    device.status == 'defective' ? 'Thiết bị đã được đánh dấu lỗi' :
+                    'Thiết bị chưa được nạp firmware',
+                    style: TextStyle(
+                      fontStyle: FontStyle.italic,
+                      fontSize: 12,
+                      color: widget.isDarkTheme ? AppColors.darkTextSecondary : Colors.grey[600],
+                    ),
+                  ),
+              ],
             ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
@@ -404,7 +453,7 @@ class _BatchSelectionPanelState extends State<BatchSelectionPanel> {
                 ),
               ],
             ),
-            selected: widget.selectedDevice == device.id.toString(),
+            selected: widget.selectedDevice == device.id.toString() || isSerialMatch,
             selectedTileColor: widget.isDarkTheme ? Colors.blue[900]!.withOpacity(0.2) : Colors.blue[50],
             onTap: () => widget.onDeviceSelected(device.id.toString()),
           ),

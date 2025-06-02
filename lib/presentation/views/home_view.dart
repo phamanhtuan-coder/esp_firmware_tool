@@ -324,7 +324,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                   if (_selectedBatch != null) {
                                     // Debug log to check the device list and input
                                     print('Checking serial: $value');
-                                    print('Available devices: ${state.devices.map((d) => d.serial).toList()}');
+                                    print('Available devices: ${state.devices.map((d) => '${d.serial} (${d.status})').toList()}');
 
                                     final matchingDevice = state.devices.firstWhere(
                                       (device) {
@@ -335,10 +335,48 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                     );
 
                                     if (matchingDevice.id.isNotEmpty) {
-                                      print('Found matching device: ${matchingDevice.serial}');
-                                      // Serial found in the batch, select the device
-                                      setState(() => _selectedDevice = matchingDevice.id);
-                                      context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id));
+                                      print('Found matching device: ${matchingDevice.serial} with status: ${matchingDevice.status}');
+
+                                      // Check device status
+                                      if (matchingDevice.status == 'firmware_uploading') {
+                                        // Serial found in the batch with valid status, select the device
+                                        setState(() => _selectedDevice = matchingDevice.id);
+                                        context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id));
+
+                                        _startSerialMonitor(value); // Start serial monitor for this device
+                                      } else if (matchingDevice.status == 'firmware_upload') {
+                                        // Device is in queue for firmware upload
+                                        _logService.addLog(
+                                          message: 'Serial $value chưa được kích hoạt để nạp firmware',
+                                          level: LogLevel.warning,
+                                          step: ProcessStep.deviceSelection,
+                                          origin: 'system',
+                                        );
+                                      } else if (matchingDevice.status == 'in_progress') {
+                                        // Device hasn't been uploaded with firmware yet
+                                        _logService.addLog(
+                                          message: 'Serial $value còn trong giai đoạn lắp ráp',
+                                          level: LogLevel.warning,
+                                          step: ProcessStep.deviceSelection,
+                                          origin: 'system',
+                                        );
+                                      } else if (matchingDevice.status == 'firmware_failed') {
+                                        // Device marked as failed firmware
+                                        _logService.addLog(
+                                          message: 'Serial $value đã được đánh dấu lỗi firmware trước đó',
+                                          level: LogLevel.error,
+                                          step: ProcessStep.deviceSelection,
+                                          origin: 'system',
+                                        );
+                                      } else {
+                                        // Other status
+                                        _logService.addLog(
+                                          message: 'Serial $value có trạng thái không hợp lệ: ${matchingDevice.status}',
+                                          level: LogLevel.warning,
+                                          step: ProcessStep.deviceSelection,
+                                          origin: 'system',
+                                        );
+                                      }
                                     } else {
                                       print('No matching device found for serial: $value');
                                       // Serial not found in current batch
@@ -349,9 +387,15 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                         origin: 'system',
                                       );
                                     }
+                                  } else {
+                                    // No batch selected
+                                    _logService.addLog(
+                                      message: 'Vui lòng chọn lô sản xuất trước khi nhập serial',
+                                      level: LogLevel.warning,
+                                      step: ProcessStep.deviceSelection,
+                                      origin: 'system',
+                                    );
                                   }
-
-                                  _startSerialMonitor(value);
                                 }
                               },
                               onQrCodeScan: () async {

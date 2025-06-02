@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:smart_net_firmware_loader/data/models/device.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/presentation/blocs/log/log_bloc.dart';
 import 'package:smart_net_firmware_loader/utils/app_colors.dart';
@@ -203,7 +204,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     });
   }
 
-  // New method to validate serial input on change
+  // Enhanced method to validate serial input with detailed status messages
   void _validateSerial(String value) {
     if (value.isEmpty) {
       setState(() {
@@ -214,26 +215,190 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
       return;
     }
 
-    // Check if serial exists in current batch
+    // Check if batch is selected
     final state = context.read<LogBloc>().state;
-    final deviceExists = state.devices.any(
-      (device) =>
-          device.serial == value &&
-          (state.selectedBatchId == null ||
-              device.batchId.toString() == state.selectedBatchId),
-    );
 
-    setState(() {
-      if (deviceExists) {
-        _serialSuccessText = 'Serial hợp lệ';
-        _serialErrorText = null;
-        _isSerialValid = true;
-      } else {
-        _serialErrorText = 'Serial không tồn tại trong lô hiện tại';
+    if (state.selectedBatchId == null) {
+      setState(() {
+        _serialErrorText = 'Vui lòng chọn lô sản xuất trước khi nhập serial';
         _serialSuccessText = null;
         _isSerialValid = false;
-      }
-    });
+      });
+      context.read<LogBloc>().add(
+        AddLogEvent(
+          LogEntry(
+            message: 'Vui lòng chọn lô sản xuất trước khi nhập serial: $value',
+            timestamp: DateTime.now(),
+            level: LogLevel.warning,
+            step: ProcessStep.deviceSelection,
+            origin: 'system',
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Find device with matching serial
+    final matchingDevice = state.devices.firstWhere(
+      (device) => device.serial.trim().toLowerCase() == value.trim().toLowerCase(),
+      orElse: () => Device(id: '', batchId: '', serial: ''),
+    );
+
+    if (matchingDevice.id.isEmpty) {
+      // No matching device found
+      setState(() {
+        _serialErrorText = 'Serial $value không tồn tại trong lô ${state.selectedBatchId}';
+        _serialSuccessText = null;
+        _isSerialValid = false;
+      });
+
+      context.read<LogBloc>().add(
+        AddLogEvent(
+          LogEntry(
+            message: 'Serial $value không tồn tại trong lô ${state.selectedBatchId}',
+            timestamp: DateTime.now(),
+            level: LogLevel.warning,
+            step: ProcessStep.deviceSelection,
+            origin: 'system',
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Check device status and provide appropriate feedback
+    switch (matchingDevice.status) {
+      case 'firmware_uploading':
+        // Only firmware_uploading status is valid for selection
+        setState(() {
+          _serialSuccessText = '✅ Serial hợp lệ - Thiết bị sẵn sàng cho nạp firmware và Serial Monitor';
+          _serialErrorText = null;
+          _isSerialValid = true;
+        });
+        // Select the device in global state
+        context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id));
+        break;
+
+      case 'firmware_upload':
+        // Requires the mobile app to activate first
+        setState(() {
+          _serialErrorText = '🔒 Serial chờ kích hoạt - Quét QR trên app mobile để kích hoạt';
+          _serialSuccessText = null;
+          _isSerialValid = false;
+        });
+        context.read<LogBloc>().add(
+          AddLogEvent(
+            LogEntry(
+              message: 'Serial $value chưa được kích hoạt để nạp firmware. Vui lòng quét QR trên app mobile',
+              timestamp: DateTime.now(),
+              level: LogLevel.warning,
+              step: ProcessStep.deviceSelection,
+              origin: 'system',
+            ),
+          ),
+        );
+        break;
+
+      case 'pending':
+        // Requires the mobile app to activate first
+        setState(() {
+          _serialErrorText = '⚠️ Serial chờ kích hoạt - Quét QR trên app mobile để kích hoạt';
+          _serialSuccessText = null;
+          _isSerialValid = false;
+        });
+        context.read<LogBloc>().add(
+          AddLogEvent(
+            LogEntry(
+              message: 'Serial $value đang ở trạng thái chờ, chưa được kích hoạt. Vui lòng quét QR trên app mobile',
+              timestamp: DateTime.now(),
+              level: LogLevel.warning,
+              step: ProcessStep.deviceSelection,
+              origin: 'system',
+            ),
+          ),
+        );
+        break;
+
+      case 'firmware_failed':
+        setState(() {
+          _serialErrorText = '❌ Thiết bị đã được đánh dấu lỗi firmware';
+          _serialSuccessText = null;
+          _isSerialValid = false;
+        });
+        context.read<LogBloc>().add(
+          AddLogEvent(
+            LogEntry(
+              message: 'Serial $value đã được đánh dấu lỗi firmware trước đó',
+              timestamp: DateTime.now(),
+              level: LogLevel.error,
+              step: ProcessStep.deviceSelection,
+              origin: 'system',
+              deviceId: value,
+            ),
+          ),
+        );
+        break;
+
+      case 'defective':
+        setState(() {
+          _serialErrorText = '❌ Thiết bị đã được đánh dấu lỗi';
+          _serialSuccessText = null;
+          _isSerialValid = false;
+        });
+        context.read<LogBloc>().add(
+          AddLogEvent(
+            LogEntry(
+              message: 'Serial $value đã được đánh dấu lỗi',
+              timestamp: DateTime.now(),
+              level: LogLevel.error,
+              step: ProcessStep.deviceSelection,
+              origin: 'system',
+              deviceId: value,
+            ),
+          ),
+        );
+        break;
+
+      case 'in_progress':
+        setState(() {
+          _serialErrorText = '⚠️ Thiết bị còn trong giai đoạn lắp ráp';
+          _serialSuccessText = null;
+          _isSerialValid = false;
+        });
+        context.read<LogBloc>().add(
+          AddLogEvent(
+            LogEntry(
+              message: 'Serial $value còn trong giai đoạn lắp ráp',
+              timestamp: DateTime.now(),
+              level: LogLevel.warning,
+              step: ProcessStep.deviceSelection,
+              origin: 'system',
+              deviceId: value,
+            ),
+          ),
+        );
+        break;
+
+      default:
+        setState(() {
+          _serialErrorText = '⚠️ Trạng thái thiết bị không hợp lệ: ${matchingDevice.status}';
+          _serialSuccessText = null;
+          _isSerialValid = false;
+        });
+        context.read<LogBloc>().add(
+          AddLogEvent(
+            LogEntry(
+              message: 'Serial $value có trạng thái không hỗ trợ: ${matchingDevice.status}',
+              timestamp: DateTime.now(),
+              level: LogLevel.warning,
+              step: ProcessStep.deviceSelection,
+              origin: 'system',
+              deviceId: value,
+            ),
+          ),
+        );
+        break;
+    }
   }
 
   void _handleRefreshPorts() async {
@@ -265,7 +430,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
       height: 48,
       child: ElevatedButton.icon(
         icon: isLoading
-            ? SizedBox(
+            ? const SizedBox(
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(

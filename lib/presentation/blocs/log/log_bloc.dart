@@ -208,17 +208,39 @@ class LogBloc extends Bloc<LogEvent, LogState> {
   }
 
   Future<void> _onLoadInitialData(LoadInitialDataEvent event, Emitter<LogState> emit) async {
-    final batches = await _batchService.fetchBatches();
-    final ports = _usbService.getAvailablePorts();
-    emit(state.copyWith(
-      batches: batches.map((b) => Batch(
-        id: b['id']!,
-        name: b['name']!,
-        planningId: b['planning_id'] ?? '',
-        templateId: b['template_id'] ?? '',
-      )).toList(),
-      availablePorts: ports,
-    ));
+    try {
+      // Start scanning USB ports
+      add(ScanUsbPortsEvent());
+
+      // Log initialization
+      add(AddLogEvent(LogEntry(
+        message: 'Application initialized successfully',
+        timestamp: DateTime.now(),
+        level: LogLevel.info,
+        step: ProcessStep.systemStart,
+        origin: 'system',
+      )));
+
+
+      // We don't need to load all plannings, batches and devices here
+      // They will be loaded when user selects specific planning/batch
+
+      // Get available ports
+      final ports = _usbService.getAvailablePorts();
+      emit(state.copyWith(availablePorts: ports));
+
+    } catch (e, stackTrace) {
+      print('Error during initialization: $e');
+      print(stackTrace);
+
+      add(AddLogEvent(LogEntry(
+        message: 'Error during initialization: $e',
+        timestamp: DateTime.now(),
+        level: LogLevel.error,
+        step: ProcessStep.systemStart,
+        origin: 'system',
+      )));
+    }
   }
 
   Future<void> _onSelectBatch(SelectBatchEvent event, Emitter<LogState> emit) async {
@@ -437,16 +459,32 @@ class LogBloc extends Bloc<LogEvent, LogState> {
   }
 
   Future<void> _onLoadBatchesForPlanning(LoadBatchesForPlanningEvent event, Emitter<LogState> emit) async {
-    final batches = await _batchService.fetchBatchesForPlanning(event.planningId);
-    emit(state.copyWith(
-      selectedPlanningId: event.planningId,
-      batches: batches.map((b) => Batch(
-        id: b['id']!,
-        name: b['name']!,
-        planningId: b['planning_id'] ?? event.planningId, // Use planning ID from event if not in response
-        templateId: b['template_id'] ?? '', // Default empty string if not provided
-      )).toList(),
-    ));
+    try {
+      final planningService = serviceLocator<PlanningService>();
+      final batches = await planningService.fetchBatches(event.planningId);
+      emit(state.copyWith(
+        selectedPlanningId: event.planningId,
+        batches: batches,
+        // Clear selected batch and devices when planning changes
+        selectedBatchId: null,
+        devices: [],
+      ));
+    } catch (e) {
+      print('Error fetching batches for planning: $e');
+      emit(state.copyWith(
+        selectedPlanningId: event.planningId,
+        batches: [], // Clear batches list on error
+        selectedBatchId: null,
+        devices: [],
+      ));
+
+      add(AddLogEvent(LogEntry(
+        message: 'Không thể tải danh sách lô: $e',
+        timestamp: DateTime.now(),
+        level: LogLevel.error,
+        step: ProcessStep.batchSelection,
+        origin: 'system',
+      )));
+    }
   }
 }
-
