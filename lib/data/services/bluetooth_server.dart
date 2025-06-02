@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 import 'package:smart_net_firmware_loader/utils/debug_logger.dart';
@@ -10,6 +11,8 @@ class BluetoothServer {
   bool _isRunning = false;
   int _port = 12345;
   Function(String)? _onSerialReceived;
+  Timer? _scanTimeoutTimer;
+  static const Duration scanTimeout = Duration(seconds: 60); // 60 seconds timeout
 
   BluetoothServer({required this.logService});
 
@@ -49,6 +52,9 @@ class BluetoothServer {
         origin: 'bluetooth-server',
       );
 
+      // Start scan timeout timer
+      _startScanTimeoutTimer();
+
       _server!.listen(_handleClient);
       return true;
     } catch (e) {
@@ -61,6 +67,27 @@ class BluetoothServer {
       );
       return false;
     }
+  }
+
+  void _startScanTimeoutTimer() {
+    // Cancel any existing timer
+    _scanTimeoutTimer?.cancel();
+
+    // Start a new timer
+    _scanTimeoutTimer = Timer(scanTimeout, () {
+      logService.addLog(
+        message: '⏱️ QR scan timed out after ${scanTimeout.inSeconds} seconds',
+        level: LogLevel.warning,
+        step: ProcessStep.scanQrCode,
+        origin: 'bluetooth-server',
+      );
+      // Stop the server after timeout
+      stop();
+    });
+  }
+
+  void _resetScanTimeoutTimer() {
+    _startScanTimeoutTimer();
   }
 
   void _handleClient(Socket client) {
@@ -88,52 +115,7 @@ class BluetoothServer {
           origin: 'bluetooth-server',
         );
 
-        String? serialNumber;
-        bool isValid = false;
-
-        try {
-          // Try to parse as JSON and extract serial number
-          Map<String, dynamic> jsonData = json.decode(message);
-          if (jsonData.containsKey('type') && jsonData['type'] == 'serial_data' &&
-              jsonData.containsKey('data')) {
-            serialNumber = jsonData['data'].toString();
-            isValid = serialNumber.isNotEmpty && serialNumber.length >= 3;
-          }
-        } catch (e) {
-          // If parsing fails, use the raw message as fallback
-          serialNumber = message;
-          isValid = serialNumber.isNotEmpty && serialNumber.length >= 3;
-        }
-
-        if (isValid && serialNumber != null) {
-          DebugLogger.i('Valid serial received: $message');
-          logService.addLog(
-            message: '✅ Valid serial received: $message',
-            level: LogLevel.success,
-            step: ProcessStep.scanQrCode,
-            origin: 'bluetooth-server',
-          );
-
-          if (_onSerialReceived != null) {
-            DebugLogger.d('Calling onSerialReceived callback with extracted serial: $serialNumber',
-              className: 'BluetoothServer');
-            _onSerialReceived!(serialNumber);
-          }
-
-          // Send acknowledgment back to client
-          _sendAcknowledgment(client, true, 'Serial received successfully');
-        } else {
-          DebugLogger.w('Invalid serial format received: $message');
-          logService.addLog(
-            message: '❌ Invalid serial format: $message',
-            level: LogLevel.warning,
-            step: ProcessStep.scanQrCode,
-            origin: 'bluetooth-server',
-          );
-
-          // Send error response back to client
-          _sendAcknowledgment(client, false, 'Invalid serial format');
-        }
+        _handleReceivedData(client, message);
       },
       onError: (error) {
         DebugLogger.e('Client error', error: error);
@@ -157,6 +139,64 @@ class BluetoothServer {
         client.destroy();
       },
     );
+  }
+
+  void _handleReceivedData(Socket client, String message) {
+    String? serialNumber;
+    bool isValid = false;
+
+    try {
+      // Try to parse as JSON and extract serial number
+      Map<String, dynamic> jsonData = json.decode(message);
+      if (jsonData.containsKey('type') && jsonData['type'] == 'serial_data' &&
+          jsonData.containsKey('data')) {
+        serialNumber = jsonData['data'].toString();
+        isValid = serialNumber.isNotEmpty && serialNumber.length >= 3;
+      }
+    } catch (e) {
+      // If parsing fails, use the raw message as fallback
+      serialNumber = message;
+      isValid = serialNumber.isNotEmpty && serialNumber.length >= 3;
+    }
+
+    // Reset the timer whenever we receive any data to extend the timeout
+    _resetScanTimeoutTimer();
+
+    if (isValid && serialNumber != null) {
+      DebugLogger.i('Valid serial received: $serialNumber');
+      logService.addLog(
+        message: '✅ Valid serial received: $serialNumber',
+        level: LogLevel.success,
+        step: ProcessStep.scanQrCode,
+        origin: 'bluetooth-server',
+      );
+
+      if (_onSerialReceived != null) {
+        DebugLogger.d('Calling onSerialReceived callback with extracted serial: $serialNumber',
+          className: 'BluetoothServer');
+        _onSerialReceived!(serialNumber);
+
+        // Cancel the timeout timer when we successfully receive a valid serial
+        _scanTimeoutTimer?.cancel();
+        _scanTimeoutTimer = null;
+      }
+
+      // Send acknowledgment back to client
+      _sendAcknowledgment(client, true, 'Serial received successfully');
+    } else {
+      DebugLogger.w('Invalid serial format received: $message');
+      logService.addLog(
+        message: '❌ Invalid serial format: $message',
+        level: LogLevel.warning,
+        step: ProcessStep.scanQrCode,
+        origin: 'bluetooth-server',
+      );
+
+      // Send error response back to client
+      _sendAcknowledgment(client, false, 'Invalid serial format');
+
+      // Note: We DO NOT stop listening for data here, we continue until timeout
+    }
   }
 
   void _sendAcknowledgment(Socket client, bool success, String message) {
@@ -188,6 +228,10 @@ class BluetoothServer {
     DebugLogger.d('Stopping server', className: 'BluetoothServer', methodName: 'stop');
 
     try {
+      // Cancel any active timeout timer
+      _scanTimeoutTimer?.cancel();
+      _scanTimeoutTimer = null;
+
       await _server?.close();
       _server = null;
       _isRunning = false;

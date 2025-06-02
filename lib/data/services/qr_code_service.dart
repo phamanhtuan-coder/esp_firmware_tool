@@ -4,10 +4,24 @@ import 'package:smart_net_firmware_loader/data/services/bluetooth_server.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 import 'package:smart_net_firmware_loader/utils/debug_logger.dart';
 
+// Enum để đại diện cho trạng thái quét QR
+enum QrScanStatus {
+  idle,       // Chưa quét
+  scanning,   // Đang quét
+  success,    // Quét thành công
+  timeout,    // Hết thời gian
+  error       // Lỗi
+}
+
 class QrCodeService {
   final LogService _logService;
   final BluetoothServer _bluetoothServer;
   bool _isScanning = false;
+
+  // Thêm các callback và controller để thông báo khi có thay đổi trạng thái
+  final _statusController = StreamController<QrScanStatus>.broadcast();
+  Stream<QrScanStatus> get statusStream => _statusController.stream;
+  QrScanStatus _currentStatus = QrScanStatus.idle;
 
   QrCodeService({
     required LogService logService,
@@ -18,12 +32,23 @@ class QrCodeService {
   }
 
   bool get isScanning => _isScanning;
+  QrScanStatus get currentStatus => _currentStatus;
+
+  void _updateStatus(QrScanStatus newStatus) {
+    DebugLogger.d('Scan status changed: $_currentStatus -> $newStatus',
+        className: 'QrCodeService', methodName: '_updateStatus');
+
+    _currentStatus = newStatus;
+    _statusController.add(newStatus);
+  }
 
   /// Bắt đầu quét mã QR, tạo server và đợi kết nối từ app di động
   /// Trả về số serial nếu nhận được, ngược lại trả về null
+  /// Callback onStatusChanged được gọi khi trạng thái quét thay đổi
   Future<String?> scanQrCode({
     int timeoutSeconds = 60,
-    int port = 12345
+    int port = 12345,
+    Function(QrScanStatus status)? onStatusChanged,
   }) async {
     DebugLogger.d('scanQrCode called with timeout: $timeoutSeconds, port: $port',
       className: 'QrCodeService', methodName: 'scanQrCode');
@@ -40,6 +65,9 @@ class QrCodeService {
     }
 
     _isScanning = true;
+    _updateStatus(QrScanStatus.scanning);
+    if (onStatusChanged != null) onStatusChanged(QrScanStatus.scanning);
+
     DebugLogger.i('Starting QR code scanning process');
     _logService.addLog(
       message: '🔍 Bắt đầu quét mã QR code...',
@@ -62,6 +90,10 @@ class QrCodeService {
             step: ProcessStep.scanQrCode,
             origin: 'qr-service',
           );
+
+          _updateStatus(QrScanStatus.success);
+          if (onStatusChanged != null) onStatusChanged(QrScanStatus.success);
+
           completer.complete(serial);
         }
       },
@@ -70,6 +102,9 @@ class QrCodeService {
 
     if (!success) {
       _isScanning = false;
+      _updateStatus(QrScanStatus.error);
+      if (onStatusChanged != null) onStatusChanged(QrScanStatus.error);
+
       DebugLogger.e('Failed to start QR code server');
       _logService.addLog(
         message: '❌ Không thể khởi động server QR code',
@@ -109,11 +144,22 @@ class QrCodeService {
           step: ProcessStep.scanQrCode,
           origin: 'qr-service',
         );
+
+        _updateStatus(QrScanStatus.timeout);
+        if (onStatusChanged != null) onStatusChanged(QrScanStatus.timeout);
+
         return null;
       });
     } finally {
       // Dừng server sau khi hoàn thành hoặc timeout
       _isScanning = false;
+
+      // Nếu kết thúc mà không phải do success/timeout/error (ví dụ: user cancel)
+      if (_currentStatus == QrScanStatus.scanning) {
+        _updateStatus(QrScanStatus.idle);
+        if (onStatusChanged != null) onStatusChanged(QrScanStatus.idle);
+      }
+
       DebugLogger.d('Cleaning up after QR scan (success: ${result != null})', className: 'QrCodeService', methodName: 'scanQrCode');
       await _bluetoothServer.stop();
     }
@@ -199,17 +245,21 @@ class QrCodeService {
   Future<void> stopScanning() async {
     DebugLogger.d('stopScanning called', className: 'QrCodeService', methodName: 'stopScanning');
     if (_isScanning) {
-      _isScanning = false;
-      await _bluetoothServer.stop();
-      DebugLogger.i('QR code scanning stopped');
       _logService.addLog(
-        message: '🛑 Đã dừng quá trình quét QR code',
+        message: '🛑 Dừng quá trình quét QR code',
         level: LogLevel.info,
         step: ProcessStep.scanQrCode,
         origin: 'qr-service',
       );
-    } else {
-      DebugLogger.i('No active QR scanning to stop');
+
+      _updateStatus(QrScanStatus.idle);
+      _isScanning = false;
+      await _bluetoothServer.stop();
     }
+  }
+
+  /// Dispose resources
+  void dispose() {
+    _statusController.close();
   }
 }

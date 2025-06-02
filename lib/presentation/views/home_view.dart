@@ -345,7 +345,35 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                 }
                               },
                               onQrCodeScan: () async {
-                                final scannedSerial = await _qrCodeService.scanQrCode();
+                                // Phương thức này sẽ được gọi khi nút Quét QR được nhấn
+                                final completer = Completer<String?>();
+
+                                // Sử dụng callback status để theo dõi trạng thái quét
+                                final scannedSerial = await _qrCodeService.scanQrCode(
+                                  onStatusChanged: (status) {
+                                    if (status == QrScanStatus.success ||
+                                        status == QrScanStatus.timeout ||
+                                        status == QrScanStatus.error) {
+                                      // Nếu đã nhận được kết quả thành công hoặc timeout/lỗi
+                                      // và completer chưa hoàn thành
+                                      if (!completer.isCompleted) {
+                                        // Hoàn thành completer nếu có serial, null nếu timeout/l��i
+                                        if (status == QrScanStatus.success) {
+                                          // Lưu ý: Serial đã được cập nhật thông qua callback onSerialReceived
+                                          // trong QrCodeService, không cần complete với giá trị
+                                          completer.complete("");
+                                        } else {
+                                          completer.complete(null);
+                                        }
+                                      }
+                                    }
+                                  }
+                                );
+
+                                // Đợi cho đến khi quét hoàn tất hoặc hết thời gian
+                                await completer.future;
+
+                                // Nếu quét thành công và nhận được serial
                                 if (scannedSerial != null) {
                                   _serialController.text = scannedSerial;
 
@@ -596,6 +624,4 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   }
 
 }
-
-
 
