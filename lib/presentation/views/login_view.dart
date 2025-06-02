@@ -48,23 +48,48 @@ class _LoginViewState extends State<LoginView> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(Icons.signal_wifi_4_bar, size: 48, color: AppColors.background),
-              ),
-              const SizedBox(height: 16),
-              const Text('Firmware Deployment Tool', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.text)),
-              const Text('Đăng nhập để tiếp tục', style: TextStyle(fontSize: 14, color: AppColors.text)),
-              const SizedBox(height: 32),
-              Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: [BoxShadow(color: AppColors.shadowColor, blurRadius: 8)],
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.shadowColor.withOpacity(0.1),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Image.asset(
+                  'assets/app_icon.png',
+                  width: 120,
+                  height: 120,
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'SmartNet Firmware Loader',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Đăng nhập để tiếp tục',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 32),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [BoxShadow(color: AppColors.shadowColor.withOpacity(0.1), blurRadius: 20)],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -72,16 +97,19 @@ class _LoginViewState extends State<LoginView> {
                     if (_isLoading) ...[
                       Container(
                         margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppColors.error.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(4),
+                          color: AppColors.error.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
                           children: const [
-                            Icon(Icons.error, size: 16, color: AppColors.error),
-                            SizedBox(width: 8),
-                            Text('Vui lòng điền đầy đủ thông tin đăng nhập', style: TextStyle(color: AppColors.error)),
+                            Icon(Icons.error_outline, size: 20, color: AppColors.error),
+                            SizedBox(width: 12),
+                            Text(
+                              'Vui lòng điền đầy đủ thông tin đăng nhập',
+                              style: TextStyle(color: AppColors.error),
+                            ),
                           ],
                         ),
                       ),
@@ -90,24 +118,37 @@ class _LoginViewState extends State<LoginView> {
                       controller: _usernameController,
                       decoration: InputDecoration(
                         labelText: 'Tên đăng nhập',
-                        prefixIcon: const Icon(Icons.person, color: AppColors.text),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        hintText: 'Nhập tên đăng nhập của bạn',
+                        prefixIcon: const Icon(Icons.person_outline, color: AppColors.primary),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     TextField(
                       controller: _passwordController,
                       obscureText: !_showPassword,
                       decoration: InputDecoration(
                         labelText: 'Mật khẩu',
-                        prefixIcon: const Icon(Icons.lock, color: AppColors.text),
+                        hintText: 'Nhập mật khẩu của bạn',
+                        prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
                         suffixIcon: IconButton(
-                          icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility, color: AppColors.text),
+                          icon: Icon(
+                            _showPassword ? Icons.visibility_off : Icons.visibility,
+                            color: AppColors.primary,
+                          ),
                           onPressed: () => setState(() => _showPassword = !_showPassword),
                         ),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -117,23 +158,40 @@ class _LoginViewState extends State<LoginView> {
                         onPressed: _isLoading ? null : () => _login(context),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 2,
                         ),
                         child: _isLoading
                             ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(color: AppColors.background, strokeWidth: 2),
-                        )
-                            : const Text('Đăng nhập', style: TextStyle(color: AppColors.background, fontWeight: FontWeight.bold)),
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Đăng nhập',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
-              const Text('Phiên bản 1.0.0', style: TextStyle(fontSize: 12, color: AppColors.text)),
+              const SizedBox(height: 24),
+              const Text(
+                'Phiên bản 1.0.0',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                ),
+              ),
             ],
           ),
         ),
@@ -141,3 +199,4 @@ class _LoginViewState extends State<LoginView> {
     );
   }
 }
+

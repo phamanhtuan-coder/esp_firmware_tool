@@ -6,6 +6,7 @@ class AppColors {
   static const Color accent = Color(0xFF42A5F5);
   static const Color background = Color(0xFFF5F5F5);
   static const Color text = Color(0xFF212121);
+  static const Color textSecondary = Color(0xFF757575);
 
   // Status colors
   static const Color connected = Color(0xFF2196F3); // Blue
