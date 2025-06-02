@@ -7,6 +7,7 @@ import 'package:smart_net_firmware_loader/data/services/planning_service.dart';
 import 'package:smart_net_firmware_loader/di/service_locator.dart';
 import 'package:provider/provider.dart';
 
+import '../../data/models/log_entry.dart';
 import '../blocs/log/log_bloc.dart';
 
 class BatchSelectionPanel extends StatefulWidget {
@@ -690,6 +691,7 @@ class _BatchSelectionPanelState extends State<BatchSelectionPanel> {
 
   Future<void> _updateDeviceStatus(BuildContext context, Device device, bool isSuccess) async {
     final deviceStatusService = serviceLocator<DeviceStatusService>();
+    final logBloc = context.read<LogBloc>();
 
     print('DEBUG: Starting _updateDeviceStatus for ${device.serial}');
 
@@ -766,12 +768,44 @@ class _BatchSelectionPanelState extends State<BatchSelectionPanel> {
         }
       }
 
-      final String newStatus = isSuccess ? 'firmware_uploading' : 'firmware_failed';
-      final updatedDevice = device.copyWith(status: newStatus);
+      // Thực hiện làm mới danh sách bất kể API call thành công hay thất bại
+      if (widget.selectedBatch != null) {
+        print('DEBUG: Refreshing device list for batch ${widget.selectedBatch} after API call');
 
-      if (result['success'] == true) {
-        print('DEBUG: API call was successful, updating device state');
-        widget.onDeviceMarkDefective(updatedDevice);
+        final logMessage = result['success'] == true
+            ? 'Làm mới danh sách thiết bị sau khi cập nhật trạng thái ${device.serial} thành công'
+            : 'Làm mới danh sách thiết bị để kiểm tra trạng thái hiện tại';
+
+        // Log về việc làm mới danh sách
+        logBloc.add(
+          AddLogEvent(
+            LogEntry(
+              message: logMessage,
+              timestamp: DateTime.now(),
+              level: LogLevel.info,
+              step: ProcessStep.deviceRefresh,
+              origin: 'system',
+            ),
+          ),
+        );
+
+        // Nếu API call thành công, cập nhật thiết bị trong global state trước
+        if (result['success'] == true) {
+          // Calculate the new status based on success flag
+          final String newStatus = isSuccess ? 'firmware_uploaded' : 'firmware_failed';
+          final updatedDevice = device.copyWith(status: newStatus);
+
+          // Cập nhật thiết bị trong state toàn cục
+          widget.onDeviceMarkDefective(updatedDevice);
+        }
+
+        // Fetch fresh data using LogBloc event để đồng bộ với server
+        logBloc.add(RefreshBatchDevicesEvent(widget.selectedBatch!));
+
+        // Cũng refresh danh sách local để cập nhật UI ngay lập tức
+        if (mounted) {
+          _loadDevicesForBatch(widget.selectedBatch!);
+        }
       }
 
       if (context.mounted) {
