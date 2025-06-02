@@ -95,6 +95,13 @@ class LoadBatchesForPlanningEvent extends LogEvent {
   List<Object?> get props => [planningId];
 }
 
+class RefreshBatchDevicesEvent extends LogEvent {
+  final String batchId;
+  const RefreshBatchDevicesEvent(this.batchId);
+  @override
+  List<Object?> get props => [batchId];
+}
+
 class LogState extends Equatable {
   final List<Batch> batches;
   final List<Device> devices;
@@ -205,6 +212,7 @@ class LogBloc extends Bloc<LogEvent, LogState> {
       emit(state.copyWith(localFilePath: null));
     });
     on<LoadBatchesForPlanningEvent>(_onLoadBatchesForPlanning);
+    on<RefreshBatchDevicesEvent>(_onRefreshBatchDevices);
   }
 
   Future<void> _onLoadInitialData(LoadInitialDataEvent event, Emitter<LogState> emit) async {
@@ -483,6 +491,31 @@ class LogBloc extends Bloc<LogEvent, LogState> {
         timestamp: DateTime.now(),
         level: LogLevel.error,
         step: ProcessStep.batchSelection,
+        origin: 'system',
+      )));
+    }
+  }
+
+  Future<void> _onRefreshBatchDevices(RefreshBatchDevicesEvent event, Emitter<LogState> emit) async {
+    try {
+      final planningService = serviceLocator<PlanningService>();
+      final devices = await planningService.fetchDevices(event.batchId);
+      emit(state.copyWith(
+        devices: devices,
+        status: 'Devices refreshed for batch: ${event.batchId}',
+      ));
+    } catch (e) {
+      print('Error refreshing devices for batch: $e');
+      emit(state.copyWith(
+        devices: [], // Clear devices list on error
+        status: 'Error refreshing devices for batch: ${event.batchId}',
+      ));
+
+      add(AddLogEvent(LogEntry(
+        message: 'Không thể làm mới danh sách thiết bị: $e',
+        timestamp: DateTime.now(),
+        level: LogLevel.error,
+        step: ProcessStep.deviceRefresh,
         origin: 'system',
       )));
     }

@@ -29,9 +29,10 @@ enum ProcessStep {
   deviceSelection,     // New step for device selection from batch
   firmwareDownload,    // New step for firmware template download
   templatePreparation, // New step for preparing templates with serial numbers
-  systemEvent,         // New step for system events like USB connect/disconnect
-  systemStart,         // New step for system initialization
-  batchSelection,      // New step for batch selection process
+  deviceRefresh,       // New step for refreshing device list from server
+  systemStart,         // System startup and initialization
+  systemEvent,         // System events like device connection/disconnection
+  batchSelection,      // Selecting a batch of devices
 }
 
 enum DataDisplayMode {

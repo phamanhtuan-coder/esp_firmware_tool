@@ -402,14 +402,15 @@ class _BatchSelectionPanelState extends State<BatchSelectionPanel> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  device.status == 'defective' ? 'Chờ sửa chữa' :
-                  device.status == 'firmware_failed' ? 'Chờ sửa chữa' :
-                  device.status == 'firmware_uploading' ? 'Đã nạp firmware' :
-                  device.status == 'firmware_upload' ? 'Chờ nạp firmware' :
+                  device.status == 'firmware_failed' ? 'Chờ sửa chữa / Lỗi' :
+                  device.status == 'firmware_uploading' ? 'Đang nạp firmware' :
+                  device.status == 'firmware_uploaded' ? 'Đã nạp firmware' :
+                  device.status == 'firmware_upload' ? 'Hàng chờ nạp firmware' :
                   device.status == 'processing' ? 'Đang xử lý' : 'Chờ xử lý',
                   style: TextStyle(
-                    color: device.status == 'defective' || device.status == 'firmware_failed' ? AppColors.error
+                    color:  device.status == 'firmware_failed' ? AppColors.error
                         : device.status == 'firmware_uploading' ? AppColors.success
+                        : device.status == 'firmware_uploaded' ? AppColors.success
                         : device.status == 'firmware_upload' ? AppColors.connected
                         : device.status == 'processing' ? AppColors.connected
                         : AppColors.warning,
@@ -418,10 +419,10 @@ class _BatchSelectionPanelState extends State<BatchSelectionPanel> {
                 // Add status indicator for matching serial
                 if (isSerialMatch)
                   Text(
-                    device.status == 'firmware_uploading' ? 'Thiết bị sẵn sàng cho Serial Monitor' :
+                    device.status == 'firmware_uploading' ? 'Thiết bị sẵn sàng để nạp firmware' :
+                    device.status == 'firmware_uploaded' ? 'Thiết bị đã hoàn thành nạp firmware' :
                     device.status == 'firmware_failed' ? 'Thiết bị đã được đánh dấu lỗi firmware' :
-                    device.status == 'defective' ? 'Thiết bị đã được đánh dấu lỗi' :
-                    'Thiết bị chưa được nạp firmware',
+                    device.status == 'firmware_upload' ? 'Thiết bị đang trong hàng chờ nạp firmware':'Thiết bị đang chờ xử lý',
                     style: TextStyle(
                       fontStyle: FontStyle.italic,
                       fontSize: 12,

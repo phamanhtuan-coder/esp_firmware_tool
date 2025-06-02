@@ -209,14 +209,44 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
       if (newValue != previousValue && newValue.isNotEmpty) {
         timer.cancel();
 
-        // Validate the new serial
-        _validateReceivedSerial(newValue);
+        // Keep loading state active a bit longer while we refresh data
+        context.read<LogBloc>().add(
+          AddLogEvent(
+            LogEntry(
+              message: 'Đang làm mới dữ liệu thiết bị từ server...',
+              timestamp: DateTime.now(),
+              level: LogLevel.info,
+              step: ProcessStep.deviceSelection,
+              origin: 'system',
+            ),
+          ),
+        );
 
-        // End loading state and hide snackbar
-        setState(() {
-          _isQrCodeButtonLoading = false;
-        });
-        scaffoldMessenger.hideCurrentSnackBar();
+        // Fetch fresh data from the server before validating
+        if (state.selectedBatchId != null) {
+          context.read<LogBloc>().add(RefreshBatchDevicesEvent(state.selectedBatchId!));
+
+          // Add a small delay to allow time for data refresh and to keep loading indicator visible
+          Future.delayed(const Duration(milliseconds: 800), () {
+            if (!mounted) return;
+
+            // Now validate the serial with fresh data
+            _validateReceivedSerial(newValue);
+
+            // End loading state and hide snackbar
+            setState(() {
+              _isQrCodeButtonLoading = false;
+            });
+            scaffoldMessenger.hideCurrentSnackBar();
+          });
+        } else {
+          // If no batch selected (shouldn't happen due to earlier check), validate immediately
+          _validateReceivedSerial(newValue);
+          setState(() {
+            _isQrCodeButtonLoading = false;
+          });
+          scaffoldMessenger.hideCurrentSnackBar();
+        }
       }
 
       // Add a timeout to eventually cancel the loading state after 62 seconds
@@ -315,6 +345,17 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
         // Only firmware_uploading status is valid for selection
         setState(() {
           _serialSuccessText = '✅ Serial hợp lệ - Thiết bị sẵn sàng cho nạp firmware và Serial Monitor';
+          _serialErrorText = null;
+          _isSerialValid = true;
+        });
+        // Select the device in global state
+        context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id));
+        break;
+
+      case 'firmware_uploaded':
+        // Device already has firmware uploaded
+        setState(() {
+          _serialSuccessText = '✅ Serial hợp lệ - Thiết bị đã hoàn thành nạp firmware';
           _serialErrorText = null;
           _isSerialValid = true;
         });
