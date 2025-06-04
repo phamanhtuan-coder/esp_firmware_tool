@@ -1,8 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:smart_net_firmware_loader/data/models/firmware.dart';
-import 'package:smart_net_firmware_loader/data/services/arduino_cli_service.dart';
 import 'package:smart_net_firmware_loader/data/services/batch_service.dart';
-import 'package:smart_net_firmware_loader/data/services/firmware_flash_service.dart';
 import 'package:smart_net_firmware_loader/data/services/planning_service.dart';
 import 'package:smart_net_firmware_loader/data/services/usb_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -129,6 +127,7 @@ class LogState extends Equatable {
   final List<Firmware> firmwares;
   final int? selectedTemplateId;
   final List<LogEntry> logs;
+  final String? selectedFirmwareVersion;
 
   const LogState({
     this.batches = const [],
@@ -148,6 +147,7 @@ class LogState extends Equatable {
     this.firmwares = const [],
     this.selectedTemplateId,
     this.logs = const [],
+    this.selectedFirmwareVersion,
   });
 
   LogState copyWith({
@@ -168,6 +168,7 @@ class LogState extends Equatable {
     List<Firmware>? firmwares,
     int? selectedTemplateId,
     List<LogEntry>? logs,
+    String? selectedFirmwareVersion,
   }) {
     return LogState(
       batches: batches ?? this.batches,
@@ -187,6 +188,7 @@ class LogState extends Equatable {
       firmwares: firmwares ?? this.firmwares,
       selectedTemplateId: selectedTemplateId ?? this.selectedTemplateId,
       logs: logs ?? this.logs,
+      selectedFirmwareVersion: selectedFirmwareVersion ?? this.selectedFirmwareVersion,
     );
   }
 
@@ -209,6 +211,7 @@ class LogState extends Equatable {
     firmwares,
     selectedTemplateId,
     logs,
+    selectedFirmwareVersion,
   ];
 }
 
@@ -296,18 +299,72 @@ class LogBloc extends Bloc<LogEvent, LogState> {
       // Load both devices and firmwares
       final batchData = await planningService.loadBatchData(event.batchId, event.planningId);
 
+      // Get current batch to check firmware_id
+      final selectedBatch = state.batches.firstWhere(
+        (batch) => batch.id == event.batchId,
+        orElse: () => Batch(
+          id: '',
+          name: '',
+          planningId: '',
+          templateId: '',
+        ),
+      );
+
+      // Get list of firmwares and find the default one
+      final firmwares = batchData['firmwares'] as List<Firmware>;
+      String? defaultFirmwareId;
+
+      // If batch has firmware_id, use it
+      if (selectedBatch.firmwareId != null) {
+        defaultFirmwareId = selectedBatch.firmwareId.toString();
+      } else {
+        // Otherwise find first mandatory and approved firmware
+        final defaultFirmware = firmwares.firstWhere(
+          (fw) => fw.isMandatory && fw.isApproved,
+          orElse: () => firmwares.firstWhere(
+            (fw) => fw.isApproved,
+            orElse: () => firmwares.isNotEmpty ? firmwares.first : Firmware(
+              firmwareId: 0,
+              version: '',
+              name: '',
+              filePath: '',
+              templateId: 0,
+              isMandatory: false,
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+              isDeleted: false,
+              isApproved: false,
+              templateName: '',
+              templateIsDeleted: false,
+              logs: [],
+            ),
+          ),
+        );
+        defaultFirmwareId = defaultFirmware.firmwareId.toString();
+      }
+
       emit(state.copyWith(
         devices: batchData['devices'] as List<Device>,
-        firmwares: batchData['firmwares'] as List<Firmware>,
+        firmwares: firmwares,
         selectedTemplateId: batchData['templateId'] as int?,
         selectedBatchId: event.batchId,
+        selectedFirmwareVersion: defaultFirmwareId,  // Set default firmware
       ));
 
       add(AddLogEvent(LogEntry(
-        message: 'Đã tải ${batchData['devices'].length} thiết bị và ${batchData['firmwares'].length} phiên bản firmware',
+        message: 'Đã tải ${batchData['devices'].length} thiết bị và ${firmwares.length} phiên bản firmware',
         timestamp: DateTime.now(),
         level: LogLevel.info,
         step: ProcessStep.productBatch,
+        origin: 'system',
+      )));
+
+      // Log selected firmware version
+      add(AddLogEvent(LogEntry(
+        message: 'Đã chọn firmware mặc định: $defaultFirmwareId',
+        timestamp: DateTime.now(),
+        level: LogLevel.info,
+        step: ProcessStep.selectFirmware,
         origin: 'system',
       )));
     } catch (e, stackTrace) {

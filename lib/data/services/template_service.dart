@@ -43,27 +43,30 @@ class TemplateService {
       }
     }
 
-    // Look for active BOARD_TYPE directive (not commented out)
-    final boardTypePattern = RegExp(r'^BOARD_TYPE:\s*(\w+)', multiLine: true);
+    // Look for any BOARD_TYPE directive (active or commented)
+    final boardTypePattern = RegExp(r'(?:\/\/\s*)?BOARD_TYPE:\s*(\w+)', multiLine: true);
     final matches = boardTypePattern.allMatches(content);
 
     if (matches.isNotEmpty) {
-      final foundType = matches.first.group(1)?.toLowerCase();
-      if (foundType != null) {
-        boardType = foundType;
-        print('DEBUG: Found active board type: $boardType');
+      // If we find an uncommented BOARD_TYPE, use that
+      for (final match in matches) {
+        final line = match.group(0);
+        if (line != null && !line.trim().startsWith('//')) {
+          final foundType = match.group(1)?.toLowerCase();
+          if (foundType != null) {
+            boardType = foundType;
+            print('DEBUG: Found active board type: $boardType');
+            break;
+          }
+        }
       }
     }
 
-    // If no active board type found, look for commented ones and log them
+    // If no active board type found, log all found types for debugging
     if (boardType == 'esp32') {
-      final commentedPattern = RegExp(r'\/\/\s*BOARD_TYPE:\s*(\w+)', multiLine: true);
-      final commentedMatches = commentedPattern.allMatches(content);
-      if (commentedMatches.isNotEmpty) {
-        print('DEBUG: Found commented board types:');
-        for (final match in commentedMatches) {
-          print('DEBUG: - ${match.group(1)}');
-        }
+      print('DEBUG: No active board type found, all found types:');
+      for (final match in matches) {
+        print('DEBUG: - ${match.group(1)}');
       }
     }
 

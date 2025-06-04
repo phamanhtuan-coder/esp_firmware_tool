@@ -1,15 +1,12 @@
 import 'dart:async';
-import 'package:smart_net_firmware_loader/data/services/bluetooth_server.dart';
-import 'package:smart_net_firmware_loader/data/services/firmware_flash_service.dart';
+import 'package:smart_net_firmware_loader/data/models/batch.dart';
 import 'package:smart_net_firmware_loader/data/services/qr_code_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide SearchBar;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/data/services/arduino_cli_service.dart';
-import 'package:smart_net_firmware_loader/data/services/batch_service.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
-import 'package:smart_net_firmware_loader/data/services/template_service.dart';
 import 'package:smart_net_firmware_loader/data/services/usb_service.dart';
 import 'package:smart_net_firmware_loader/di/service_locator.dart';
 import 'package:smart_net_firmware_loader/presentation/blocs/log/log_bloc.dart';
@@ -43,8 +40,8 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   String? _selectedFirmwareVersion;
   String? _selectedPort;
   bool _isDarkTheme = false;
-  bool _isSearching = false;
   bool _localFileWarning = false;
+  bool _isSearching = false;
   final TextEditingController _serialInputController = TextEditingController();
   int _selectedBaudRate = 115200;
   final List<int> _baudRates = [
@@ -54,9 +51,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   final LogService _logService = serviceLocator<LogService>();
   final UsbService _usbService = serviceLocator<UsbService>();
   final ArduinoCliService _arduinoCliService = serviceLocator<ArduinoCliService>();
-  final TemplateService _templateService = serviceLocator<TemplateService>();
-  final BatchService _batchService = serviceLocator<BatchService>();
-  final BluetoothServer _bluetoothServer = serviceLocator<BluetoothServer>();
   final QrCodeService _qrCodeService = serviceLocator<QrCodeService>();
 
   @override
@@ -72,19 +66,12 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       }
     });
 
-    // Lắng nghe sự kiện thay đổi tab để theo dõi tab nào đang active
     _tabController.addListener(_handleTabChange);
   }
 
-  // Theo dõi khi tab thay đổi
   void _handleTabChange() {
-    // Đảm bảo không render lại UI khi tab index không thay đổi
     if (!mounted) return;
-    setState(() {
-      // Kích hoạt render lại để các tab biết trạng thái active của chúng
-    });
-
-    // Ghi log để debug
+    setState(() {});
     _logService.addLog(
       message: 'Đã chuyển sang tab ${_tabController.index == 0 ? "Console Log" : "Serial Monitor"}',
       level: LogLevel.debug,
@@ -115,22 +102,11 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     });
   }
 
-  // Helper method to log messages
-  void _log(String message, {LogLevel level = LogLevel.info, String origin = 'system'}) {
-    _logService.addLog(
-      message: message,
-      level: level,
-      step: ProcessStep.scanQrCode,
-      origin: origin,
-    );
-  }
-
   @override
   void dispose() {
     _qrCodeService.stopScanning();
     _serialInputController.dispose();
     _serialController.dispose();
-    _searchController.dispose();
     _scrollController.dispose();
     _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
@@ -142,7 +118,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   void _startSerialMonitor(String serialNumber) async {
     final logService = serviceLocator<LogService>();
 
-    // Check if a port is selected
     if (_selectedPort == null || _selectedPort!.isEmpty) {
       logService.addLog(
         message: 'No COM port selected. Please select a COM port first.',
@@ -154,7 +129,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       return;
     }
 
-    // Log that we're starting the serial monitor with specific parameters
     logService.addLog(
       message: 'Starting serial monitor for port $_selectedPort at $_selectedBaudRate baud',
       level: LogLevel.info,
@@ -166,28 +140,22 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     final port = _selectedPort;
 
     if (port != null) {
-      // Try the arduino-cli monitor first as it's more reliable
       final cliSuccess = await logService.startSerialMonitor(port, _selectedBaudRate, serialNumber);
 
       if (!cliSuccess) {
-        // If arduino-cli fails, try the native serial port monitor
         final nativeSuccess = await logService.startNativeSerialMonitor(port, _selectedBaudRate, serialNumber);
 
         if (!nativeSuccess) {
-          // If both methods fail, try alternative methods as a last resort
           await logService.startAlternativeSerialMonitor(port, _selectedBaudRate, serialNumber);
         }
       }
 
-      // Force the UI to refresh and show the tab with serial monitor
       setState(() {
-        _tabController.animateTo(1); // Switch to the Serial Monitor tab (index 1)
+        _tabController.animateTo(1);
       });
 
-      // Set auto-scroll to true when starting a new monitor
       logService.autoScroll = true;
 
-      // Add a test message to verify the stream is working
       logService.addLog(
         message: 'Serial monitor connection established',
         level: LogLevel.serialOutput,
@@ -223,10 +191,8 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       if (result != null && result.files.single.path != null) {
         final filePath = result.files.single.path!;
 
-        // When selecting a local file, clear any version selection
         setState(() => _selectedFirmwareVersion = null);
 
-        // Add the file path to the bloc state
         context.read<LogBloc>().add(SelectLocalFileEvent(filePath));
 
         _logService.addLog(
@@ -244,6 +210,131 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         origin: 'system',
       );
     }
+  }
+
+  Future<void> _flashFirmware() async {
+    if (_selectedPort == null || _selectedPort!.isEmpty) {
+      _logService.addLog(
+        message: 'No COM port selected. Please select a COM port first.',
+        level: LogLevel.warning,
+        step: ProcessStep.flash,
+        origin: 'system',
+      );
+      return;
+    }
+
+    if (_selectedFirmwareVersion == null && _serialController.text.isEmpty) {
+      _logService.addLog(
+        message: 'No firmware version or serial number provided.',
+        level: LogLevel.warning,
+        step: ProcessStep.flash,
+        origin: 'system',
+      );
+      return;
+    }
+
+    final deviceId = _selectedDevice ?? '';
+    final deviceSerial = _serialController.text;
+
+    // Get the device type from the device ID
+    String deviceType = 'esp32'; // Default to ESP32
+    if (deviceId.toLowerCase().contains('esp8266')) {
+      deviceType = 'esp8266';
+    } else if (deviceId.toLowerCase().contains('arduino')) {
+      deviceType = 'arduino_uno';
+    }
+
+    // Start the flashing process
+    context.read<LogBloc>().add(InitiateFlashEvent(
+      deviceId: deviceId,
+      firmwareVersion: _selectedFirmwareVersion ?? '',
+      deviceSerial: deviceSerial,
+      deviceType: deviceType,
+    ));
+
+    // Get the board type
+    final boardFqbn = _arduinoCliService.getBoardFqbn(deviceType);
+
+    // First try to compile
+    _logService.addLog(
+      message: 'Starting compilation...',
+      level: LogLevel.info,
+      step: ProcessStep.firmwareCompile,
+      origin: 'system',
+      deviceId: deviceSerial,
+    );
+
+    // Try to compile the sketch
+    final compileSuccess = await _arduinoCliService.compileSketch(
+      _selectedFirmwareVersion ?? '',
+      boardFqbn,
+      onLog: (log) => _logService.addLog(
+        message: log.message,
+        level: log.level,
+        step: log.step,
+        deviceId: deviceSerial,
+        origin: log.origin,
+        rawOutput: log.rawOutput,
+      ),
+    );
+
+    if (!compileSuccess) {
+      _logService.addLog(
+        message: 'Compilation failed',
+        level: LogLevel.error,
+        step: ProcessStep.firmwareCompile,
+        deviceId: deviceSerial,
+        origin: 'system',
+      );
+      return;
+    }
+
+    // If compilation succeeded, start upload
+    _logService.addLog(
+      message: 'Starting upload...',
+      level: LogLevel.info,
+      step: ProcessStep.flash,
+      deviceId: deviceSerial,
+      origin: 'system',
+    );
+
+    final uploadSuccess = await _arduinoCliService.uploadSketch(
+      _selectedFirmwareVersion ?? '',
+      _selectedPort!,
+      boardFqbn,
+      onLog: (log) => _logService.addLog(
+        message: log.message,
+        level: log.level,
+        step: log.step,
+        deviceId: deviceSerial,
+        origin: log.origin,
+        rawOutput: log.rawOutput,
+      ),
+    );
+
+    if (uploadSuccess) {
+      _logService.addLog(
+        message: 'Firmware upload completed successfully',
+        level: LogLevel.success,
+        step: ProcessStep.flash,
+        deviceId: deviceSerial,
+        origin: 'system',
+      );
+
+      // Start serial monitor after successful upload
+      _startSerialMonitor(deviceSerial);
+    } else {
+      _logService.addLog(
+        message: 'Firmware upload failed',
+        level: LogLevel.error,
+        step: ProcessStep.flash,
+        deviceId: deviceSerial,
+        origin: 'system',
+      );
+    }
+
+    // Reset flashing state
+    context.read<LogBloc>().add(StopProcessEvent());
   }
 
   @override
@@ -283,10 +374,8 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                           onPlanningSelected: (value) {
                             setState(() {
                               _selectedPlanning = value;
-                              // Reset batch selection when planning changes
                               _selectedBatch = null;
                             });
-                            // Load batches for the selected planning
                             context.read<LogBloc>().add(LoadBatchesForPlanningEvent(value!));
                           },
                           onDeviceMarkDefective: (device) {
@@ -304,8 +393,9 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                               selectedFirmwareVersion: _selectedFirmwareVersion,
                               selectedPort: _selectedPort,
                               serialController: _serialController,
-                              onFirmwareVersionSelected: (value) =>
-                                  setState(() => _selectedFirmwareVersion = value),
+                              onFirmwareVersionSelected: (value) {
+                                setState(() => _selectedFirmwareVersion = value);
+                              },
                               onUsbPortSelected: (value) {
                                 setState(() => _selectedPort = value);
                                 context.read<LogBloc>().add(SelectUsbPortEvent(value!));
@@ -318,34 +408,23 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                               onSerialSubmitted: (value) {
                                 if (value.isNotEmpty) {
                                   context.read<LogBloc>().add(SelectSerialEvent(value));
-                                  _serialController.text = value; // Update the controller text
+                                  _serialController.text = value;
 
-                                  // Check if the entered serial exists in current batch
                                   if (_selectedBatch != null) {
-                                    // Debug log to check the device list and input
-                                    print('Checking serial: $value');
-                                    print('Available devices: ${state.devices.map((d) => '${d.serial} (${d.status})').toList()}');
-
                                     final matchingDevice = state.devices.firstWhere(
                                       (device) {
-                                        print('Comparing: ${device.serial} with $value');
                                         return device.serial.trim().toLowerCase() == value.trim().toLowerCase();
                                       },
                                       orElse: () => Device(id: '', batchId: '', serial: ''),
                                     );
 
                                     if (matchingDevice.id.isNotEmpty) {
-                                      print('Found matching device: ${matchingDevice.serial} with status: ${matchingDevice.status}');
-
-                                      // Check device status
                                       if (matchingDevice.status == 'firmware_uploading') {
-                                        // Serial found in the batch with valid status, select the device
                                         setState(() => _selectedDevice = matchingDevice.id);
                                         context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id));
 
-                                        _startSerialMonitor(value); // Start serial monitor for this device
+                                        _startSerialMonitor(value);
                                       } else if (matchingDevice.status == 'firmware_upload') {
-                                        // Device is in queue for firmware upload
                                         _logService.addLog(
                                           message: 'Serial $value chưa được kích hoạt để nạp firmware',
                                           level: LogLevel.warning,
@@ -353,7 +432,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                           origin: 'system',
                                         );
                                       } else if (matchingDevice.status == 'in_progress') {
-                                        // Device hasn't been uploaded with firmware yet
                                         _logService.addLog(
                                           message: 'Serial $value còn trong giai đoạn lắp ráp',
                                           level: LogLevel.warning,
@@ -361,7 +439,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                           origin: 'system',
                                         );
                                       } else if (matchingDevice.status == 'firmware_failed') {
-                                        // Device marked as failed firmware
                                         _logService.addLog(
                                           message: 'Serial $value đã được đánh dấu lỗi firmware trước đó',
                                           level: LogLevel.error,
@@ -369,7 +446,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                           origin: 'system',
                                         );
                                       } else {
-                                        // Other status
                                         _logService.addLog(
                                           message: 'Serial $value có trạng thái không hợp lệ: ${matchingDevice.status}',
                                           level: LogLevel.warning,
@@ -378,8 +454,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                         );
                                       }
                                     } else {
-                                      print('No matching device found for serial: $value');
-                                      // Serial not found in current batch
                                       _logService.addLog(
                                         message: 'Serial $value không tồn tại trong lô $_selectedBatch',
                                         level: LogLevel.warning,
@@ -388,7 +462,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                       );
                                     }
                                   } else {
-                                    // No batch selected
                                     _logService.addLog(
                                       message: 'Vui lòng chọn lô sản xuất trước khi nhập serial',
                                       level: LogLevel.warning,
@@ -399,7 +472,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                 }
                               },
                               onQrCodeScan: () async {
-                                // Check if batch is selected (this is also checked in FirmwareControlPanel, but added here as a safeguard)
                                 if (_selectedBatch == null) {
                                   _logService.addLog(
                                     message: 'Vui lòng chọn lô sản xuất trước khi quét QR code',
@@ -410,22 +482,15 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                   return;
                                 }
 
-                                // Phương thức này sẽ được gọi khi nút Quét QR được nhấn
                                 final completer = Completer<String?>();
 
-                                // Sử dụng callback status để theo dõi trạng thái quét
                                 final scannedSerial = await _qrCodeService.scanQrCode(
                                   onStatusChanged: (status) {
                                     if (status == QrScanStatus.success ||
                                         status == QrScanStatus.timeout ||
                                         status == QrScanStatus.error) {
-                                      // Nếu đã nhận được kết quả thành công hoặc timeout/lỗi
-                                      // và completer chưa hoàn thành
                                       if (!completer.isCompleted) {
-                                        // Hoàn thành completer nếu có serial, null nếu timeout/lỗi
                                         if (status == QrScanStatus.success) {
-                                          // Lưu ý: Serial đã được cập nhật thông qua callback onSerialReceived
-                                          // trong QrCodeService, không cần complete với giá trị
                                           completer.complete("");
                                         } else {
                                           completer.complete(null);
@@ -435,14 +500,11 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                   }
                                 );
 
-                                // Đợi cho đến khi quét hoàn tất hoặc hết thời gian
                                 await completer.future;
 
-                                // Nếu quét thành công và nhận được serial
                                 if (scannedSerial != null) {
                                   _serialController.text = scannedSerial;
 
-                                  // Log để debug
                                   _logService.addLog(
                                     message: 'Đã nhận và xác thực serial từ QR code: $scannedSerial',
                                     level: LogLevel.debug,
@@ -452,13 +514,27 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                 }
                               },
                               availablePorts: _usbService.getAvailablePorts(),
+                              firmwares: state.firmwares,
+                              defaultFirmwareId: state.selectedBatchId != null
+                                  ? state.batches.firstWhere(
+                                      (batch) => batch.id == state.selectedBatchId,
+                                      orElse: () => Batch(
+                                        id: '',
+                                        name: '',
+                                        planningId: '',
+                                        templateId: '',
+                                      ),
+                                    ).firmwareId
+                                  : null,
                             ),
                             ActionButtons(
                               isDarkTheme: _isDarkTheme,
                               onClearLogs: () {
                                 context.read<LogBloc>().add(ClearLogsEvent());
                               },
-                              onInitiateFlash: _flashFirmware,
+                              onInitiateFlash: (deviceId, firmwareVersion, deviceSerial, deviceType) {
+                                _flashFirmware();
+                              },
                               isFlashing: state.isFlashing,
                               selectedPort: _selectedPort,
                               selectedFirmwareVersion: _selectedFirmwareVersion,
@@ -502,7 +578,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                               child: ConsoleTerminalWidget(
                                                 logs: logs,
                                                 scrollController: _scrollController,
-                                                isActiveTab: _tabController.index == 0,  // Thêm dòng này
+                                                isActiveTab: _tabController.index == 0,
                                               ),
                                             );
                                           },
@@ -641,38 +717,5 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       ],
     );
   }
-
-  void _flashFirmware(
-      String deviceId,
-      String firmwareVersion,
-      String serialNumber,
-      String deviceType,
-      ) async {
-    final logBloc = context.read<LogBloc>();
-    log(LogEntry entry) => logBloc.add(AddLogEvent(entry));
-
-    final flashService = FirmwareFlashService(
-      _arduinoCliService,
-      _templateService,
-      _batchService,
-      _usbService,
-    );
-
-    // Use a default firmware version if none is selected (to avoid empty string issues)
-    final effectiveFirmwareVersion = firmwareVersion.isEmpty ? "default" : firmwareVersion;
-
-    await flashService.flash(
-      serialNumber: serialNumber,
-      deviceType: deviceType,
-      firmwareVersion: effectiveFirmwareVersion,
-      localFilePath: logBloc.state.localFilePath,
-      selectedBatch: _selectedBatch,
-      selectedPort: _selectedPort,
-      useQuotesForDefines: false, // Do not use quotes around serial numbers in #define
-      onLog: log,
-    );
-  }
-
 }
-
 

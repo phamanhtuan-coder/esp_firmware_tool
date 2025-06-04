@@ -236,87 +236,107 @@ class ArduinoCliService {
     try {
       if (onLog != null) {
         onLog(LogEntry(
-          message: '🔨 Bắt đầu biên dịch sketch...',
+          message: '🔨 Starting compilation...',
           timestamp: DateTime.now(),
           level: LogLevel.info,
-          step: ProcessStep.firmwareCompile, // Thay đổi từ compile sang firmwareCompile
+          step: ProcessStep.firmwareCompile,
           origin: 'arduino-cli',
         ));
       }
 
-      _activeProcess = await startProcess(['compile', '--fqbn', fqbn, '--verbose', sketchPath]);
+      // Kill any existing process first
+      await killActiveProcess();
 
-      // Handle stdout
-      _activeProcess!.stdout.transform(utf8.decoder).listen((output) {
-        if (onLog != null) {
-          // Split output by lines to handle each line separately
-          for (var line in output.split('\n')) {
-            if (line.trim().isNotEmpty) {
-              onLog(LogEntry(
-                message: line,
-                timestamp: DateTime.now(),
-                level: _getLogLevelFromOutput(line),
-                step: ProcessStep.firmwareCompile, // Thay đổi từ compile sang firmwareCompile
-                origin: 'arduino-cli',
-                rawOutput: line,
-              ));
+      // Start compilation process
+      _activeProcess = await startProcess([
+        'compile',
+        '--fqbn', fqbn,
+        '--verbose',
+        sketchPath,
+      ]);
+
+      final stdout = StringBuffer();
+      final stderr = StringBuffer();
+
+      // Handle stdout stream
+      _activeProcess!.stdout.transform(utf8.decoder).listen(
+        (data) {
+          stdout.write(data);
+          if (onLog != null) {
+            final lines = data.split('\n');
+            for (var line in lines) {
+              if (line.trim().isNotEmpty) {
+                onLog(LogEntry(
+                  message: line.trim(),
+                  timestamp: DateTime.now(),
+                  level: _getLogLevelFromOutput(line),
+                  step: ProcessStep.firmwareCompile,
+                  origin: 'arduino-cli',
+                  rawOutput: line,
+                ));
+              }
             }
           }
-        }
-      });
+        },
+      );
 
-      // Handle stderr
-      _activeProcess!.stderr.transform(utf8.decoder).listen((output) {
-        if (onLog != null) {
-          for (var line in output.split('\n')) {
-            if (line.trim().isNotEmpty) {
-              onLog(LogEntry(
-                message: line,
-                timestamp: DateTime.now(),
-                level: LogLevel.error,
-                step: ProcessStep.firmwareCompile, // Thay đổi từ compile sang firmwareCompile
-                origin: 'arduino-cli',
-                rawOutput: line,
-              ));
+      // Handle stderr stream
+      _activeProcess!.stderr.transform(utf8.decoder).listen(
+        (data) {
+          stderr.write(data);
+          if (onLog != null) {
+            final lines = data.split('\n');
+            for (var line in lines) {
+              if (line.trim().isNotEmpty) {
+                onLog(LogEntry(
+                  message: line.trim(),
+                  timestamp: DateTime.now(),
+                  level: LogLevel.error,
+                  step: ProcessStep.firmwareCompile,
+                  origin: 'arduino-cli',
+                  rawOutput: line,
+                ));
+              }
             }
           }
-        }
-      });
+        },
+      );
 
+      // Wait for process to complete
       final exitCode = await _activeProcess!.exitCode;
       _activeProcess = null;
 
       if (exitCode == 0) {
         if (onLog != null) {
           onLog(LogEntry(
-            message: '✅ Biên dịch thành công',
+            message: '✅ Compilation successful',
             timestamp: DateTime.now(),
             level: LogLevel.success,
-            step: ProcessStep.firmwareCompile, // Thay đổi từ compile sang firmwareCompile
+            step: ProcessStep.firmwareCompile,
             origin: 'arduino-cli',
           ));
         }
         return true;
       } else {
+        final errorMessage = stderr.toString().trim();
         if (onLog != null) {
           onLog(LogEntry(
-            message: '❌ Biên dịch thất bại (exit code: $exitCode)',
+            message: '❌ Compilation failed (exit code: $exitCode)\n$errorMessage',
             timestamp: DateTime.now(),
             level: LogLevel.error,
-            step: ProcessStep.firmwareCompile, // Thay đổi từ compile sang firmwareCompile
+            step: ProcessStep.firmwareCompile,
             origin: 'arduino-cli',
           ));
         }
         return false;
       }
-
     } catch (e) {
       if (onLog != null) {
         onLog(LogEntry(
-          message: '❌ Lỗi trong quá trình biên dịch: $e',
+          message: '❌ Error during compilation: $e',
           timestamp: DateTime.now(),
           level: LogLevel.error,
-          step: ProcessStep.firmwareCompile, // Thay đổi từ compile sang firmwareCompile
+          step: ProcessStep.firmwareCompile,
           origin: 'arduino-cli',
         ));
       }
@@ -329,86 +349,108 @@ class ArduinoCliService {
     try {
       if (onLog != null) {
         onLog(LogEntry(
-          message: '📤 Bắt đầu upload sketch...',
+          message: '📤 Starting upload...',
           timestamp: DateTime.now(),
           level: LogLevel.info,
-          step: ProcessStep.flash, // Sử dụng ProcessStep.flash
+          step: ProcessStep.flash,
           origin: 'arduino-cli',
         ));
       }
 
-      _activeProcess = await startProcess(['upload', '-p', port, '--fqbn', fqbn, '--verbose', sketchPath]);
+      // Kill any existing process first
+      await killActiveProcess();
 
-      // Handle stdout
-      _activeProcess!.stdout.transform(utf8.decoder).listen((output) {
-        if (onLog != null) {
-          for (var line in output.split('\n')) {
-            if (line.trim().isNotEmpty) {
-              onLog(LogEntry(
-                message: line,
-                timestamp: DateTime.now(),
-                level: _getLogLevelFromOutput(line),
-                step: ProcessStep.flash, // Sử dụng ProcessStep.flash
-                origin: 'arduino-cli',
-                rawOutput: line,
-              ));
+      // Start upload process
+      _activeProcess = await startProcess([
+        'upload',
+        '-p', port,
+        '--fqbn', fqbn,
+        '--verbose',
+        sketchPath,
+      ]);
+
+      final stdout = StringBuffer();
+      final stderr = StringBuffer();
+
+      // Handle stdout stream
+      _activeProcess!.stdout.transform(utf8.decoder).listen(
+        (data) {
+          stdout.write(data);
+          if (onLog != null) {
+            final lines = data.split('\n');
+            for (var line in lines) {
+              if (line.trim().isNotEmpty) {
+                onLog(LogEntry(
+                  message: line.trim(),
+                  timestamp: DateTime.now(),
+                  level: _getLogLevelFromOutput(line),
+                  step: ProcessStep.flash,
+                  origin: 'arduino-cli',
+                  rawOutput: line,
+                ));
+              }
             }
           }
-        }
-      });
+        },
+      );
 
-      // Handle stderr
-      _activeProcess!.stderr.transform(utf8.decoder).listen((output) {
-        if (onLog != null) {
-          for (var line in output.split('\n')) {
-            if (line.trim().isNotEmpty) {
-              onLog(LogEntry(
-                message: line,
-                timestamp: DateTime.now(),
-                level: LogLevel.error,
-                step: ProcessStep.flash, // Sử dụng ProcessStep.flash
-                origin: 'arduino-cli',
-                rawOutput: line,
-              ));
+      // Handle stderr stream
+      _activeProcess!.stderr.transform(utf8.decoder).listen(
+        (data) {
+          stderr.write(data);
+          if (onLog != null) {
+            final lines = data.split('\n');
+            for (var line in lines) {
+              if (line.trim().isNotEmpty) {
+                onLog(LogEntry(
+                  message: line.trim(),
+                  timestamp: DateTime.now(),
+                  level: LogLevel.error,
+                  step: ProcessStep.flash,
+                  origin: 'arduino-cli',
+                  rawOutput: line,
+                ));
+              }
             }
           }
-        }
-      });
+        },
+      );
 
+      // Wait for process to complete
       final exitCode = await _activeProcess!.exitCode;
       _activeProcess = null;
 
       if (exitCode == 0) {
         if (onLog != null) {
           onLog(LogEntry(
-            message: '✅ Upload thành công',
+            message: '✅ Upload successful',
             timestamp: DateTime.now(),
             level: LogLevel.success,
-            step: ProcessStep.flash, // Sử dụng ProcessStep.flash
+            step: ProcessStep.flash,
             origin: 'arduino-cli',
           ));
         }
         return true;
       } else {
+        final errorMessage = stderr.toString().trim();
         if (onLog != null) {
           onLog(LogEntry(
-            message: '❌ Upload thất bại (exit code: $exitCode)',
+            message: '❌ Upload failed (exit code: $exitCode)\n$errorMessage',
             timestamp: DateTime.now(),
             level: LogLevel.error,
-            step: ProcessStep.flash, // Sử dụng ProcessStep.flash
+            step: ProcessStep.flash,
             origin: 'arduino-cli',
           ));
         }
         return false;
       }
-
     } catch (e) {
       if (onLog != null) {
         onLog(LogEntry(
-          message: '❌ Lỗi trong quá trình upload: $e',
+          message: '❌ Error during upload: $e',
           timestamp: DateTime.now(),
           level: LogLevel.error,
-          step: ProcessStep.flash, // Sử dụng ProcessStep.flash
+          step: ProcessStep.flash,
           origin: 'arduino-cli',
         ));
       }

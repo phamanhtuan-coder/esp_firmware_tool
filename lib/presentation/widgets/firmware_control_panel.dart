@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:smart_net_firmware_loader/data/models/device.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
+import 'package:smart_net_firmware_loader/data/models/firmware.dart';
 import 'package:smart_net_firmware_loader/presentation/blocs/log/log_bloc.dart';
 import 'package:smart_net_firmware_loader/utils/app_colors.dart';
 
@@ -21,6 +22,8 @@ class FirmwareControlPanel extends StatefulWidget {
   final Function(String) onSerialSubmitted;
   final VoidCallback onQrCodeScan;
   final List<String> availablePorts;
+  final List<Firmware> firmwares;
+  final int? defaultFirmwareId;
 
   const FirmwareControlPanel({
     super.key,
@@ -35,6 +38,8 @@ class FirmwareControlPanel extends StatefulWidget {
     required this.onSerialSubmitted,
     required this.onQrCodeScan,
     required this.availablePorts,
+    required this.firmwares,
+    this.defaultFirmwareId,
   });
 
   @override
@@ -47,7 +52,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
   bool _isQrCodeButtonLoading = false;
   bool _isRefreshButtonLoading = false;
 
-  // Add validation state variables
   String? _serialErrorText;
   String? _serialSuccessText;
   bool _isSerialValid = false;
@@ -126,7 +130,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
   }
 
   void _handleQrScan() {
-    // Check if batch is selected first
     final state = context.read<LogBloc>().state;
     if (state.selectedBatchId == null) {
       setState(() {
@@ -135,7 +138,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
         _isSerialValid = false;
       });
 
-      // Add a log entry to notify the user
       context.read<LogBloc>().add(
         AddLogEvent(
           LogEntry(
@@ -152,12 +154,10 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
 
     setState(() {
       _isQrCodeButtonLoading = true;
-      // Clear any existing validation messages
       _serialErrorText = null;
       _serialSuccessText = null;
     });
 
-    // Show a SnackBar to inform the user what to do while scanning is in progress
     final snackBar = SnackBar(
       content: Row(
         children: [
@@ -174,42 +174,32 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
           ),
         ],
       ),
-      duration: const Duration(days: 1), // Very long duration - will be dismissed manually when scan completes
+      duration: const Duration(days: 1),
       backgroundColor: Colors.blue.shade700,
     );
 
-    // Show the snackbar
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     scaffoldMessenger.hideCurrentSnackBar();
     scaffoldMessenger.showSnackBar(snackBar);
 
-    // Store previous value to check if it changed after scan
     final previousValue = widget.serialController.text;
-
-    // Start time to track timeout
     final startTime = DateTime.now();
-    const timeoutDuration = Duration(seconds: 62); // 62 seconds timeout
+    const timeoutDuration = Duration(seconds: 62);
 
-    // Invoke the QR scan callback, which will update the controller text if scan succeeds
     widget.onQrCodeScan();
 
-    // Create a timer to periodically check if the serial value has changed
-    // This solves the async issue without needing to modify the parent widget's callback type
     Timer.periodic(const Duration(milliseconds: 200), (timer) {
-      // Stop checking if widget is no longer mounted
       if (!mounted) {
         timer.cancel();
-        scaffoldMessenger.hideCurrentSnackBar(); // Hide snackbar if not mounted
+        scaffoldMessenger.hideCurrentSnackBar();
         return;
       }
 
       final newValue = widget.serialController.text;
 
-      // If the value has changed, the scan was successful
       if (newValue != previousValue && newValue.isNotEmpty) {
         timer.cancel();
 
-        // Keep loading state active a bit longer while we refresh data
         context.read<LogBloc>().add(
           AddLogEvent(
             LogEntry(
@@ -222,25 +212,20 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
           ),
         );
 
-        // Fetch fresh data from the server before validating
         if (state.selectedBatchId != null) {
           context.read<LogBloc>().add(RefreshBatchDevicesEvent(state.selectedBatchId!));
 
-          // Add a small delay to allow time for data refresh and to keep loading indicator visible
           Future.delayed(const Duration(milliseconds: 800), () {
             if (!mounted) return;
 
-            // Now validate the serial with fresh data
             _validateReceivedSerial(newValue);
 
-            // End loading state and hide snackbar
             setState(() {
               _isQrCodeButtonLoading = false;
             });
             scaffoldMessenger.hideCurrentSnackBar();
           });
         } else {
-          // If no batch selected (shouldn't happen due to earlier check), validate immediately
           _validateReceivedSerial(newValue);
           setState(() {
             _isQrCodeButtonLoading = false;
@@ -249,7 +234,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
         }
       }
 
-      // Add a timeout to eventually cancel the loading state after 62 seconds
       if (DateTime.now().difference(startTime) > timeoutDuration) {
         timer.cancel();
         if (mounted) {
@@ -262,14 +246,11 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     });
   }
 
-  // New method to validate a received serial number
   void _validateReceivedSerial(String value) {
     if (!mounted) return;
 
-    // Use the more comprehensive validation method for consistency
     _validateSerial(value);
 
-    // End QR code loading status if it's still active
     if (_isQrCodeButtonLoading) {
       setState(() {
         _isQrCodeButtonLoading = false;
@@ -277,25 +258,28 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     }
   }
 
-  // Enhanced method to validate serial input with detailed status messages
+  void _validateAndSubmitSerial(String value) {
+    _validateSerial(value);
+    if (_isSerialValid) {
+      widget.onSerialSubmitted(value);
+    }
+  }
+
   void _validateSerial(String value) {
     if (value.isEmpty) {
       setState(() {
         _serialErrorText = 'Số serial không được để trống';
         _serialSuccessText = null;
-        _isSerialValid = false;
       });
       return;
     }
 
-    // Check if batch is selected
     final state = context.read<LogBloc>().state;
 
     if (state.selectedBatchId == null) {
       setState(() {
         _serialErrorText = 'Vui lòng chọn lô sản xuất trước khi nhập serial';
         _serialSuccessText = null;
-        _isSerialValid = false;
       });
       context.read<LogBloc>().add(
         AddLogEvent(
@@ -311,18 +295,15 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
       return;
     }
 
-    // Find device with matching serial
     final matchingDevice = state.devices.firstWhere(
       (device) => device.serial.trim().toLowerCase() == value.trim().toLowerCase(),
       orElse: () => Device(id: '', batchId: '', serial: ''),
     );
 
     if (matchingDevice.id.isEmpty) {
-      // No matching device found
       setState(() {
         _serialErrorText = 'Serial $value không tồn tại trong lô ${state.selectedBatchId}';
         _serialSuccessText = null;
-        _isSerialValid = false;
       });
 
       context.read<LogBloc>().add(
@@ -339,148 +320,64 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
       return;
     }
 
-    // Check device status and provide appropriate feedback
     switch (matchingDevice.status) {
       case 'firmware_uploading':
-        // Only firmware_uploading status is valid for selection
         setState(() {
           _serialSuccessText = '✅ Serial hợp lệ - Thiết bị sẵn sàng cho nạp firmware và Serial Monitor';
           _serialErrorText = null;
           _isSerialValid = true;
         });
-        // Select the device in global state
         context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id));
         break;
 
       case 'firmware_uploaded':
-        // Device already has firmware uploaded
         setState(() {
           _serialSuccessText = '✅ Serial hợp lệ - Thiết bị đã hoàn thành nạp firmware';
           _serialErrorText = null;
-          _isSerialValid = true;
         });
-        // Select the device in global state
         context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id));
         break;
 
       case 'firmware_upload':
-        // Requires the mobile app to activate first
         setState(() {
           _serialErrorText = '🔒 Serial chờ kích hoạt - Quét QR trên app mobile để kích hoạt';
           _serialSuccessText = null;
-          _isSerialValid = false;
         });
-        context.read<LogBloc>().add(
-          AddLogEvent(
-            LogEntry(
-              message: 'Serial $value chưa được kích hoạt để nạp firmware. Vui lòng quét QR trên app mobile',
-              timestamp: DateTime.now(),
-              level: LogLevel.warning,
-              step: ProcessStep.deviceSelection,
-              origin: 'system',
-            ),
-          ),
-        );
         break;
 
       case 'pending':
-        // Requires the mobile app to activate first
         setState(() {
           _serialErrorText = '⚠️ Serial chờ kích hoạt - Quét QR trên app mobile để kích hoạt';
           _serialSuccessText = null;
-          _isSerialValid = false;
         });
-        context.read<LogBloc>().add(
-          AddLogEvent(
-            LogEntry(
-              message: 'Serial $value đang ở trạng thái chờ, chưa được kích hoạt. Vui lòng quét QR trên app mobile',
-              timestamp: DateTime.now(),
-              level: LogLevel.warning,
-              step: ProcessStep.deviceSelection,
-              origin: 'system',
-            ),
-          ),
-        );
         break;
 
       case 'firmware_failed':
         setState(() {
           _serialErrorText = '❌ Thiết bị đã được đánh dấu lỗi firmware';
           _serialSuccessText = null;
-          _isSerialValid = false;
         });
-        context.read<LogBloc>().add(
-          AddLogEvent(
-            LogEntry(
-              message: 'Serial $value đã được đánh dấu lỗi firmware trước đó',
-              timestamp: DateTime.now(),
-              level: LogLevel.error,
-              step: ProcessStep.deviceSelection,
-              origin: 'system',
-              deviceId: value,
-            ),
-          ),
-        );
         break;
 
       case 'defective':
         setState(() {
           _serialErrorText = '❌ Thiết bị đã được đánh dấu lỗi';
           _serialSuccessText = null;
-          _isSerialValid = false;
         });
-        context.read<LogBloc>().add(
-          AddLogEvent(
-            LogEntry(
-              message: 'Serial $value đã được đánh dấu lỗi',
-              timestamp: DateTime.now(),
-              level: LogLevel.error,
-              step: ProcessStep.deviceSelection,
-              origin: 'system',
-              deviceId: value,
-            ),
-          ),
-        );
         break;
 
       case 'in_progress':
         setState(() {
           _serialErrorText = '⚠️ Thiết bị còn trong giai đoạn lắp ráp';
           _serialSuccessText = null;
-          _isSerialValid = false;
         });
-        context.read<LogBloc>().add(
-          AddLogEvent(
-            LogEntry(
-              message: 'Serial $value còn trong giai đoạn lắp ráp',
-              timestamp: DateTime.now(),
-              level: LogLevel.warning,
-              step: ProcessStep.deviceSelection,
-              origin: 'system',
-              deviceId: value,
-            ),
-          ),
-        );
         break;
 
       default:
         setState(() {
           _serialErrorText = '⚠️ Trạng thái thiết bị không hợp lệ: ${matchingDevice.status}';
           _serialSuccessText = null;
-          _isSerialValid = false;
         });
-        context.read<LogBloc>().add(
-          AddLogEvent(
-            LogEntry(
-              message: 'Serial $value có trạng thái không hỗ trợ: ${matchingDevice.status}',
-              timestamp: DateTime.now(),
-              level: LogLevel.warning,
-              step: ProcessStep.deviceSelection,
-              origin: 'system',
-              deviceId: value,
-            ),
-          ),
-        );
         break;
     }
   }
@@ -494,7 +391,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
       widget.onUsbPortRefresh();
     } finally {
       if (mounted) {
-        // Giả lập delay để hiệu ứng loading hiển thị đủ lâu
         await Future.delayed(const Duration(milliseconds: 500));
         setState(() {
           _isRefreshButtonLoading = false;
@@ -548,7 +444,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              // Hàng 1: Phiên bản Firmware
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -579,43 +474,43 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                                 ? hasLocalFile
                                     ? AppColors.darkCardBackground.withOpacity(
                                         0.5,
-                                      ) // Dimmed when disabled
+                                      )
                                     : AppColors.darkCardBackground
                                 : hasLocalFile
                                     ? AppColors.cardBackground.withOpacity(
                                         0.5,
-                                      ) // Dimmed when disabled
+                                      )
                                     : AppColors.cardBackground,
                             filled: true,
                             enabled:
-                                !hasLocalFile, // Disable when local file is selected
+                                !hasLocalFile && widget.firmwares.isNotEmpty,
                           ),
-                          items: const [
-                            DropdownMenuItem(
-                              value: '1.0.0',
-                              child: Text('1.0.0'),
-                            ),
-                            DropdownMenuItem(
-                              value: '1.1.0',
-                              child: Text('1.1.0'),
-                            ),
-                            DropdownMenuItem(
-                              value: '2.0.0',
-                              child: Text('2.0.0'),
-                            ),
-                          ],
+                          items: widget.firmwares.map((firmware) {
+                            return DropdownMenuItem(
+                              value: firmware.firmwareId.toString(),
+                              child: Text(
+                                '${firmware.name} (${firmware.version})${firmware.isMandatory ? " - Bắt buộc" : ""}',
+                              ),
+                            );
+                          }).toList(),
                           onChanged: hasLocalFile
                               ? null
-                              : widget.onFirmwareVersionSelected,
+                              : (value) {
+                                  if (value != null) {
+                                    widget.onFirmwareVersionSelected(value);
+                                  }
+                                },
                           hint: Text(
                             hasLocalFile
                                 ? 'Không khả dụng khi chọn file local'
-                                : '-- Chọn phiên bản --',
+                                : widget.firmwares.isEmpty
+                                    ? 'Không có firmware khả dụng'
+                                    : '-- Chọn phiên bản --',
                           ),
                         ),
-                        // Error message if neither firmware version nor local file is selected
                         if (!hasLocalFile &&
-                            widget.selectedFirmwareVersion == null)
+                            widget.selectedFirmwareVersion == null &&
+                            widget.firmwares.isNotEmpty)
                           const Padding(
                             padding: EdgeInsets.only(top: 4),
                             child: Text(
@@ -631,7 +526,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 24),
-                      // Height of label + some spacing
                       _buildLoadingButton(
                         isLoading: _isVersionButtonLoading,
                         onPressed: () => _clearLocalFile(context),
@@ -643,10 +537,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 16),
-
-              // Hàng 2: File Firmware Cục Bộ
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -688,11 +579,9 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                   const SizedBox(width: 8),
                   Padding(
                     padding: const EdgeInsets.only(top: 24),
-                    // Add top padding to align with input field
                     child: _buildLoadingButton(
                       isLoading: _isFileButtonLoading,
                       onPressed: widget.onLocalFileSearch,
-                      // Call onLocalFileSearch to show warning dialog first
                       text: 'Tìm File',
                       icon: Icons.search,
                       backgroundColor: AppColors.findFile,
@@ -700,10 +589,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 16),
-
-              // Hàng 3: Số Serial
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -771,7 +657,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                             filled: true,
                             errorText: _serialErrorText,
                             errorStyle: const TextStyle(color: Colors.red),
-                            // Add suffix for success message
                             suffixIcon: _serialSuccessText != null
                                 ? const Icon(
                                     Icons.check_circle,
@@ -780,9 +665,8 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                                 : null,
                           ),
                           onSubmitted: widget.onSerialSubmitted,
-                          onChanged: _validateSerial,
+                          onChanged: _validateAndSubmitSerial,
                         ),
-                        // Display success message if present
                         if (_serialSuccessText != null)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
@@ -801,7 +685,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Invisible text to match height of label
                       const SizedBox(height: 18),
                       _buildLoadingButton(
                         isLoading: _isQrCodeButtonLoading,
@@ -814,10 +697,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 16),
-
-              // Hàng 4: Cổng COM (USB)
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -871,7 +751,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                   const SizedBox(width: 8),
                   Padding(
                     padding: const EdgeInsets.only(top: 24),
-                    // Add top padding to align with input field
                     child: _buildLoadingButton(
                       isLoading: _isRefreshButtonLoading,
                       onPressed: _handleRefreshPorts,

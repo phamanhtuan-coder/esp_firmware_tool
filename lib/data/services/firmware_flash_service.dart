@@ -119,10 +119,14 @@ class FirmwareFlashService {
           deviceId: serialNumber,
         ));
 
-        final sourceCode = await _batchService.fetchVersionFirmware(batchId: selectedBatch);
+        final sourceCode = await _batchService.fetchVersionFirmware(
+          batchId: selectedBatch,
+          firmwareId: firmwareVersion,
+        );
+
         if (sourceCode == null || sourceCode.isEmpty) {
           onLog(LogEntry(
-            message: '❌ Không thể tải mã nguồn firmware',
+            message: '❌ Không thể tải m�� nguồn firmware',
             timestamp: DateTime.now(),
             level: LogLevel.error,
             step: ProcessStep.firmwareDownload,

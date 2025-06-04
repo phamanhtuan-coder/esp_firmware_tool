@@ -3,22 +3,24 @@ class Batch {
   final String name;
   final String planningId;
   final String templateId;
+  final int? firmwareId;
 
   Batch({
     required this.id,
     required this.name,
     required this.planningId,
     required this.templateId,
+    this.firmwareId,
   });
 
   factory Batch.fromJson(Map<String, dynamic> json) {
     final batchId = json['production_batch_id']?.toString() ?? '';
     return Batch(
       id: batchId,
-      // Use the ID as name if name isn't provided in the API response
       name: json['name']?.toString() ?? batchId,
       planningId: json['planning_id']?.toString() ?? '',
       templateId: json['template_id']?.toString() ?? '',
+      firmwareId: json['firmware_id'] as int?,
     );
   }
 
@@ -28,6 +30,7 @@ class Batch {
       'name': name,
       'planning_id': planningId,
       'template_id': templateId,
+      'firmware_id': firmwareId,
     };
   }
 

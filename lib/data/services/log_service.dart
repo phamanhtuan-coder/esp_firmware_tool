@@ -24,24 +24,17 @@ class LogService {
   // Console log process
   Process? _consoleLogProcess;
 
+  // Whether console log is active
+  bool _consoleLogActive = false;
+
   // Device currently being monitored
   String? _currentDeviceId;
 
   // Whether the serial monitor is active
   bool _serialMonitorActive = false;
 
-  // Whether the console log is active
-  bool _consoleLogActive = false;
-
   // Base directory for firmware templates
   String? _firmwareTemplatesDir;
-
-  // Map to track USB connected devices
-  final Map<String, bool> _connectedDevices = {};
-
-  // Current batch of devices being processed
-  final List<String> _currentBatchSerials = [];
-  final String _currentBatchId = '';
 
   // Serial port instance for native serial monitor
   SerialPort? _serialPort;
@@ -72,9 +65,6 @@ class LogService {
   set autoScroll(bool value) {
     _autoScroll = value;
   }
-
-  // Getter for current batch ID
-  String get currentBatchId => _currentBatchId;
 
   // Get the current serial buffer
   List<LogEntry> getSerialBuffer() {

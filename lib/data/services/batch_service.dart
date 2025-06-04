@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
-import 'package:smart_net_firmware_loader/data/services/arduino_cli_service.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 import 'package:smart_net_firmware_loader/data/services/api_client.dart';
 import 'package:smart_net_firmware_loader/data/models/firmware.dart';
@@ -10,19 +9,13 @@ import 'package:smart_net_firmware_loader/data/models/device.dart';
 /// Service responsible for managing batches, devices, and firmware operations
 class BatchService {
   final LogService _logService;
-  final ArduinoCliService _arduinoCliService;
   final ApiClient _apiClient;
-
-  // Track connections between device IDs and ports
-  final Map<String, String> _devicePortMap = {};
 
   BatchService({
     required LogService logService,
-    required ArduinoCliService arduinoCliService,
     required ApiClient apiClient,
   }) :
     _logService = logService,
-    _arduinoCliService = arduinoCliService,
     _apiClient = apiClient;
 
   Future<List<Firmware>> fetchFirmwares(int templateId) async {
@@ -71,6 +64,7 @@ class BatchService {
 
   Future<String?> fetchVersionFirmware({
     required String batchId,
+    String? firmwareId,
   }) async {
     try {
       _logService.addLog(
@@ -80,22 +74,53 @@ class BatchService {
         origin: 'system',
       );
 
-      // TODO: Implement actual API call
-      // For now, return a basic template for testing
-      return '''
-void setup() {
-  Serial.begin(115200);
-  Serial.println("Device {{SERIAL_NUMBER}} starting...");
-}
+      if (firmwareId == null) {
+        _logService.addLog(
+          message: 'Error: Firmware ID is required',
+          level: LogLevel.error,
+          step: ProcessStep.firmwareDownload,
+          origin: 'system',
+        );
+        return null;
+      }
 
-void loop() {
-  Serial.println("Hello from {{DEVICE_ID}}");
-  delay(1000);
-}
-''';
+      final response = await _apiClient.get('/firmware/detail/$firmwareId');
+
+      if (response['success'] == true && response['data'] != null) {
+        final data = response['data'];
+        final sourceCode = data['file_path'] as String?;
+
+        if (sourceCode == null || sourceCode.isEmpty) {
+          _logService.addLog(
+            message: 'Error: Source code is empty in firmware data',
+            level: LogLevel.error,
+            step: ProcessStep.firmwareDownload,
+            origin: 'system',
+          );
+          return null;
+        }
+
+        _logService.addLog(
+          message: 'Successfully fetched firmware version ${data['version']}',
+          level: LogLevel.success,
+          step: ProcessStep.firmwareDownload,
+          origin: 'system',
+        );
+
+        return sourceCode;
+      } else {
+        final String errorMessage = response['message'] ?? 'Unknown error occurred';
+        _logService.addLog(
+          message: 'Error fetching firmware: $errorMessage',
+          level: LogLevel.error,
+          step: ProcessStep.firmwareDownload,
+          origin: 'system',
+        );
+        return null;
+      }
     } catch (e) {
       _logService.addLog(
-        message: 'Error fetching firmware: $e',
+        message: 'Exception when fetching firmware: $e',
         level: LogLevel.error,
         step: ProcessStep.firmwareDownload,
         origin: 'system',
