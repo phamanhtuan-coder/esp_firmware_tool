@@ -36,7 +36,7 @@ class DeviceStatusService {
     _logService.addLog(
       message: logMessage,
       level: LogLevel.info,
-      step: ProcessStep.updateStatus,
+      step: ProcessStep.deviceStatus, // Changed from updateStatus to deviceStatus
       origin: 'system',
       deviceId: deviceSerial,
     );
@@ -69,7 +69,7 @@ class DeviceStatusService {
       _logService.addLog(
         message: resultMessage,
         level: isSuccess ? LogLevel.success : LogLevel.error,
-        step: ProcessStep.updateStatus,
+        step: ProcessStep.deviceStatus, // Changed from updateStatus to deviceStatus
         origin: 'system',
         deviceId: deviceSerial,
       );
@@ -86,7 +86,7 @@ class DeviceStatusService {
       _logService.addLog(
         message: errorMessage,
         level: LogLevel.error,
-        step: ProcessStep.updateStatus,
+        step: ProcessStep.deviceStatus, // Changed from updateStatus to deviceStatus
         origin: 'system',
         deviceId: deviceSerial,
       );

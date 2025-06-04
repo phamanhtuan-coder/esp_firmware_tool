@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:smart_net_firmware_loader/data/models/firmware.dart';
 import 'package:smart_net_firmware_loader/data/services/arduino_cli_service.dart';
 import 'package:smart_net_firmware_loader/data/services/batch_service.dart';
 import 'package:smart_net_firmware_loader/data/services/firmware_flash_service.dart';
@@ -102,6 +103,14 @@ class RefreshBatchDevicesEvent extends LogEvent {
   List<Object?> get props => [batchId];
 }
 
+class LoadBatchDataEvent extends LogEvent {
+  final String batchId;
+  final String planningId;
+  const LoadBatchDataEvent(this.batchId, this.planningId);
+  @override
+  List<Object?> get props => [batchId, planningId];
+}
+
 class LogState extends Equatable {
   final List<Batch> batches;
   final List<Device> devices;
@@ -117,6 +126,9 @@ class LogState extends Equatable {
   final String? error;
   final String? localFilePath;
   final List<String> serialBuffer;
+  final List<Firmware> firmwares;
+  final int? selectedTemplateId;
+  final List<LogEntry> logs;
 
   const LogState({
     this.batches = const [],
@@ -133,6 +145,9 @@ class LogState extends Equatable {
     this.error,
     this.localFilePath,
     this.serialBuffer = const [],
+    this.firmwares = const [],
+    this.selectedTemplateId,
+    this.logs = const [],
   });
 
   LogState copyWith({
@@ -150,6 +165,9 @@ class LogState extends Equatable {
     String? error,
     String? localFilePath,
     List<String>? serialBuffer,
+    List<Firmware>? firmwares,
+    int? selectedTemplateId,
+    List<LogEntry>? logs,
   }) {
     return LogState(
       batches: batches ?? this.batches,
@@ -166,6 +184,9 @@ class LogState extends Equatable {
       error: error ?? this.error,
       localFilePath: localFilePath ?? this.localFilePath,
       serialBuffer: serialBuffer ?? this.serialBuffer,
+      firmwares: firmwares ?? this.firmwares,
+      selectedTemplateId: selectedTemplateId ?? this.selectedTemplateId,
+      logs: logs ?? this.logs,
     );
   }
 
@@ -185,6 +206,9 @@ class LogState extends Equatable {
     error,
     localFilePath,
     serialBuffer,
+    firmwares,
+    selectedTemplateId,
+    logs,
   ];
 }
 
@@ -213,6 +237,7 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     });
     on<LoadBatchesForPlanningEvent>(_onLoadBatchesForPlanning);
     on<RefreshBatchDevicesEvent>(_onRefreshBatchDevices);
+    on<LoadBatchDataEvent>(_onLoadBatchData);
   }
 
   Future<void> _onLoadInitialData(LoadInitialDataEvent event, Emitter<LogState> emit) async {
@@ -240,284 +265,168 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     } catch (e, stackTrace) {
       print('Error during initialization: $e');
       print(stackTrace);
-
-      add(AddLogEvent(LogEntry(
-        message: 'Error during initialization: $e',
-        timestamp: DateTime.now(),
-        level: LogLevel.error,
-        step: ProcessStep.systemStart,
-        origin: 'system',
-      )));
     }
   }
 
   Future<void> _onSelectBatch(SelectBatchEvent event, Emitter<LogState> emit) async {
-    try {
-      final planningService = serviceLocator<PlanningService>();
-      final devices = await planningService.fetchDevices(event.batchId);
-      emit(state.copyWith(
-        selectedBatchId: event.batchId,
-        devices: devices,
-      ));
-    } catch (e) {
-      // Log error but don't rethrow to prevent UI from breaking
-      print('Error fetching devices for batch: $e');
-      emit(state.copyWith(
-        selectedBatchId: event.batchId,
-        devices: [], // Clear devices list on error
-      ));
-    }
-  }
-
-  void _onSelectDevice(SelectDeviceEvent event, Emitter<LogState> emit) {
-    final device = state.devices.firstWhere(
-      (device) => device.id == event.deviceId,
-      orElse: () => Device(id: '', batchId: '', serial: ''),
-    );
+    // Clear previous device selection when changing batch
     emit(state.copyWith(
-      selectedDeviceId: event.deviceId,
-      serialNumber: device.serial
-    ));
-  }
-
-  void _onMarkDeviceDefective(MarkDeviceDefectiveEvent event, Emitter<LogState> emit) {
-    // Find the device to be updated
-    final deviceToUpdate = state.devices.firstWhere(
-      (device) => device.id == event.deviceId,
-      orElse: () => state.devices.firstWhere(
-        (device) => device.serial == event.deviceId,
-        orElse: () => Device(id: '', batchId: '', serial: ''),
-      ),
-    );
-
-    if (deviceToUpdate.id.isEmpty) {
-      // Device not found
-      emit(state.copyWith(status: 'Device not found: ${event.deviceId}'));
-      return;
-    }
-
-    // Standard handling for marking a device as defective
-    final updatedDevices = state.devices.map((device) {
-      if (device.id == event.deviceId) {
-        return device.copyWith(status: 'defective', reason: event.reason);
-      }
-      return device;
-    }).toList();
-
-    emit(state.copyWith(
-      devices: updatedDevices,
-      status: 'Device ${event.deviceId} marked as defective'
-    ));
-  }
-
-  void _onSelectUsbPort(SelectUsbPortEvent event, Emitter<LogState> emit) {
-    emit(state.copyWith(
-      selectedPort: event.port,
-      status: 'Selected port: ${event.port}'
+      selectedDeviceId: null,
+      selectedBatchId: event.batchId,
     ));
 
-    final logEntry = LogEntry(
-      message: 'Selected COM port: ${event.port}',
-      timestamp: DateTime.now(),
-      level: LogLevel.info,
-      step: ProcessStep.usbCheck,
-      origin: 'system',
-    );
-    add(AddLogEvent(logEntry));
-  }
-
-  void _onScanUsbPorts(ScanUsbPortsEvent event, Emitter<LogState> emit) {
-    final ports = _usbService.getAvailablePorts();
-    emit(state.copyWith(status: 'Scanning ports...', availablePorts: ports));
-  }
-
-  void _onInitiateFlash(InitiateFlashEvent event, Emitter<LogState> emit) async {
-    try {
-      // Set flashing state
-      emit(state.copyWith(isFlashing: true, error: null));
-
-      // Clear previous logs related to flashing
-      final filteredLogs = state.filteredLogs.where((log) => log.step != ProcessStep.flash).toList();
-      emit(state.copyWith(filteredLogs: filteredLogs));
-
-      // Add start flashing notification
+    // Load both devices and firmwares for the new batch
+    if (state.selectedPlanningId != null) {
+      add(LoadBatchDataEvent(event.batchId, state.selectedPlanningId!));
+    } else {
       add(AddLogEvent(LogEntry(
-        message: '🔄 Bắt đầu quá trình flash firmware',
-        timestamp: DateTime.now(),
-        level: LogLevel.info,
-        step: ProcessStep.flash,
-        deviceId: event.deviceSerial,
-        origin: 'system',
-      )));
-
-      // Get the services
-      final firmware = serviceLocator<FirmwareFlashService>();
-      final arduinoCli = serviceLocator<ArduinoCliService>();
-
-      // Verify Arduino CLI
-      final isCliAvailable = await arduinoCli.isCliAvailable();
-      if (!isCliAvailable) {
-        throw Exception('Arduino CLI không có sẵn. Vui lòng cài đặt Arduino CLI trước.');
-      }
-
-      // Call flash service
-      final success = await firmware.flash(
-        serialNumber: event.deviceSerial,
-        deviceType: event.deviceType,
-        firmwareVersion: event.firmwareVersion,
-        localFilePath: state.localFilePath,
-        selectedBatch: state.selectedBatchId,
-        selectedPort: state.selectedPort,
-        onLog: (log) {
-          // Add all logs directly
-          add(AddLogEvent(log));
-        },
-      );
-
-      // Update state and show final status
-      emit(state.copyWith(
-        isFlashing: false,
-        status: success ? 'Flash thành công' : 'Flash thất bại',
-      ));
-
-      // Add completion notification with clear success/failure indication
-      if (success) {
-        add(AddLogEvent(LogEntry(
-          message: '✅ FLASH THÀNH CÔNG: Firmware đã được cài đặt cho thiết bị ${event.deviceSerial}',
-          timestamp: DateTime.now(),
-          level: LogLevel.success,
-          step: ProcessStep.flash,
-          deviceId: event.deviceSerial,
-          origin: 'system',
-        )));
-      } else {
-        add(AddLogEvent(LogEntry(
-          message: '❌ FLASH THẤT BẠI: Không thể cài đặt firmware cho thiết bị ${event.deviceSerial}',
-          timestamp: DateTime.now(),
-          level: LogLevel.error,
-          step: ProcessStep.flash,
-          deviceId: event.deviceSerial,
-          origin: 'system',
-        )));
-      }
-
-    } catch (e) {
-      final errorMessage = 'Lỗi trong quá trình flash: $e';
-
-      emit(state.copyWith(
-        isFlashing: false,
-        error: errorMessage,
-        status: 'Flash thất bại'
-      ));
-
-      add(AddLogEvent(LogEntry(
-        message: '❌ FLASH THẤT BẠI: $errorMessage',
+        message: 'Không thể tải dữ liệu batch: Planning ID không hợp lệ',
         timestamp: DateTime.now(),
         level: LogLevel.error,
-        step: ProcessStep.flash,
-        deviceId: event.deviceSerial,
+        step: ProcessStep.productBatch,
         origin: 'system',
       )));
     }
   }
 
-  void _onStopProcess(StopProcessEvent event, Emitter<LogState> emit) {
-    emit(state.copyWith(isFlashing: false, status: 'Process stopped', error: null));
-  }
+  Future<void> _onLoadBatchData(LoadBatchDataEvent event, Emitter<LogState> emit) async {
+    try {
+      final planningService = serviceLocator<PlanningService>();
 
-  void _onClearLogs(ClearLogsEvent event, Emitter<LogState> emit) {
-    emit(state.copyWith(filteredLogs: [], status: 'Logs cleared'));
-  }
+      // Load both devices and firmwares
+      final batchData = await planningService.loadBatchData(event.batchId, event.planningId);
 
-  void _onFilterLog(FilterLogEvent event, Emitter<LogState> emit) {
-    final filtered = event.filter == null
-        ? state.filteredLogs
-        : state.filteredLogs
-        .where((log) => log.message.toLowerCase().contains(event.filter!.toLowerCase()) || log.deviceId == event.filter)
-        .toList();
-    emit(state.copyWith(filteredLogs: filtered, status: 'Filtering logs for: ${event.filter ?? 'all'}'));
-  }
+      emit(state.copyWith(
+        devices: batchData['devices'] as List<Device>,
+        firmwares: batchData['firmwares'] as List<Firmware>,
+        selectedTemplateId: batchData['templateId'] as int?,
+        selectedBatchId: event.batchId,
+      ));
 
-  void _onSelectSerial(SelectSerialEvent event, Emitter<LogState> emit) {
-    emit(state.copyWith(serialNumber: event.serial));
-  }
+      add(AddLogEvent(LogEntry(
+        message: 'Đã tải ${batchData['devices'].length} thiết bị và ${batchData['firmwares'].length} phiên bản firmware',
+        timestamp: DateTime.now(),
+        level: LogLevel.info,
+        step: ProcessStep.productBatch,
+        origin: 'system',
+      )));
+    } catch (e, stackTrace) {
+      print('Error loading batch data: $e');
+      print(stackTrace);
 
-  void _onAutoScroll(AutoScrollEvent event, Emitter<LogState> emit) {
-    // Handle auto-scroll if needed
-  }
-
-  void _onAddLog(AddLogEvent event, Emitter<LogState> emit) {
-    final updatedLogs = List<LogEntry>.from(state.filteredLogs)..add(event.log);
-    emit(state.copyWith(filteredLogs: updatedLogs));
-  }
-
-  void _onSelectLocalFile(SelectLocalFileEvent event, Emitter<LogState> emit) {
-    emit(state.copyWith(
-      localFilePath: event.filePath,
-      status: 'Selected local file: ${event.filePath}',
-    ));
-    final logEntry = LogEntry(
-      message: 'Selected local file: ${event.filePath}',
-      timestamp: DateTime.now(),
-      level: LogLevel.info,
-      step: ProcessStep.firmwareDownload,
-      origin: 'system',
-    );
-    add(AddLogEvent(logEntry));
+      add(AddLogEvent(LogEntry(
+        message: 'Lỗi khi tải dữ liệu batch: $e',
+        timestamp: DateTime.now(),
+        level: LogLevel.error,
+        step: ProcessStep.productBatch,
+        origin: 'system',
+      )));
+    }
   }
 
   Future<void> _onLoadBatchesForPlanning(LoadBatchesForPlanningEvent event, Emitter<LogState> emit) async {
     try {
       final planningService = serviceLocator<PlanningService>();
       final batches = await planningService.fetchBatches(event.planningId);
+
       emit(state.copyWith(
-        selectedPlanningId: event.planningId,
         batches: batches,
-        // Clear selected batch and devices when planning changes
+        selectedPlanningId: event.planningId,  // Save planning ID
+        // Clear previous selections when changing planning
         selectedBatchId: null,
+        selectedDeviceId: null,
         devices: [],
-      ));
-    } catch (e) {
-      print('Error fetching batches for planning: $e');
-      emit(state.copyWith(
-        selectedPlanningId: event.planningId,
-        batches: [], // Clear batches list on error
-        selectedBatchId: null,
-        devices: [],
+        firmwares: [],
+        selectedTemplateId: null,
       ));
 
+    } catch (e, stackTrace) {
+      print('Error loading batches: $e');
+      print(stackTrace);
+
       add(AddLogEvent(LogEntry(
-        message: 'Không thể tải danh sách lô: $e',
+        message: 'Lỗi khi tải danh sách lô: $e',
         timestamp: DateTime.now(),
         level: LogLevel.error,
-        step: ProcessStep.batchSelection,
+        step: ProcessStep.productBatch,
         origin: 'system',
       )));
     }
   }
 
-  Future<void> _onRefreshBatchDevices(RefreshBatchDevicesEvent event, Emitter<LogState> emit) async {
-    try {
-      final planningService = serviceLocator<PlanningService>();
-      final devices = await planningService.fetchDevices(event.batchId);
-      emit(state.copyWith(
-        devices: devices,
-        status: 'Devices refreshed for batch: ${event.batchId}',
-      ));
-    } catch (e) {
-      print('Error refreshing devices for batch: $e');
-      emit(state.copyWith(
-        devices: [], // Clear devices list on error
-        status: 'Error refreshing devices for batch: ${event.batchId}',
-      ));
+  Future<void> _onSelectDevice(SelectDeviceEvent event, Emitter<LogState> emit) async {
+    emit(state.copyWith(selectedDeviceId: event.deviceId));
+  }
 
-      add(AddLogEvent(LogEntry(
-        message: 'Không thể làm mới danh sách thiết bị: $e',
-        timestamp: DateTime.now(),
-        level: LogLevel.error,
-        step: ProcessStep.deviceRefresh,
-        origin: 'system',
-      )));
+  Future<void> _onMarkDeviceDefective(MarkDeviceDefectiveEvent event, Emitter<LogState> emit) async {
+    // Handle marking device as defective
+    _logService.addLog(
+      message: 'Device ${event.deviceId} marked as defective${event.reason.isNotEmpty ? ': ${event.reason}' : ''}',
+      level: LogLevel.warning,
+      step: ProcessStep.deviceStatus,
+      origin: 'system',
+    );
+  }
+
+  Future<void> _onSelectUsbPort(SelectUsbPortEvent event, Emitter<LogState> emit) async {
+    emit(state.copyWith(selectedPort: event.port));
+  }
+
+  Future<void> _onScanUsbPorts(ScanUsbPortsEvent event, Emitter<LogState> emit) async {
+    final ports = _usbService.getAvailablePorts();
+    emit(state.copyWith(availablePorts: ports));
+  }
+
+  Future<void> _onInitiateFlash(InitiateFlashEvent event, Emitter<LogState> emit) async {
+    emit(state.copyWith(isFlashing: true));
+    // Actual flashing logic is handled in the UI
+  }
+
+  Future<void> _onStopProcess(StopProcessEvent event, Emitter<LogState> emit) async {
+    emit(state.copyWith(isFlashing: false));
+  }
+
+  Future<void> _onClearLogs(ClearLogsEvent event, Emitter<LogState> emit) async {
+    emit(state.copyWith(filteredLogs: []));
+  }
+
+  Future<void> _onFilterLog(FilterLogEvent event, Emitter<LogState> emit) async {
+    if (event.filter == null || event.filter!.isEmpty) {
+      // If no filter, show all logs
+      emit(state.copyWith(filteredLogs: state.logs));
+    } else {
+      // Filter logs based on the search term
+      final filteredLogs = state.logs.where((log) =>
+        log.message.toLowerCase().contains(event.filter!.toLowerCase())
+      ).toList();
+      emit(state.copyWith(filteredLogs: filteredLogs));
+    }
+  }
+
+  Future<void> _onSelectSerial(SelectSerialEvent event, Emitter<LogState> emit) async {
+    emit(state.copyWith(serialNumber: event.serial));
+  }
+
+  Future<void> _onAutoScroll(AutoScrollEvent event, Emitter<LogState> emit) async {
+    // Auto scroll handling is done in the UI
+  }
+
+  Future<void> _onAddLog(AddLogEvent event, Emitter<LogState> emit) async {
+    final updatedLogs = List<LogEntry>.from(state.logs)..add(event.log);
+    emit(state.copyWith(
+      logs: updatedLogs,
+      filteredLogs: updatedLogs,
+    ));
+  }
+
+  Future<void> _onSelectLocalFile(SelectLocalFileEvent event, Emitter<LogState> emit) async {
+    emit(state.copyWith(localFilePath: event.filePath));
+  }
+
+  Future<void> _onRefreshBatchDevices(RefreshBatchDevicesEvent event, Emitter<LogState> emit) async {
+    if (event.batchId.isNotEmpty) {
+      final devices = await _batchService.fetchDevices(event.batchId);
+      emit(state.copyWith(devices: devices));
     }
   }
 }

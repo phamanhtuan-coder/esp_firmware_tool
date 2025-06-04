@@ -33,6 +33,7 @@ void setupServiceLocator() {
   serviceLocator.registerLazySingleton<BatchService>(() => BatchService(
     logService: serviceLocator<LogService>(),
     arduinoCliService: serviceLocator<ArduinoCliService>(),
+    apiClient: serviceLocator<ApiClient>(),
   ));
 
   // Device status service

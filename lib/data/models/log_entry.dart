@@ -12,27 +12,40 @@ enum LogLevel {
 }
 
 enum ProcessStep {
-  usbCheck,
-  compile,
-  flash,
-  error,
-  other,
-  installCore,
-  installLibrary,
-  serialMonitor,
-  consoleLog, // New step for console logging
-  scanQrCode,
-  selectFirmware,
-  selectDeviceType,
-  productBatch,
-  updateStatus,
-  deviceSelection,     // New step for device selection from batch
-  firmwareDownload,    // New step for firmware template download
-  templatePreparation, // New step for preparing templates with serial numbers
-  deviceRefresh,       // New step for refreshing device list from server
-  systemStart,         // System startup and initialization
-  systemEvent,         // System events like device connection/disconnection
-  batchSelection,      // Selecting a batch of devices
+  // Các bước khởi động và hệ thống
+  systemStart,    // Khởi động ứng dụng
+  systemEvent,    // Các sự kiện hệ thống (USB connect/disconnect...)
+
+  // Các bước quản lý sản phẩm
+  productBatch,   // Quản lý lô sản phẩm
+  batchSelection, // Chọn lô sản xuất
+  deviceSelection,// Chọn thiết bị trong lô
+  deviceStatus,   // Trạng thái thiết bị (defective, ready...)
+  deviceRefresh,  // Refresh danh sách thiết bị từ server
+
+  // Các bước quản lý firmware
+  firmwareDownload,    // Tải firmware từ server
+  selectFirmware,      // Chọn phiên bản firmware
+  templatePreparation, // Chu��n bị template với serial number
+
+  // Các bước nạp firmware
+  firmwareCompile,     // Biên dịch firmware
+  firmwareUpload,      // Nạp firmware vào thiết bị
+  usbCheck,           // Kiểm tra kết nối USB
+  flash,              // Quá trình flash
+
+  // Các bước theo dõi và tương tác
+  scanQrCode,         // Quét mã QR
+  serialMonitor,      // Theo dõi cổng serial
+  consoleLog,         // Log console
+
+  // Các bước quản lý thư viện
+  installCore,        // Cài đặt core
+  installLibrary,     // Cài đặt thư viện
+
+  // Khác
+  error,              // Xử lý lỗi
+  other,              // Các bước khác
 }
 
 enum DataDisplayMode {

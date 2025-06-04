@@ -153,6 +153,11 @@ class ApiClient {
     return _request(method: 'DELETE', endpoint: endpoint, headers: headers);
   }
 
+  /// Fetch firmware list by template ID
+  Future<Map<String, dynamic>> fetchFirmwareByTemplate(int templateId) async {
+    return get('/firmware/by-template/$templateId');
+  }
+
   // Close the HTTP client when done
   void dispose() {
     _httpClient.close();

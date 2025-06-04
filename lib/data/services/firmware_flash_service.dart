@@ -188,7 +188,7 @@ class FirmwareFlashService {
         message: '🔨 Đang biên dịch firmware...',
         timestamp: DateTime.now(),
         level: LogLevel.info,
-        step: ProcessStep.compile,
+        step: ProcessStep.firmwareCompile,
         deviceId: serialNumber,
         origin: 'system',
       ));
@@ -199,7 +199,7 @@ class FirmwareFlashService {
           message: '❌ Biên dịch firmware thất bại',
           timestamp: DateTime.now(),
           level: LogLevel.error,
-          step: ProcessStep.compile,
+          step: ProcessStep.firmwareCompile,
           deviceId: serialNumber,
           origin: 'system',
         ));
@@ -210,7 +210,7 @@ class FirmwareFlashService {
         message: '✅ Biên dịch firmware thành công',
         timestamp: DateTime.now(),
         level: LogLevel.success,
-        step: ProcessStep.compile,
+        step: ProcessStep.firmwareCompile,
         deviceId: serialNumber,
         origin: 'system',
       ));
@@ -256,6 +256,56 @@ class FirmwareFlashService {
         level: LogLevel.error,
         step: ProcessStep.flash,
         deviceId: serialNumber,
+        origin: 'system',
+      ));
+      return false;
+    }
+  }
+
+  Future<bool> _compileSketch({
+    required String sketchPath,
+    required String deviceType,
+    void Function(LogEntry)? onLog,
+  }) async {
+    try {
+      onLog?.call(LogEntry(
+        message: 'Starting sketch compilation...',
+        timestamp: DateTime.now(),
+        level: LogLevel.info,
+        step: ProcessStep.firmwareCompile,  // Changed from compile
+        origin: 'system',
+      ));
+
+      final boardType = await _getBoardTypeFromMetadata(sketchPath);
+      final fqbn = _arduinoCliService.getBoardFqbn(boardType);
+
+      final result = await _arduinoCliService.compileSketch(sketchPath, fqbn);
+
+      if (result) {
+        onLog?.call(LogEntry(
+          message: 'Compilation successful',
+          timestamp: DateTime.now(),
+          level: LogLevel.success,
+          step: ProcessStep.firmwareCompile,  // Changed from compile
+          origin: 'system',
+        ));
+        return true;
+      } else {
+        onLog?.call(LogEntry(
+          message: 'Compilation failed',
+          timestamp: DateTime.now(),
+          level: LogLevel.error,
+          step: ProcessStep.firmwareCompile,  // Changed from compile
+          origin: 'system',
+        ));
+        return false;
+      }
+    } catch (e) {
+      onLog?.call(LogEntry(
+        message: 'Error during compilation: $e',
+        timestamp: DateTime.now(),
+        level: LogLevel.error,
+        step: ProcessStep.firmwareCompile,  // Changed from compile
         origin: 'system',
       ));
       return false;

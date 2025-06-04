@@ -3,12 +3,15 @@ import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/data/models/planning.dart';
 import 'package:smart_net_firmware_loader/data/models/batch.dart';
 import 'package:smart_net_firmware_loader/data/models/device.dart';
+import 'package:smart_net_firmware_loader/data/models/firmware.dart';
 import 'package:smart_net_firmware_loader/data/services/api_client.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 
 class PlanningService {
   final ApiClient _apiClient;
   final LogService _logService;
+  // Cache để lưu firmware cho mỗi template
+  final Map<int, List<Firmware>> _firmwareCache = {};
 
   PlanningService({
     required ApiClient apiClient,
@@ -342,6 +345,136 @@ class PlanningService {
       );
 
       return [];
+    }
+  }
+
+  /// Fetches and caches firmware list for a template
+  Future<List<Firmware>> fetchAndCacheFirmwares(int templateId) async {
+    try {
+      final response = await _apiClient.fetchFirmwareByTemplate(templateId);
+
+      if (response['success'] == true && response['data'] != null) {
+        final List<dynamic> firmwareData = response['data'] as List;
+        final firmwares = firmwareData.map((json) => Firmware.fromJson(json)).toList();
+
+        // Cập nhật cache
+        _firmwareCache[templateId] = firmwares;
+
+        _logService.addLog(
+          message: 'Đã tải ${firmwares.length} phiên bản firmware cho template $templateId',
+          level: LogLevel.success,
+          step: ProcessStep.firmwareDownload,
+          origin: 'system',
+        );
+
+        return firmwares;
+      } else {
+        final String errorMessage = response['message'] ?? 'Unknown error occurred';
+        _logService.addLog(
+          message: 'Lỗi khi tải danh sách firmware: $errorMessage',
+          level: LogLevel.error,
+          step: ProcessStep.firmwareDownload,
+          origin: 'system',
+        );
+        return [];
+      }
+    } catch (e, stackTrace) {
+      _logService.addLog(
+        message: 'Lỗi ngoại lệ khi tải firmware: $e',
+        level: LogLevel.error,
+        step: ProcessStep.firmwareDownload,
+        origin: 'system',
+      );
+      return [];
+    }
+  }
+
+  /// Lấy firmware từ cache hoặc tải mới nếu chưa có
+  Future<List<Firmware>> getFirmwares(int templateId) async {
+    if (_firmwareCache.containsKey(templateId)) {
+      return _firmwareCache[templateId]!;
+    }
+    return fetchAndCacheFirmwares(templateId);
+  }
+
+  /// Lấy firmware mặc định (firmware bắt buộc) cho template
+  Future<Firmware?> getDefaultFirmware(int templateId) async {
+    final firmwares = await getFirmwares(templateId);
+    return firmwares.firstWhere(
+      (fw) => fw.isMandatory && fw.isApproved,
+      orElse: () => firmwares.firstWhere(
+        (fw) => fw.isApproved,
+        orElse: () => firmwares.first,
+      ),
+    );
+  }
+
+  /// Fetches devices and firmwares when a batch is selected
+  Future<Map<String, dynamic>> loadBatchData(String batchId, String planningId) async {
+    try {
+      // Fetch devices for the batch
+      final devices = await fetchDevices(batchId);
+
+      // Find the batch to get its template ID
+      final response = await _apiClient.get(
+        '/production-tracking/info-need-upload-firmware/batch/$planningId/null',
+      );
+
+      if (response['success'] == true && response['data'] != null) {
+        final List<dynamic> batchesData = response['data'] as List;
+        final selectedBatch = batchesData.firstWhere(
+          (data) => data['production_batch_id'] == batchId,
+          orElse: () => null,
+        );
+
+        if (selectedBatch != null && selectedBatch['template_id'] != null) {
+          final templateId = selectedBatch['template_id'] as int;
+
+          // Load firmwares for the template
+          final firmwares = await getFirmwares(templateId);
+
+          _logService.addLog(
+            message: 'Đã tải ${firmwares.length} phiên bản firmware cho template $templateId',
+            level: LogLevel.success,
+            step: ProcessStep.firmwareDownload,
+            origin: 'system',
+          );
+
+          return {
+            'devices': devices,
+            'firmwares': firmwares,
+            'templateId': templateId,
+          };
+        }
+      }
+
+      // Return devices only if batch or template info not found
+      return {
+        'devices': devices,
+        'firmwares': <Firmware>[],
+        'templateId': null,
+      };
+
+    } catch (e, stackTrace) {
+      _logService.addLog(
+        message: 'Lỗi khi tải dữ liệu cho batch: $e',
+        level: LogLevel.error,
+        step: ProcessStep.firmwareDownload,
+        origin: 'system',
+      );
+
+      developer.log(
+        'Error loading batch data',
+        error: e,
+        stackTrace: stackTrace,
+        name: 'PlanningService',
+      );
+
+      return {
+        'devices': <Device>[],
+        'firmwares': <Firmware>[],
+        'templateId': null,
+      };
     }
   }
 }

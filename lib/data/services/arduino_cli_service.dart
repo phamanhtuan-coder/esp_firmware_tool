@@ -12,7 +12,6 @@ class ArduinoCliService {
   Process? _activeProcess;
   String? _arduinoCliPath;
 
-
   /// Map of device types to their FQBN (Fully Qualified Board Name)
   final Map<String, String> _boardFqbns = {
     'esp32': 'esp32:esp32:esp32',
@@ -85,7 +84,6 @@ class ArduinoCliService {
       return null;
     }
   }
-
 
   // Initialize the Arduino CLI path
   Future<void> init() async {
@@ -241,13 +239,12 @@ class ArduinoCliService {
           message: '🔨 Bắt đầu biên dịch sketch...',
           timestamp: DateTime.now(),
           level: LogLevel.info,
-          step: ProcessStep.compile,
+          step: ProcessStep.firmwareCompile, // Thay đổi từ compile sang firmwareCompile
           origin: 'arduino-cli',
         ));
       }
 
       _activeProcess = await startProcess(['compile', '--fqbn', fqbn, '--verbose', sketchPath]);
-
 
       // Handle stdout
       _activeProcess!.stdout.transform(utf8.decoder).listen((output) {
@@ -259,7 +256,7 @@ class ArduinoCliService {
                 message: line,
                 timestamp: DateTime.now(),
                 level: _getLogLevelFromOutput(line),
-                step: ProcessStep.compile,
+                step: ProcessStep.firmwareCompile, // Thay đổi từ compile sang firmwareCompile
                 origin: 'arduino-cli',
                 rawOutput: line,
               ));
@@ -277,7 +274,7 @@ class ArduinoCliService {
                 message: line,
                 timestamp: DateTime.now(),
                 level: LogLevel.error,
-                step: ProcessStep.compile,
+                step: ProcessStep.firmwareCompile, // Thay đổi từ compile sang firmwareCompile
                 origin: 'arduino-cli',
                 rawOutput: line,
               ));
@@ -295,7 +292,7 @@ class ArduinoCliService {
             message: '✅ Biên dịch thành công',
             timestamp: DateTime.now(),
             level: LogLevel.success,
-            step: ProcessStep.compile,
+            step: ProcessStep.firmwareCompile, // Thay đổi từ compile sang firmwareCompile
             origin: 'arduino-cli',
           ));
         }
@@ -306,7 +303,7 @@ class ArduinoCliService {
             message: '❌ Biên dịch thất bại (exit code: $exitCode)',
             timestamp: DateTime.now(),
             level: LogLevel.error,
-            step: ProcessStep.compile,
+            step: ProcessStep.firmwareCompile, // Thay đổi từ compile sang firmwareCompile
             origin: 'arduino-cli',
           ));
         }
@@ -319,7 +316,7 @@ class ArduinoCliService {
           message: '❌ Lỗi trong quá trình biên dịch: $e',
           timestamp: DateTime.now(),
           level: LogLevel.error,
-          step: ProcessStep.compile,
+          step: ProcessStep.firmwareCompile, // Thay đổi từ compile sang firmwareCompile
           origin: 'arduino-cli',
         ));
       }
@@ -335,13 +332,12 @@ class ArduinoCliService {
           message: '📤 Bắt đầu upload sketch...',
           timestamp: DateTime.now(),
           level: LogLevel.info,
-          step: ProcessStep.flash,
+          step: ProcessStep.flash, // Sử dụng ProcessStep.flash
           origin: 'arduino-cli',
         ));
       }
 
       _activeProcess = await startProcess(['upload', '-p', port, '--fqbn', fqbn, '--verbose', sketchPath]);
-
 
       // Handle stdout
       _activeProcess!.stdout.transform(utf8.decoder).listen((output) {
@@ -352,7 +348,7 @@ class ArduinoCliService {
                 message: line,
                 timestamp: DateTime.now(),
                 level: _getLogLevelFromOutput(line),
-                step: ProcessStep.flash,
+                step: ProcessStep.flash, // Sử dụng ProcessStep.flash
                 origin: 'arduino-cli',
                 rawOutput: line,
               ));
@@ -370,7 +366,7 @@ class ArduinoCliService {
                 message: line,
                 timestamp: DateTime.now(),
                 level: LogLevel.error,
-                step: ProcessStep.flash,
+                step: ProcessStep.flash, // Sử dụng ProcessStep.flash
                 origin: 'arduino-cli',
                 rawOutput: line,
               ));
@@ -388,7 +384,7 @@ class ArduinoCliService {
             message: '✅ Upload thành công',
             timestamp: DateTime.now(),
             level: LogLevel.success,
-            step: ProcessStep.flash,
+            step: ProcessStep.flash, // Sử dụng ProcessStep.flash
             origin: 'arduino-cli',
           ));
         }
@@ -399,7 +395,7 @@ class ArduinoCliService {
             message: '❌ Upload thất bại (exit code: $exitCode)',
             timestamp: DateTime.now(),
             level: LogLevel.error,
-            step: ProcessStep.flash,
+            step: ProcessStep.flash, // Sử dụng ProcessStep.flash
             origin: 'arduino-cli',
           ));
         }
@@ -412,7 +408,7 @@ class ArduinoCliService {
           message: '❌ Lỗi trong quá trình upload: $e',
           timestamp: DateTime.now(),
           level: LogLevel.error,
-          step: ProcessStep.flash,
+          step: ProcessStep.flash, // Sử dụng ProcessStep.flash
           origin: 'arduino-cli',
         ));
       }
