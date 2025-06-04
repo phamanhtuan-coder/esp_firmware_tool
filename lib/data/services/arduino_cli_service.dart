@@ -87,54 +87,129 @@ class ArduinoCliService {
 
   // Initialize the Arduino CLI path
   Future<void> init() async {
-    if (_arduinoCliPath != null) return;
-
-    // Get the application documents directory
-    final appDir = await getApplicationDocumentsDirectory();
-    String appName;
-    if (Platform.isWindows) {
-      appName = 'arduino-cli';
-    } else if (Platform.isMacOS) {
-      appName = 'arduino-cli-macos';
-    } else if (Platform.isLinux) {
-      appName = 'arduino-cli-linux';
-    } else {
-      throw UnsupportedError('Unsupported platform: ${Platform.operatingSystem}');
-    }
-    final arduinoDir = Directory(path.join(appDir.path, appName));
-
-    // Create the directory if it doesn't exist
-    if (!await arduinoDir.exists()) {
-      await arduinoDir.create(recursive: true);
-    }
-
-    // Set platform-specific executable path and file name
-    String executableName;
-    if (Platform.isWindows) {
-      executableName = 'arduino-cli.exe';
-    } else if (Platform.isMacOS) {
-      executableName = 'arduino-cli';
-    } else if (Platform.isLinux) {
-      executableName = 'arduino-cli';
-    } else {
-      throw UnsupportedError('Unsupported platform: ${Platform.operatingSystem}');
-    }
-
-    // Path to the executable
-    _arduinoCliPath = path.join(arduinoDir.path, executableName);
-
-    // Extract executable if it doesn't exist
-    if (!await File(_arduinoCliPath!).exists()) {
-      // Copy from assets to the app directory
-      final byteData = await rootBundle.load('assets/$appName/$executableName');
-      final buffer = byteData.buffer;
-      await File(_arduinoCliPath!).writeAsBytes(
-          buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
-
-      // Make the file executable on Unix-based systems
-      if (!Platform.isWindows) {
-        await Process.run('chmod', ['+x', _arduinoCliPath!]);
+    try {
+      print('======= ARDUINO CLI INITIALIZATION =======');
+      if (_arduinoCliPath != null) {
+        print('DEBUG: Arduino CLI already initialized at: $_arduinoCliPath');
+        return;
       }
+
+      // Get the application documents directory
+      print('DEBUG: Getting application directory');
+      final appDir = await getApplicationDocumentsDirectory();
+      print('DEBUG: App directory: ${appDir.path}');
+
+      String appName;
+      if (Platform.isWindows) {
+        appName = 'arduino-cli';
+      } else if (Platform.isMacOS) {
+        appName = 'arduino-cli-macos';
+      } else if (Platform.isLinux) {
+        appName = 'arduino-cli-linux';
+      } else {
+        throw UnsupportedError('Unsupported platform: ${Platform.operatingSystem}');
+      }
+      print('DEBUG: App name based on platform: $appName');
+
+      final arduinoDir = Directory(path.join(appDir.path, appName));
+      print('DEBUG: Arduino CLI directory path: ${arduinoDir.path}');
+
+      // Create the directory if it doesn't exist
+      if (!await arduinoDir.exists()) {
+        print('DEBUG: Creating Arduino CLI directory');
+        await arduinoDir.create(recursive: true);
+      } else {
+        print('DEBUG: Arduino CLI directory already exists');
+      }
+
+      // Set platform-specific executable path and file name
+      String executableName;
+      if (Platform.isWindows) {
+        executableName = 'arduino-cli.exe';
+      } else if (Platform.isMacOS) {
+        executableName = 'arduino-cli';
+      } else if (Platform.isLinux) {
+        executableName = 'arduino-cli';
+      } else {
+        throw UnsupportedError('Unsupported platform: ${Platform.operatingSystem}');
+      }
+      print('DEBUG: Executable name: $executableName');
+
+      // Path to the executable
+      _arduinoCliPath = path.join(arduinoDir.path, executableName);
+      print('DEBUG: Arduino CLI executable path: $_arduinoCliPath');
+
+      // Extract executable if it doesn't exist
+      final cliFile = File(_arduinoCliPath!);
+      if (!await cliFile.exists()) {
+        print('DEBUG: Arduino CLI executable does not exist, extracting from assets');
+        try {
+          // Check if the asset exists
+          final assetPath = 'assets/$appName/$executableName';
+          print('DEBUG: Loading asset from: $assetPath');
+
+          try {
+            // Copy from assets to the app directory
+            final byteData = await rootBundle.load(assetPath);
+            print('DEBUG: Asset loaded successfully, size: ${byteData.lengthInBytes} bytes');
+
+            final buffer = byteData.buffer;
+            await cliFile.writeAsBytes(
+              buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes),
+            );
+            print('DEBUG: Successfully extracted Arduino CLI');
+
+            // Make the file executable on Unix-based systems
+            if (!Platform.isWindows) {
+              print('DEBUG: Setting executable permissions');
+              await Process.run('chmod', ['+x', _arduinoCliPath!]);
+            }
+          } catch (e) {
+            print('ERROR: Failed to load asset: $e');
+
+            // List available assets for debugging
+            print('DEBUG: Checking for available assets...');
+            try {
+              final manifestContent = await rootBundle.loadString('AssetManifest.json');
+              final Map<String, dynamic> manifestMap = json.decode(manifestContent);
+              print('DEBUG: Available assets:');
+              manifestMap.keys.where((k) => k.startsWith('assets/')).forEach((k) {
+                print('  - $k');
+              });
+            } catch (e) {
+              print('ERROR: Failed to list assets: $e');
+            }
+
+            throw Exception('Failed to extract Arduino CLI: $e');
+          }
+        } catch (e) {
+          print('DEBUG: Error extracting Arduino CLI: $e');
+          throw Exception('Failed to extract Arduino CLI: $e');
+        }
+      } else {
+        print('DEBUG: Arduino CLI executable already exists');
+      }
+
+      // Verify the CLI is working
+      try {
+        print('DEBUG: Verifying Arduino CLI by running "version" command');
+        final result = await Process.run(_arduinoCliPath!, ['version']);
+        if (result.exitCode == 0) {
+          print('DEBUG: Arduino CLI verified working. Version info:');
+          print(result.stdout);
+        } else {
+          print('DEBUG: Arduino CLI verification failed:');
+          print(result.stderr);
+          throw Exception('Arduino CLI verification failed with exit code: ${result.exitCode}');
+        }
+      } catch (e) {
+        print('DEBUG: Error verifying Arduino CLI: $e');
+        throw Exception('Error verifying Arduino CLI: $e');
+      }
+      print('======= ARDUINO CLI INITIALIZATION COMPLETED =======');
+    } catch (e) {
+      print('CRITICAL ERROR: Error in init(): $e');
+      throw Exception('Failed to initialize Arduino CLI: $e');
     }
   }
 

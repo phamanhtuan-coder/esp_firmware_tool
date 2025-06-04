@@ -875,6 +875,44 @@ class LogService {
     }
   }
 
+  // Helper method to send data to serial port
+  void sendToSerial(String port, String data) {
+    try {
+      final serialPort = SerialPort(port);
+      if (!serialPort.openWrite()) {
+        addLog(
+          message: 'Failed to open port $port for writing',
+          level: LogLevel.error,
+          step: ProcessStep.serialMonitor,
+          origin: 'system',
+        );
+        return;
+      }
+
+      // Add newline if not present
+      final dataToSend = data.endsWith('\n') ? data : '$data\n';
+      final bytes = utf8.encode(dataToSend);
+      serialPort.write(Uint8List.fromList(bytes));
+
+      // Log the sent command
+      addLog(
+        message: '> $data',
+        level: LogLevel.input,
+        step: ProcessStep.serialMonitor,
+        origin: 'serial-monitor',
+      );
+
+      serialPort.close();
+    } catch (e) {
+      addLog(
+        message: 'Error sending data to serial port: $e',
+        level: LogLevel.error,
+        step: ProcessStep.serialMonitor,
+        origin: 'system',
+      );
+    }
+  }
+
   // Stop the serial monitor with improved cleanup
   Future<void> stopSerialMonitor() async {
     if (_serialPort != null) {

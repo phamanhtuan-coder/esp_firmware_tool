@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_net_firmware_loader/di/service_locator.dart';
+import 'package:smart_net_firmware_loader/data/services/arduino_cli_service.dart';
 import 'package:smart_net_firmware_loader/presentation/blocs/log/log_bloc.dart';
 import 'package:smart_net_firmware_loader/presentation/views/home_view.dart';
 import 'package:smart_net_firmware_loader/utils/app_routes.dart';
@@ -9,15 +10,29 @@ import 'presentation/views/login_view.dart';
 import 'presentation/views/splash_screen.dart';
 import 'package:window_manager/window_manager.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await windowManager.ensureInitialized();
 
-  // Configure window to start maximized with standard controls
+  // Khởi tạo service locator
+  setupServiceLocator();
+
+  // Khởi tạo Arduino CLI trước để đảm bảo hoạt động khi cần
+  print('Initializing Arduino CLI during app startup');
+  try {
+    final arduinoCliService = serviceLocator<ArduinoCliService>();
+    await arduinoCliService.init();
+    print('Arduino CLI initialized successfully');
+  } catch (e) {
+    print('Error initializing Arduino CLI: $e');
+    // Vẫn tiếp tục chạy ứng dụng, sẽ thử lại khi cần
+  }
+
+  // Khởi tạo window manager
+  await windowManager.ensureInitialized();
   WindowOptions windowOptions = const WindowOptions(
     title: 'Firmware Deployment Tool',
     titleBarStyle: TitleBarStyle.normal, // Preserve standard window controls
-    size: Size(1600,900), // Initial size, will be maximized later
+    size: Size(1600, 900), // Initial size, will be maximized later
     center: true, // Make sure window is centered on screen
   );
   await windowManager.waitUntilReadyToShow(windowOptions, () async {
@@ -27,7 +42,6 @@ void main() async {
     await windowManager.setAlignment(Alignment.center);
   });
 
-  setupServiceLocator();
   runApp(const MyApp());
 }
 

@@ -68,12 +68,21 @@ class ActionButtons extends StatelessWidget {
             onPressed: isFlashing || !isFlashEnabled
                 ? null
                 : () {
+              // First notify the LogBloc about the flashing event
               context.read<LogBloc>().add(InitiateFlashEvent(
-                deviceId: deviceSerial,
+                deviceId: selectedDevice ?? '',
                 firmwareVersion: selectedFirmwareVersion ?? '',
                 deviceSerial: deviceSerial,
                 deviceType: 'esp32',
               ));
+
+              // Then call the onInitiateFlash callback with required parameters
+              onInitiateFlash(
+                selectedDevice ?? '',
+                selectedFirmwareVersion ?? '',
+                deviceSerial,
+                'esp32',
+              );
             },
           ),
         ],
@@ -81,3 +90,4 @@ class ActionButtons extends StatelessWidget {
     );
   }
 }
+

@@ -54,6 +54,11 @@ class FirmwareFlashService {
     required void Function(LogEntry) onLog,
   }) async {
     try {
+      // Debug info
+      print('DEBUG: Starting firmware flash process');
+      print('DEBUG: Serial: $serialNumber, Device type: $deviceType, FW Version: $firmwareVersion');
+      print('DEBUG: Local file: $localFilePath, Batch: $selectedBatch, Port: $selectedPort');
+
       // Check port selection
       if (selectedPort == null || selectedPort.isEmpty) {
         onLog(LogEntry(
@@ -81,6 +86,7 @@ class FirmwareFlashService {
 
       // If using a local file
       if (localFilePath != null && localFilePath.isNotEmpty) {
+        print('DEBUG: Processing local file: $localFilePath');
         onLog(LogEntry(
           message: '📂 Đang xử lý file local: $localFilePath',
           timestamp: DateTime.now(),
@@ -96,6 +102,7 @@ class FirmwareFlashService {
           serialNumber,
           useQuotesForDefines: useQuotesForDefines,
         );
+        print('DEBUG: Local file processed path: $processedPath');
       } else {
         // Using firmware version from server/batch
         if (selectedBatch == null) {
@@ -110,6 +117,7 @@ class FirmwareFlashService {
           return false;
         }
 
+        print('DEBUG: Fetching firmware from server. Version: $firmwareVersion, Batch: $selectedBatch');
         onLog(LogEntry(
           message: '🌐 Đang tải firmware phiên bản $firmwareVersion từ lô $selectedBatch',
           timestamp: DateTime.now(),
@@ -123,10 +131,11 @@ class FirmwareFlashService {
           batchId: selectedBatch,
           firmwareId: firmwareVersion,
         );
+        print('DEBUG: Fetched source code length: ${sourceCode?.length ?? 0}');
 
         if (sourceCode == null || sourceCode.isEmpty) {
           onLog(LogEntry(
-            message: '❌ Không thể tải m�� nguồn firmware',
+            message: '❌ Không thể tải mã nguồn firmware',
             timestamp: DateTime.now(),
             level: LogLevel.error,
             step: ProcessStep.firmwareDownload,
@@ -136,11 +145,13 @@ class FirmwareFlashService {
           return false;
         }
 
+        print('DEBUG: Saving firmware template');
         final templatePath = await _templateService.saveFirmwareTemplate(
           sourceCode,
           firmwareVersion,
           deviceType,
         );
+        print('DEBUG: Template path: $templatePath');
 
         if (templatePath == null) {
           onLog(LogEntry(
@@ -154,12 +165,14 @@ class FirmwareFlashService {
           return false;
         }
 
+        print('DEBUG: Preparing firmware template');
         processedPath = await _templateService.prepareFirmwareTemplate(
           templatePath,
           serialNumber,
           serialNumber,
           useQuotesForDefines: useQuotesForDefines,
         );
+        print('DEBUG: Processed path: $processedPath');
       }
 
       if (processedPath == null) {
@@ -184,8 +197,27 @@ class FirmwareFlashService {
       ));
 
       // Determine board type
+      print('DEBUG: Getting board type from metadata');
       final boardType = await _getBoardTypeFromMetadata(processedPath);
       final fqbn = _arduinoCliService.getBoardFqbn(boardType);
+      print('DEBUG: Board type: $boardType, FQBN: $fqbn');
+
+      // Check if Arduino CLI is available
+      print('DEBUG: Checking if Arduino CLI is available');
+      final cliAvailable = await _arduinoCliService.isCliAvailable();
+      print('DEBUG: Arduino CLI available: $cliAvailable');
+
+      if (!cliAvailable) {
+        onLog(LogEntry(
+          message: '❌ Arduino CLI không khả dụng. Vui lòng cài đặt hoặc kiểm tra lại.',
+          timestamp: DateTime.now(),
+          level: LogLevel.error,
+          step: ProcessStep.firmwareCompile,
+          deviceId: serialNumber,
+          origin: 'system',
+        ));
+        return false;
+      }
 
       // Compile firmware
       onLog(LogEntry(
@@ -197,7 +229,17 @@ class FirmwareFlashService {
         origin: 'system',
       ));
 
-      final compiled = await _arduinoCliService.compileSketch(processedPath, fqbn);
+      print('DEBUG: Starting compile sketch: $processedPath');
+      final compiled = await _arduinoCliService.compileSketch(
+        processedPath,
+        fqbn,
+        onLog: (log) {
+          print('DEBUG: Compile log: ${log.message}');
+          onLog(log);
+        }
+      );
+
+      print('DEBUG: Compile result: $compiled');
       if (!compiled) {
         onLog(LogEntry(
           message: '❌ Biên dịch firmware thất bại',
@@ -229,7 +271,18 @@ class FirmwareFlashService {
         origin: 'system',
       ));
 
-      final uploaded = await _arduinoCliService.uploadSketch(processedPath, selectedPort, fqbn);
+      print('DEBUG: Starting upload sketch to port: $selectedPort');
+      final uploaded = await _arduinoCliService.uploadSketch(
+        processedPath,
+        selectedPort,
+        fqbn,
+        onLog: (log) {
+          print('DEBUG: Upload log: ${log.message}');
+          onLog(log);
+        }
+      );
+
+      print('DEBUG: Upload result: $uploaded');
       if (!uploaded) {
         onLog(LogEntry(
           message: '❌ Upload firmware thất bại',
