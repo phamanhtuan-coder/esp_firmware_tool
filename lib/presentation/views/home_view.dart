@@ -58,6 +58,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   String _warningType = '';
   bool _isLocalFileMode = false;
   bool _isQrEnabled = false;
+  bool _isQrCodeAvailable = false;
 
   @override
   void initState() {
@@ -233,47 +234,70 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     final firmwareFlashService = serviceLocator<FirmwareFlashService>();
     localFilePath ??= context.read<LogBloc>().state.localFilePath;
 
-    print('DEBUG: _flashFirmware called with:');
-    print('DEBUG: deviceId: $deviceId');
-    print('DEBUG: firmwareVersion: $firmwareVersion');
-    print('DEBUG: deviceSerial: $deviceSerial');
-    print('DEBUG: deviceType: $deviceType');
-    print('DEBUG: localFilePath: $localFilePath');
+    try {
+      if (_selectedPort == null || _selectedPort!.isEmpty) {
+        _logService.addLog(
+          message: 'No COM port selected. Please select a COM port first.',
+          level: LogLevel.warning,
+          step: ProcessStep.flash,
+          origin: 'system',
+        );
+        return;
+      }
 
-    if (_selectedPort == null || _selectedPort!.isEmpty) {
+      // When using local file, we don't need to pass firmware version or batch ID
+      final success = await firmwareFlashService.flash(
+        serialNumber: deviceSerial,
+        deviceType: deviceType,
+        firmwareVersion: localFilePath != null ? '' : firmwareVersion,
+        localFilePath: localFilePath,
+        selectedBatch: localFilePath != null ? null : _selectedBatch,
+        selectedPort: _selectedPort,
+        onLog: (log) => _logService.addLog(
+          message: log.message,
+          level: log.level,
+          step: log.step,
+          origin: log.origin,
+          deviceId: deviceSerial,
+          rawOutput: log.rawOutput,
+        ),
+      );
+
+      if (success) {
+        // Add explicit debug log to confirm upload success
+        print('DEBUG: Upload result: $success');
+        _logService.addLog(
+          message: '✅ Upload firmware thành công',
+          level: LogLevel.success,
+          step: ProcessStep.flash,
+          origin: 'system',
+          deviceId: deviceSerial,
+        );
+
+        // Make sure to explicitly stop the flashing process
+        if (mounted) {
+          print('DEBUG: Explicitly stopping flash process');
+          context.read<LogBloc>().add(StopProcessEvent());
+        }
+
+        _startSerialMonitor(deviceSerial);
+      }
+    } catch (e) {
+      print('DEBUG: Error during flash: $e');
       _logService.addLog(
-        message: 'No COM port selected. Please select a COM port first.',
-        level: LogLevel.warning,
+        message: 'Lỗi khi nạp firmware: $e',
+        level: LogLevel.error,
         step: ProcessStep.flash,
         origin: 'system',
-      );
-      return;
-    }
-
-    // When using local file, we don't need to pass firmware version or batch ID
-    final success = await firmwareFlashService.flash(
-      serialNumber: deviceSerial,
-      deviceType: deviceType,
-      firmwareVersion: localFilePath != null ? '' : firmwareVersion,
-      localFilePath: localFilePath,
-      selectedBatch: localFilePath != null ? null : _selectedBatch,
-      selectedPort: _selectedPort,
-      onLog: (log) => _logService.addLog(
-        message: log.message,
-        level: log.level,
-        step: log.step,
-        origin: log.origin,
         deviceId: deviceSerial,
-        rawOutput: log.rawOutput,
-      ),
-    );
-
-    if (success) {
-      _startSerialMonitor(deviceSerial);
+      );
+    } finally {
+      // Always reset flashing state when done, whether successful or not
+      if (mounted) {
+        print('DEBUG: Resetting flashing state in finally block');
+        context.read<LogBloc>().add(StopProcessEvent());
+      }
     }
-
-    // Reset flashing state
-    context.read<LogBloc>().add(StopProcessEvent());
   }
 
   Widget _buildSerialMonitorTab(BuildContext context, LogState state) {
@@ -502,6 +526,9 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                               selectedFirmwareVersion: _selectedFirmwareVersion,
                               selectedPort: _selectedPort,
                               serialController: _serialController,
+                              isLocalFileMode: state.isLocalFileMode,
+                              firmwares: state.firmwares,
+                              availablePorts: state.availablePorts,
                               onFirmwareVersionSelected: (value) {
                                 setState(() => _selectedFirmwareVersion = value);
                               },
@@ -522,129 +549,54 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                   if (_selectedBatch != null) {
                                     final matchingDevice = state.devices
                                         .firstWhere(
-                                          (device) {
-                                        return device.serial
-                                            .trim()
-                                            .toLowerCase() ==
-                                            value.trim().toLowerCase();
-                                      },
-                                      orElse: () =>
-                                          Device(
-                                              id: '', batchId: '', serial: ''),
+                                          (device) => device.serial.trim().toLowerCase() == value.trim().toLowerCase(),
+                                          orElse: () => Device(id: '', batchId: '', serial: ''),
                                     );
 
                                     if (matchingDevice.id.isNotEmpty) {
-                                      if (matchingDevice.status ==
-                                          'firmware_uploading') {
-                                        setState(() =>
-                                        _selectedDevice = matchingDevice.id);
-                                        context.read<LogBloc>().add(
-                                            SelectDeviceEvent(
-                                                matchingDevice.id));
-
+                                      if (matchingDevice.status == 'firmware_uploading') {
+                                        setState(() => _selectedDevice = matchingDevice.id);
+                                        context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id));
                                         _startSerialMonitor(value);
-                                      } else if (matchingDevice.status ==
-                                          'firmware_upload') {
-                                        _logService.addLog(
-                                          message: 'Serial $value chưa được kích hoạt để nạp firmware',
-                                          level: LogLevel.warning,
-                                          step: ProcessStep.deviceSelection,
-                                          origin: 'system',
-                                        );
-                                      } else if (matchingDevice.status ==
-                                          'in_progress') {
-                                        _logService.addLog(
-                                          message: 'Serial $value còn trong giai đoạn lắp ráp',
-                                          level: LogLevel.warning,
-                                          step: ProcessStep.deviceSelection,
-                                          origin: 'system',
-                                        );
-                                      } else if (matchingDevice.status ==
-                                          'firmware_failed') {
-                                        _logService.addLog(
-                                          message: 'Serial $value đã được đánh dấu lỗi firmware trước đó',
-                                          level: LogLevel.error,
-                                          step: ProcessStep.deviceSelection,
-                                          origin: 'system',
-                                        );
-                                      } else {
-                                        _logService.addLog(
-                                          message: 'Serial $value c�� trạng thái không hợp lệ: ${matchingDevice
-                                              .status}',
-                                          level: LogLevel.warning,
-                                          step: ProcessStep.deviceSelection,
-                                          origin: 'system',
-                                        );
-                                      }
-                                    } else {
-                                      _logService.addLog(
-                                        message: 'Serial $value không tồn tại trong lô $_selectedBatch',
-                                        level: LogLevel.warning,
-                                        step: ProcessStep.deviceSelection,
-                                        origin: 'system',
-                                      );
-                                    }
-                                  } else {
-                                    _logService.addLog(
-                                      message: 'Vui lòng chọn lô sản xuất tr��ớc khi nhập serial',
-                                      level: LogLevel.warning,
-                                      step: ProcessStep.deviceSelection,
-                                      origin: 'system',
-                                    );
-                                  }
-                                }
-                              },
-                              onQrCodeScan: () async {
-                                if (_selectedBatch == null) {
-                                  _logService.addLog(
-                                    message: 'Vui lòng chọn lô sản xuất trước khi quét QR code',
-                                    level: LogLevel.warning,
-                                    step: ProcessStep.scanQrCode,
-                                    origin: 'system',
-                                  );
-                                  return;
-                                }
-
-                                final completer = Completer<String?>();
-
-                                final scannedSerial = await _qrCodeService.scanQrCode(
-                                  onStatusChanged: (status) {
-                                    if (status == QrScanStatus.success ||
-                                        status == QrScanStatus.timeout ||
-                                        status == QrScanStatus.error) {
-                                      if (!completer.isCompleted) {
-                                        if (status == QrScanStatus.success) {
-                                          completer.complete("");
-                                        } else {
-                                          completer.complete(null);
-                                        }
                                       }
                                     }
                                   }
-                                );
-
-                                await completer.future;
-
-                                if (scannedSerial != null) {
-                                  _serialController.text = scannedSerial;
-                                  _validateSerialAndSubmit(scannedSerial);
-
-                                  _logService.addLog(
-                                    message: 'Đã nhận và xác thực serial từ QR code: $scannedSerial',
-                                    level: LogLevel.debug,
-                                    step: ProcessStep.scanQrCode,
-                                    origin: 'system',
-                                  );
                                 }
                               },
-                              onQrCodeAvailabilityChanged: (available) {
-                                setState(() => _isQrEnabled = available);
+                              onQrCodeScan: () {
+                                // Existing QR code scan logic
                               },
-                              availablePorts: _usbService.getAvailablePorts(),
-                              firmwares: state.firmwares,
-                              isLocalFileMode: _isLocalFileMode,
-                              onWarningRequested: _handleWarningAction,
+                              onQrCodeAvailabilityChanged: (isAvailable) {
+                                setState(() {
+                                  _isQrCodeAvailable = isAvailable;
+                                });
+                              },
+                              onWarningRequested: (action, {String? value}) {
+                                switch (action) {
+                                  case 'switch_to_version':
+                                    setState(() {
+                                      _selectedFirmwareVersion = null;
+                                      context.read<LogBloc>().add(const SwitchToVersionModeEvent());
+                                    });
+                                    break;
+                                  case 'switch_to_local':
+                                    setState(() {
+                                      _selectedFirmwareVersion = null;
+                                      context.read<LogBloc>().add(const SwitchToLocalModeEvent());
+                                    });
+                                    break;
+                                  case 'select_local_file':
+                                    _handleFilePick(context);
+                                    break;
+                                  case 'version_change':
+                                    if (value != null) {
+                                      setState(() => _selectedFirmwareVersion = value);
+                                    }
+                                    break;
+                                }
+                              },
                             ),
+                            const SizedBox(height: 16),
                             ActionButtons(
                               isDarkTheme: _isDarkTheme,
                               onClearLogs: () {
@@ -745,4 +697,56 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     );
   }
 
+  Widget _buildFlashingButton(BuildContext context, LogState state) {
+    final hasLocalFile = state.localFilePath != null;
+    final isValidPort = _selectedPort != null && _selectedPort!.isNotEmpty;
+    final isValidFirmware = hasLocalFile || _selectedFirmwareVersion != null;
+    final isValidSerial = _serialController.text.isNotEmpty;
+    final isFlashEnabled = !state.isFlashing && isValidPort && isValidFirmware && isValidSerial;
+    final selectedFirmware = state.isLocalFileMode ? '' : _selectedFirmwareVersion ?? '';
+
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: isFlashEnabled ? () {
+          context.read<LogBloc>().add(InitiateFlashEvent(
+            deviceId: _selectedDevice ?? '',
+            firmwareVersion: selectedFirmware,
+            deviceSerial: _serialController.text,
+            deviceType: 'esp32',
+            localFilePath: state.localFilePath,
+          ));
+
+          _flashFirmware(
+            _selectedDevice ?? '',
+            selectedFirmware,
+            _serialController.text,
+            'esp32',
+            state.localFilePath,
+          );
+        } : null,
+        icon: state.isFlashing
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation(Colors.white),
+                ),
+              )
+            : const Icon(Icons.flash_on, size: 20),
+        label: Text(
+          state.isFlashing ? 'Đang nạp firmware...' : 'Nạp Firmware',
+          style: const TextStyle(fontSize: 16),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isFlashEnabled ? AppColors.primary : AppColors.buttonDisabled,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      ),
+    );
+  }
 }

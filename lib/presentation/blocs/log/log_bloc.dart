@@ -111,6 +111,14 @@ class LoadBatchDataEvent extends LogEvent {
   List<Object?> get props => [batchId, planningId];
 }
 
+class SwitchToVersionModeEvent extends LogEvent {
+  const SwitchToVersionModeEvent();
+}
+
+class SwitchToLocalModeEvent extends LogEvent {
+  const SwitchToLocalModeEvent();
+}
+
 class LogState extends Equatable {
   final List<Batch> batches;
   final List<Device> devices;
@@ -130,6 +138,7 @@ class LogState extends Equatable {
   final int? selectedTemplateId;
   final List<LogEntry> logs;
   final String? selectedFirmwareVersion;
+  final bool isLocalFileMode;
 
   const LogState({
     this.batches = const [],
@@ -150,6 +159,7 @@ class LogState extends Equatable {
     this.selectedTemplateId,
     this.logs = const [],
     this.selectedFirmwareVersion,
+    this.isLocalFileMode = false,
   });
 
   LogState copyWith({
@@ -171,6 +181,7 @@ class LogState extends Equatable {
     int? selectedTemplateId,
     List<LogEntry>? logs,
     String? selectedFirmwareVersion,
+    bool? isLocalFileMode,
   }) {
     return LogState(
       batches: batches ?? this.batches,
@@ -191,6 +202,7 @@ class LogState extends Equatable {
       selectedTemplateId: selectedTemplateId ?? this.selectedTemplateId,
       logs: logs ?? this.logs,
       selectedFirmwareVersion: selectedFirmwareVersion ?? this.selectedFirmwareVersion,
+      isLocalFileMode: isLocalFileMode ?? this.isLocalFileMode,
     );
   }
 
@@ -214,6 +226,7 @@ class LogState extends Equatable {
     selectedTemplateId,
     logs,
     selectedFirmwareVersion,
+    isLocalFileMode,
   ];
 }
 
@@ -243,6 +256,18 @@ class LogBloc extends Bloc<LogEvent, LogState> {
     on<LoadBatchesForPlanningEvent>(_onLoadBatchesForPlanning);
     on<RefreshBatchDevicesEvent>(_onRefreshBatchDevices);
     on<LoadBatchDataEvent>(_onLoadBatchData);
+    on<SwitchToVersionModeEvent>((event, emit) {
+      // Handle switching to version mode
+      emit(state.copyWith(
+        isLocalFileMode: false, // Disable local file mode
+      ));
+    });
+    on<SwitchToLocalModeEvent>((event, emit) {
+      // Handle switching to local mode
+      emit(state.copyWith(
+        isLocalFileMode: true, // Enable local file mode
+      ));
+    });
   }
 
   Future<void> _onLoadInitialData(LoadInitialDataEvent event, Emitter<LogState> emit) async {

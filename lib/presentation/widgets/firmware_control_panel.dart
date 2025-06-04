@@ -376,8 +376,29 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     );
   }
 
+  @override
+  void didUpdateWidget(FirmwareControlPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isLocalFileMode != widget.isLocalFileMode) {
+      setState(() {});  // Trigger rebuild on mode change
+    }
+  }
+
   void _handleLocalFileSearch() {
     widget.onWarningRequested('select_local_file');
+    // Force rebuild after file selection
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) setState(() {});
+    });
+  }
+
+  bool _canFlash() {
+    if (widget.isLocalFileMode) {
+      final state = context.read<LogBloc>().state;
+      return state.localFilePath != null && widget.selectedPort != null && _isSerialValid;
+    } else {
+      return widget.selectedFirmwareVersion != null && widget.selectedPort != null && _isSerialValid;
+    }
   }
 
   @override
@@ -385,9 +406,12 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     return BlocBuilder<LogBloc, LogState>(
       builder: (context, state) {
         final hasLocalFile = state.localFilePath != null;
-        final fileName = state.localFilePath != null
+        final fileName = hasLocalFile
             ? state.localFilePath!.split(Platform.pathSeparator).last
-            : '';
+            : 'Chưa chọn file';
+
+        // Add rebuild trigger when mode changes
+        final isReadyToFlash = _canFlash();
 
         // Modify conditions to allow input before batch selection
         final bool canUseSerial = true; // Always allow serial input

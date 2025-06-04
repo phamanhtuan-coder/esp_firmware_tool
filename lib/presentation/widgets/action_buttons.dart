@@ -29,7 +29,7 @@ class ActionButtons extends StatelessWidget {
   Widget build(BuildContext context) {
     final logState = context.watch<LogBloc>().state;
     final hasLocalFile = logState.localFilePath != null;
-    final isFlashEnabled = selectedPort != null && (hasLocalFile || selectedFirmwareVersion != null) && deviceSerial.isNotEmpty;
+    final isFlashEnabled = !isFlashing && selectedPort != null && (hasLocalFile || selectedFirmwareVersion != null) && deviceSerial.isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -51,15 +51,15 @@ class ActionButtons extends StatelessWidget {
           ElevatedButton.icon(
             icon: isFlashing
                 ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation(Colors.white),
-              ),
-            )
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(Colors.white),
+                    ),
+                  )
                 : const Icon(Icons.flash_on, size: 16),
-            label: Text(isFlashing ? 'Flashing...' : 'Flash Firmware'),
+            label: Text(isFlashing ? 'Đang nạp firmware...' : 'Nạp Firmware'),
             style: ElevatedButton.styleFrom(
               backgroundColor: isFlashEnabled ? AppColors.done : AppColors.idle,
               foregroundColor: Colors.white,
@@ -68,29 +68,34 @@ class ActionButtons extends StatelessWidget {
             onPressed: isFlashing || !isFlashEnabled
                 ? null
                 : () {
-              // Don't send firmware version if using local file
-              final logState = context.read<LogBloc>().state;
-              final localFilePath = logState.localFilePath;
-              final firmwareVersion = localFilePath != null ? '' : selectedFirmwareVersion ?? '';
+                    try {
+                      // Don't send firmware version if using local file
+                      final logState = context.read<LogBloc>().state;
+                      final localFilePath = logState.localFilePath;
+                      final firmwareVersion = localFilePath != null ? '' : selectedFirmwareVersion ?? '';
 
-              // First notify the LogBloc about the flashing event
-              context.read<LogBloc>().add(InitiateFlashEvent(
-                deviceId: selectedDevice ?? '',
-                firmwareVersion: firmwareVersion,
-                deviceSerial: deviceSerial,
-                deviceType: 'esp32',
-                localFilePath: localFilePath,
-              ));
+                      // First notify the LogBloc about the flashing event
+                      context.read<LogBloc>().add(InitiateFlashEvent(
+                        deviceId: selectedDevice ?? '',
+                        firmwareVersion: firmwareVersion,
+                        deviceSerial: deviceSerial,
+                        deviceType: 'esp32',
+                        localFilePath: localFilePath,
+                      ));
 
-              // Then call the onInitiateFlash callback with required parameters
-              onInitiateFlash(
-                selectedDevice ?? '',
-                firmwareVersion,
-                deviceSerial,
-                'esp32',
-                localFilePath,
-              );
-            },
+                      // Then call the onInitiateFlash callback
+                      onInitiateFlash(
+                        selectedDevice ?? '',
+                        firmwareVersion,
+                        deviceSerial,
+                        'esp32',
+                        localFilePath,
+                      );
+                    } catch (e) {
+                      // Make sure to reset flashing state on error
+                      context.read<LogBloc>().add(StopProcessEvent());
+                    }
+                  },
           ),
         ],
       ),
