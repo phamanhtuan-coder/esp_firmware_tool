@@ -226,23 +226,13 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
 
     final state = context.read<LogBloc>().state;
 
+    // Allow input even without batch selection, just show warning
     if (state.selectedBatchId == null) {
       setState(() {
-        _serialErrorText = 'Vui lòng chọn lô sản xuất trước khi nhập serial';
+        _serialErrorText = 'Cần chọn lô sản xuất để xác thực serial';
         _serialSuccessText = null;
         _isSerialValid = false;
       });
-      context.read<LogBloc>().add(
-        AddLogEvent(
-          LogEntry(
-            message: 'Vui lòng chọn lô sản xuất trước khi nhập serial: $value',
-            timestamp: DateTime.now(),
-            level: LogLevel.warning,
-            step: ProcessStep.deviceSelection,
-            origin: 'system',
-          ),
-        ),
-      );
       return;
     }
 
@@ -399,9 +389,9 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
             ? state.localFilePath!.split(Platform.pathSeparator).last
             : '';
 
-        // Điều kiện enable cho serial input và QR scan
-        final bool canUseSerial = (!widget.isLocalFileMode && widget.selectedFirmwareVersion != null) ||
-                                 (widget.isLocalFileMode && hasLocalFile);
+        // Modify conditions to allow input before batch selection
+        final bool canUseSerial = true; // Always allow serial input
+        final bool canScanQR = state.selectedBatchId != null; // QR requires batch selection
 
         return Padding(
           padding: const EdgeInsets.all(AppConfig.defaultPadding),
@@ -613,7 +603,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                           ),
                           onSubmitted: widget.onSerialSubmitted,
                           onChanged: _validateAndSubmitSerial,
-                          enabled: canUseSerial,
+                          enabled: canUseSerial, // Allow input but validation will show warnings
                         ),
                         if (_serialSuccessText != null)
                           Padding(
@@ -640,7 +630,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                         text: 'Quét QR',
                         icon: Icons.qr_code,
                         backgroundColor: AppColors.scanQr,
-                        enabled: canUseSerial,
+                        enabled: canScanQR, // QR scan still requires batch selection
                       ),
                     ],
                   ),
