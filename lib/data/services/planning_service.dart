@@ -378,7 +378,7 @@ class PlanningService {
         );
         return [];
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       _logService.addLog(
         message: 'Lỗi ngoại lệ khi tải firmware: $e',
         level: LogLevel.error,

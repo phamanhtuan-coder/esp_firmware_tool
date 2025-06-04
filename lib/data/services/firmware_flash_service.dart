@@ -278,7 +278,7 @@ class FirmwareFlashService {
 
       print('DEBUG: Starting compile sketch: $processedPath');
       final compiled = await _arduinoCliService.compileSketch(
-        processedPath!,
+        processedPath,
         fqbn,
         onLog: (log) {
           print('DEBUG: Compile log: ${log.message}');

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:smart_net_firmware_loader/data/models/batch.dart';
 import 'package:smart_net_firmware_loader/data/services/firmware_flash_service.dart';
 import 'package:smart_net_firmware_loader/data/services/qr_code_service.dart';
 import 'package:file_picker/file_picker.dart';
@@ -41,10 +40,9 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   String? _selectedFirmwareVersion;
   String? _selectedPort;
   bool _isDarkTheme = false;
-  bool _localFileWarning = false;
   bool _isSearching = false;
   final TextEditingController _serialInputController = TextEditingController();
-  int _selectedBaudRate = 115200;
+  final int _selectedBaudRate = 115200;
   final List<int> _baudRates = [
     300, 600, 1200, 2400, 4800, 9600, 19200,
     38400, 57600, 115200, 230400, 460800, 921600
@@ -54,6 +52,10 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   final ArduinoCliService _arduinoCliService = serviceLocator<
       ArduinoCliService>();
   final QrCodeService _qrCodeService = serviceLocator<QrCodeService>();
+
+  bool _showWarningDialog = false;
+  String _warningType = '';
+  bool _isLocalFileMode = false;
 
   @override
   void initState() {
@@ -284,24 +286,129 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     );
   }
 
+  void _handleWarningAction(String type, {String? value}) {
+    setState(() {
+      _showWarningDialog = true;
+      _warningType = type;
+    });
+  }
+
+  void _validateSerial(String value) {
+    if (value.isEmpty) {
+      return;
+    }
+
+    final state = context.read<LogBloc>().state;
+    if (_selectedBatch != null) {
+      final matchingDevice = state.devices.firstWhere(
+        (device) => device.serial.trim().toLowerCase() == value.trim().toLowerCase(),
+        orElse: () => Device(id: '', batchId: '', serial: ''),
+      );
+
+      if (matchingDevice.id.isNotEmpty) {
+        if (matchingDevice.status == 'firmware_uploading') {
+          setState(() => _selectedDevice = matchingDevice.id);
+          context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id));
+        }
+      }
+    }
+  }
+
+  void _handleWarningContinue() {
+    setState(() {
+      _showWarningDialog = false;
+    });
+
+    switch (_warningType) {
+      case 'switch_to_local':
+        setState(() {
+          _isLocalFileMode = true;
+          _selectedFirmwareVersion = null;
+          context.read<LogBloc>().add(ClearLocalFileEvent());
+        });
+        break;
+
+      case 'switch_to_version':
+        setState(() {
+          _isLocalFileMode = false;
+          context.read<LogBloc>().add(ClearLocalFileEvent());
+        });
+        break;
+
+      case 'select_local_file':
+        if (_isLocalFileMode) {
+          _handleFilePick(context);
+        }
+        break;
+
+      case 'version_change':
+        if (!_isLocalFileMode) {
+          // Don't clear the selectedFirmwareVersion since we're just changing it
+          final value = context.read<LogBloc>().state.selectedFirmwareVersion;
+          if (value != null) {
+            setState(() {
+              _selectedFirmwareVersion = value;
+            });
+          }
+        }
+        break;
+
+      case 'manual_serial':
+        if (_serialController.text.startsWith('QR_SCAN_')) {
+          _validateSerial(_serialController.text);
+        }
+        break;
+    }
+  }
+
+  String _getWarningTitle() {
+    switch (_warningType) {
+      case 'switch_to_local':
+        return 'Chuyển sang chế độ Upload File';
+      case 'switch_to_version':
+        return 'Chuyển sang chế độ Chọn Version';
+      case 'select_local_file':
+        return 'Cảnh báo: Sử dụng File Cục Bộ';
+      case 'version_change':
+        return 'Cảnh báo: Thay đổi Phiên bản Firmware';
+      case 'manual_serial':
+        return 'Cảnh báo: Nhập Serial Thủ Công';
+      default:
+        return 'Cảnh báo';
+    }
+  }
+
+  String _getWarningMessage() {
+    switch (_warningType) {
+      case 'switch_to_local':
+        return 'Bạn đang chuyển sang ch�� độ upload file firmware cục bộ. Việc này có thể gây ra rủi ro nếu file không được kiểm tra. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
+      case 'switch_to_version':
+        return 'Bạn đang chuyển sang chế độ chọn version từ server. Mọi file firmware cục bộ sẽ bị xóa. Tiếp tục?';
+      case 'select_local_file':
+        return 'Bạn đang sử dụng file firmware cục bộ. Việc này có thể gây ra rủi ro nếu file không được kiểm tra. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
+      case 'version_change':
+        return 'Bạn đang thay đổi phiên bản firmware so với mặc định. Việc này có thể gây ra rủi ro nếu phiên bản không tương thích. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
+      case 'manual_serial':
+        return 'Bạn đang nhập serial thủ công thay vì quét QR code. Việc này có thể gây ra rủi ro nếu serial không chính xác. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
+      default:
+        return 'Hành động này có thể gây ra rủi ro. Bạn có chắc muốn tiếp tục?';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) =>
-      LogBloc()
-        ..add(LoadInitialDataEvent()),
+      create: (context) => LogBloc()..add(LoadInitialDataEvent()),
       child: BlocBuilder<LogBloc, LogState>(
         builder: (context, state) {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: _isDarkTheme ? ThemeData.dark() : ThemeData.light(),
             home: Scaffold(
-              backgroundColor: _isDarkTheme ? AppColors.darkBackground : Colors
-                  .grey[50],
+              backgroundColor: _isDarkTheme ? AppColors.darkBackground : Colors.grey[50],
               appBar: AppHeader(
                 isDarkTheme: _isDarkTheme,
-                onThemeToggled: () =>
-                    setState(() => _isDarkTheme = !_isDarkTheme),
+                onThemeToggled: () => setState(() => _isDarkTheme = !_isDarkTheme),
               ),
               body: Stack(
                 children: [
@@ -349,25 +456,20 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                               selectedPort: _selectedPort,
                               serialController: _serialController,
                               onFirmwareVersionSelected: (value) {
-                                setState(() =>
-                                _selectedFirmwareVersion = value);
+                                setState(() => _selectedFirmwareVersion = value);
                               },
                               onUsbPortSelected: (value) {
                                 setState(() => _selectedPort = value);
-                                context.read<LogBloc>().add(
-                                    SelectUsbPortEvent(value!));
+                                context.read<LogBloc>().add(SelectUsbPortEvent(value!));
                               },
-                              onLocalFileSearch: () =>
-                                  setState(() => _localFileWarning = true),
+                              onLocalFileSearch: () => _handleFilePick(context),
                               onUsbPortRefresh: () {
-                                context.read<LogBloc>().add(
-                                    ScanUsbPortsEvent());
+                                context.read<LogBloc>().add(ScanUsbPortsEvent());
                                 _usbService.getAvailablePorts();
                               },
                               onSerialSubmitted: (value) {
                                 if (value.isNotEmpty) {
-                                  context.read<LogBloc>().add(
-                                      SelectSerialEvent(value));
+                                  context.read<LogBloc>().add(SelectSerialEvent(value));
                                   _serialController.text = value;
 
                                   if (_selectedBatch != null) {
@@ -420,7 +522,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                         );
                                       } else {
                                         _logService.addLog(
-                                          message: 'Serial $value có trạng thái không hợp lệ: ${matchingDevice
+                                          message: 'Serial $value c�� trạng thái không hợp lệ: ${matchingDevice
                                               .status}',
                                           level: LogLevel.warning,
                                           step: ProcessStep.deviceSelection,
@@ -448,7 +550,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                               onQrCodeScan: () async {
                                 if (_selectedBatch == null) {
                                   _logService.addLog(
-                                    message: 'Vui lòng chọn lô sản xuất trước khi quét QR code',
+                                    message: 'Vui lòng chọn lô sản xu���t trước khi quét QR code',
                                     level: LogLevel.warning,
                                     step: ProcessStep.scanQrCode,
                                     origin: 'system',
@@ -481,7 +583,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                   _serialController.text = scannedSerial;
 
                                   _logService.addLog(
-                                    message: 'Đã nhận và xác thực serial từ QR code: $scannedSerial',
+                                    message: 'Đã nhận và xác th���c serial từ QR code: $scannedSerial',
                                     level: LogLevel.debug,
                                     step: ProcessStep.scanQrCode,
                                     origin: 'system',
@@ -490,21 +592,8 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                               },
                               availablePorts: _usbService.getAvailablePorts(),
                               firmwares: state.firmwares,
-                              defaultFirmwareId: state.selectedBatchId != null
-                                  ? state.batches
-                                  .firstWhere(
-                                    (batch) =>
-                                batch.id == state.selectedBatchId,
-                                orElse: () =>
-                                    Batch(
-                                      id: '',
-                                      name: '',
-                                      planningId: '',
-                                      templateId: '',
-                                    ),
-                              )
-                                  .firmwareId
-                                  : null,
+                              isLocalFileMode: _isLocalFileMode,
+                              onWarningRequested: _handleWarningAction,
                             ),
                             ActionButtons(
                               isDarkTheme: _isDarkTheme,
@@ -580,16 +669,22 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                       ),
                     ],
                   ),
-                  if (_localFileWarning)
-                    WarningDialog(
-                      isDarkTheme: _isDarkTheme,
-                      onCancel: () => setState(() => _localFileWarning = false),
-                      onContinue: () {
-                        setState(() => _localFileWarning = false);
-                        _handleFilePick(context);
-                      },
-                      title: 'Cảnh báo',
-                      message: 'Tính năng chọn file local có thể gây nguy hiểm cho dự án. Bạn có chắc muốn tiếp tục?',
+                  if (_showWarningDialog)
+                    Container(
+                      color: Colors.black54,
+                      child: Center(
+                        child: WarningDialog(
+                          isDarkTheme: _isDarkTheme,
+                          onCancel: () {
+                            setState(() {
+                              _showWarningDialog = false;
+                            });
+                          },
+                          onContinue: _handleWarningContinue,
+                          title: _getWarningTitle(),
+                          message: _getWarningMessage(),
+                        ),
+                      ),
                     ),
                 ],
               ),
