@@ -26,6 +26,7 @@ class FirmwareControlPanel extends StatefulWidget {
   final Function(String?) onUsbPortSelected;
   final Function(String, {String? value}) onWarningRequested;
   final bool isLocalFileMode;
+  final Function(bool) onQrCodeAvailabilityChanged;  // Add new callback
 
   const FirmwareControlPanel({
     super.key,
@@ -43,6 +44,7 @@ class FirmwareControlPanel extends StatefulWidget {
     required this.onUsbPortSelected,
     required this.onWarningRequested,
     required this.isLocalFileMode,
+    required this.onQrCodeAvailabilityChanged,  // Add to constructor
   });
 
   @override
@@ -71,39 +73,13 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
   }
 
   void _validateAndSubmitSerial(String value) {
-    if (value.isNotEmpty && !value.startsWith('QR_SCAN_')) {
-      widget.onWarningRequested('manual_serial', value: value);
-      return;
-    }
+    // Bỏ kiểm tra QR_SCAN_ prefix
     _validateSerial(value);
     if (_isSerialValid) {
       widget.onSerialSubmitted(value);
     }
   }
 
-  void _clearLocalFile(BuildContext context) async {
-    setState(() {
-      _isVersionButtonLoading = true;
-    });
-
-    try {
-      context.read<LogBloc>().add(ClearLocalFileEvent());
-      widget.onFirmwareVersionSelected(null);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Đã xóa file firmware cục bộ'),
-          backgroundColor: AppColors.success,
-          duration: Duration(seconds: 2),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isVersionButtonLoading = false;
-        });
-      }
-    }
-  }
 
   void _handleQrScan() {
     final state = context.read<LogBloc>().state;
@@ -125,8 +101,12 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
           ),
         ),
       );
+      widget.onQrCodeAvailabilityChanged(false);  // Notify QR not available
       return;
     }
+
+    // Enable QR scanning
+    widget.onQrCodeAvailabilityChanged(true);
 
     setState(() {
       _isQrCodeButtonLoading = true;
@@ -419,6 +399,10 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
             ? state.localFilePath!.split(Platform.pathSeparator).last
             : '';
 
+        // Điều kiện enable cho serial input và QR scan
+        final bool canUseSerial = (!widget.isLocalFileMode && widget.selectedFirmwareVersion != null) ||
+                                 (widget.isLocalFileMode && hasLocalFile);
+
         return Padding(
           padding: const EdgeInsets.all(AppConfig.defaultPadding),
           child: Column(
@@ -457,7 +441,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                                     ? AppColors.cardBackground.withAlpha(128)
                                     : AppColors.cardBackground,
                             filled: true,
-                            enabled: !widget.isLocalFileMode && widget.firmwares.isNotEmpty,
+                            enabled: !widget.isLocalFileMode,
                           ),
                           items: widget.firmwares.map((firmware) {
                             return DropdownMenuItem(
@@ -526,8 +510,12 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                               vertical: 14,
                             ),
                             fillColor: widget.isDarkTheme
-                                ? AppColors.darkCardBackground
-                                : AppColors.cardBackground,
+                                ? widget.isLocalFileMode
+                                    ? AppColors.darkCardBackground
+                                    : AppColors.darkCardBackground.withAlpha(128)
+                                : widget.isLocalFileMode
+                                    ? AppColors.cardBackground
+                                    : AppColors.cardBackground.withAlpha(128),
                             filled: true,
                           ),
                         ),
@@ -543,7 +531,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                       text: 'Tìm File',
                       icon: Icons.search,
                       backgroundColor: AppColors.findFile,
-                      enabled: !hasLocalFile,
+                      enabled: widget.isLocalFileMode && !hasLocalFile,
                     ),
                   ),
                 ],
@@ -625,7 +613,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                           ),
                           onSubmitted: widget.onSerialSubmitted,
                           onChanged: _validateAndSubmitSerial,
-                          enabled: widget.selectedFirmwareVersion != null || hasLocalFile,
+                          enabled: canUseSerial,
                         ),
                         if (_serialSuccessText != null)
                           Padding(
@@ -652,7 +640,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                         text: 'Quét QR',
                         icon: Icons.qr_code,
                         backgroundColor: AppColors.scanQr,
-                        enabled: widget.selectedFirmwareVersion != null || hasLocalFile,
+                        enabled: canUseSerial,
                       ),
                     ],
                   ),

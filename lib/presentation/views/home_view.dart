@@ -20,6 +20,7 @@ import 'package:smart_net_firmware_loader/presentation/widgets/serial_monitor_te
 import 'package:smart_net_firmware_loader/presentation/widgets/warning_dialog.dart';
 import 'package:smart_net_firmware_loader/utils/app_colors.dart';
 
+import '../../data/models/batch.dart';
 import '../../data/models/device.dart';
 
 class HomeView extends StatefulWidget {
@@ -56,6 +57,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   bool _showWarningDialog = false;
   String _warningType = '';
   bool _isLocalFileMode = false;
+  bool _isQrEnabled = false;
 
   @override
   void initState() {
@@ -324,13 +326,13 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         setState(() {
           _isLocalFileMode = true;
           _selectedFirmwareVersion = null;
-          context.read<LogBloc>().add(ClearLocalFileEvent());
         });
         break;
 
       case 'switch_to_version':
         setState(() {
           _isLocalFileMode = false;
+          _selectedFirmwareVersion = null;
           context.read<LogBloc>().add(ClearLocalFileEvent());
         });
         break;
@@ -342,25 +344,59 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         break;
 
       case 'version_change':
-        if (!_isLocalFileMode) {
-          // Don't clear the selectedFirmwareVersion since we're just changing it
-          final value = context.read<LogBloc>().state.selectedFirmwareVersion;
-          if (value != null) {
-            setState(() {
-              _selectedFirmwareVersion = value;
-            });
-          }
-        }
+        // Handle firmware version change
+        setState(() => _selectedFirmwareVersion = context.read<LogBloc>().state.selectedFirmwareVersion);
         break;
 
       case 'manual_serial':
-        if (_serialController.text.startsWith('QR_SCAN_')) {
-          _validateSerial(_serialController.text);
-        }
+        _validateSerial(_serialController.text);
         break;
     }
   }
 
+  void _validateSerialAndSubmit(String value) {
+    if (value.isNotEmpty) {
+      context.read<LogBloc>().add(SelectSerialEvent(value));
+      _serialController.text = value;
+
+      if (_selectedBatch != null) {
+        final state = context.read<LogBloc>().state;
+        final matchingDevice = state.devices.firstWhere(
+          (device) => device.serial.trim().toLowerCase() == value.trim().toLowerCase(),
+          orElse: () => Device(id: '', batchId: '', serial: ''),
+        );
+
+        if (matchingDevice.id.isNotEmpty) {
+          if (matchingDevice.status == 'firmware_uploading') {
+            setState(() => _selectedDevice = matchingDevice.id);
+            context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id));
+            _startSerialMonitor(value);
+          } else {
+            _logService.addLog(
+              message: 'Trạng thái thiết bị không hợp lệ: ${matchingDevice.status}',
+              level: LogLevel.warning,
+              step: ProcessStep.deviceSelection,
+              origin: 'system',
+            );
+          }
+        } else {
+          _logService.addLog(
+            message: 'Serial $value không tồn tại trong lô $_selectedBatch',
+            level: LogLevel.warning,
+            step: ProcessStep.deviceSelection,
+            origin: 'system',
+          );
+        }
+      } else {
+        _logService.addLog(
+          message: 'Vui lòng chọn lô sản xuất trước khi nhập serial',
+          level: LogLevel.warning,
+          step: ProcessStep.deviceSelection,
+          origin: 'system',
+        );
+      }
+    }
+  }
   String _getWarningTitle() {
     switch (_warningType) {
       case 'switch_to_local':
@@ -423,8 +459,19 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                           selectedPlanning: _selectedPlanning,
                           onBatchSelected: (value) {
                             setState(() => _selectedBatch = value);
-                            context.read<LogBloc>().add(
-                                SelectBatchEvent(value!));
+                            if (value != null) {
+                              // Find the batch to get its firmware_id
+                              final selectedBatch = state.batches.firstWhere(
+                                    (batch) => batch.id == value,
+                                orElse: () => Batch(id: '', firmwareId: null, name: '', planningId: '', templateId: ''), // Replace with your Batch model's default constructor
+                              );
+
+                              if (selectedBatch?.firmwareId != null) {
+                                // Auto select firmware version based on batch's firmware_id
+                                _selectedFirmwareVersion = selectedBatch!.firmwareId.toString();
+                              }
+                              context.read<LogBloc>().add(SelectBatchEvent(value));
+                            }
                           },
                           onDeviceSelected: (value) {
                             setState(() => _selectedDevice = value);
@@ -550,7 +597,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                               onQrCodeScan: () async {
                                 if (_selectedBatch == null) {
                                   _logService.addLog(
-                                    message: 'Vui lòng chọn lô sản xu���t trước khi quét QR code',
+                                    message: 'Vui lòng chọn lô sản xuất trước khi quét QR code',
                                     level: LogLevel.warning,
                                     step: ProcessStep.scanQrCode,
                                     origin: 'system',
@@ -560,35 +607,38 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
 
                                 final completer = Completer<String?>();
 
-                                final scannedSerial = await _qrCodeService
-                                    .scanQrCode(
-                                    onStatusChanged: (status) {
-                                      if (status == QrScanStatus.success ||
-                                          status == QrScanStatus.timeout ||
-                                          status == QrScanStatus.error) {
-                                        if (!completer.isCompleted) {
-                                          if (status == QrScanStatus.success) {
-                                            completer.complete("");
-                                          } else {
-                                            completer.complete(null);
-                                          }
+                                final scannedSerial = await _qrCodeService.scanQrCode(
+                                  onStatusChanged: (status) {
+                                    if (status == QrScanStatus.success ||
+                                        status == QrScanStatus.timeout ||
+                                        status == QrScanStatus.error) {
+                                      if (!completer.isCompleted) {
+                                        if (status == QrScanStatus.success) {
+                                          completer.complete("");
+                                        } else {
+                                          completer.complete(null);
                                         }
                                       }
                                     }
+                                  }
                                 );
 
                                 await completer.future;
 
                                 if (scannedSerial != null) {
                                   _serialController.text = scannedSerial;
+                                  _validateSerialAndSubmit(scannedSerial);
 
                                   _logService.addLog(
-                                    message: 'Đã nhận và xác th���c serial từ QR code: $scannedSerial',
+                                    message: 'Đã nhận và xác thực serial từ QR code: $scannedSerial',
                                     level: LogLevel.debug,
                                     step: ProcessStep.scanQrCode,
                                     origin: 'system',
                                   );
                                 }
+                              },
+                              onQrCodeAvailabilityChanged: (available) {
+                                setState(() => _isQrEnabled = available);
                               },
                               availablePorts: _usbService.getAvailablePorts(),
                               firmwares: state.firmwares,
