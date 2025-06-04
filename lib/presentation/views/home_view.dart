@@ -275,67 +275,11 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   Widget _buildSerialMonitorTab(BuildContext context, LogState state) {
     return Container(
       padding: const EdgeInsets.all(8.0),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _serialInputController,
-                  decoration: InputDecoration(
-                    labelText: 'Serial Command',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    suffixIcon: DropdownButton<int>(
-                      value: _selectedBaudRate,
-                      underline: const SizedBox(),
-                      items: _baudRates.map((rate) {
-                        return DropdownMenuItem<int>(
-                          value: rate,
-                          child: Text('$rate bps'),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _selectedBaudRate = value;
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                  onSubmitted: (value) {
-                    if (value.isNotEmpty && _selectedPort != null) {
-                      _logService.sendToSerial(_selectedPort!, value);
-                      _serialInputController.clear();
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: () {
-                  final command = _serialInputController.text;
-                  if (command.isNotEmpty && _selectedPort != null) {
-                    _logService.sendToSerial(_selectedPort!, command);
-                    _serialInputController.clear();
-                  }
-                },
-                child: const Text('Send'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: SerialMonitorTerminalWidget(
-              initialPort: _selectedPort,
-              initialBaudRate: _selectedBaudRate,
-              autoStart: true,
-              isActiveTab: _tabController.index == 1,
-            ),
-          ),
-        ],
+      child: SerialMonitorTerminalWidget(
+        initialPort: _selectedPort,
+        initialBaudRate: _selectedBaudRate,
+        autoStart: true,
+        isActiveTab: _tabController.index == 1,
       ),
     );
   }
@@ -604,33 +548,14 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                     child: TabBarView(
                                       controller: _tabController,
                                       children: [
-                                        StreamBuilder<List<LogEntry>>(
-                                          stream: _logService.logStream
-                                              .transform(
-                                            StreamTransformer<LogEntry,
-                                                List<LogEntry>>.fromHandlers(
-                                              handleData: (log, sink) {
-                                                final currentLogs = state
-                                                    .filteredLogs.toList();
-                                                currentLogs.add(log);
-                                                sink.add(currentLogs);
-                                              },
-                                            ),
+                                        // Let ConsoleTerminalWidget handle the stream transformation internally
+                                        Container(
+                                          padding: const EdgeInsets.all(8.0),
+                                          child: ConsoleTerminalWidget(
+                                            logs: state.filteredLogs,
+                                            scrollController: _scrollController,
+                                            isActiveTab: _tabController.index == 0,
                                           ),
-                                          builder: (context, snapshot) {
-                                            final logs = snapshot.data ??
-                                                state.filteredLogs;
-                                            return Container(
-                                              padding: const EdgeInsets.all(
-                                                  8.0),
-                                              child: ConsoleTerminalWidget(
-                                                logs: logs,
-                                                scrollController: _scrollController,
-                                                isActiveTab: _tabController
-                                                    .index == 0,
-                                              ),
-                                            );
-                                          },
                                         ),
                                         _buildSerialMonitorTab(context, state),
                                       ],

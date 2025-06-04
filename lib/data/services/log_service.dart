@@ -181,6 +181,7 @@ class LogService {
         logLevel = LogLevel.verbose;
       }
 
+      // Always add logs to the stream instead of replacing
       addLog(
         message: message,
         level: logLevel,
@@ -192,7 +193,7 @@ class LogService {
       return;
     }
 
-    // Handle other output types based on content
+    // Handle other output types based on content - always add to log stream
     if (output.toLowerCase().contains('error') || output.toLowerCase().contains('failed')) {
       addLog(
         message: output,
@@ -237,6 +238,7 @@ class LogService {
         rawOutput: output,
       );
     } else {
+      // For all other outputs, add as info level
       addLog(
         message: output,
         level: LogLevel.info,
@@ -999,4 +1001,3 @@ class LogService {
     }
   }
 }
-

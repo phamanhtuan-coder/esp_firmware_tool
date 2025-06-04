@@ -167,13 +167,7 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
                   stream: _logService.logStream.transform(
                     StreamTransformer<LogEntry, List<LogEntry>>.fromHandlers(
                       handleData: (log, sink) {
-                        final currentLogs = [..._displayLines.map((line) => LogEntry(
-                          message: line.content,
-                          timestamp: DateTime.parse(line.timestamp),
-                          level: line.level,
-                          step: ProcessStep.consoleLog,
-                          origin: line.origin,
-                        )), log];
+                        final currentLogs = [...widget.logs, log]; // Dùng widget.logs làm base
                         sink.add(currentLogs);
                       },
                     ),
@@ -181,107 +175,111 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
                   builder: (context, snapshot) {
                     final logs = snapshot.data ?? widget.logs;
                     print('DEBUG: StreamBuilder received ${logs.length} logs'); // Debug
-                    if (snapshot.hasData) {
-                      _displayLines.clear(); // Chỉ xóa khi có dữ liệu mới
-                      for (var log in logs) {
-                        _displayLines.add(ConsoleLineDisplay(
-                          log.formattedTimestamp,
-                          log.message,
-                          level: log.level,
-                          origin: log.origin,
-                          isSystemMessage: log.origin == 'system',
-                        ));
-                      }
+
+                    _displayLines.clear(); // Clear display lines when new data arrives
+                    for (var log in logs) {
+                      _displayLines.add(ConsoleLineDisplay(
+                        log.formattedTimestamp,
+                        log.message,
+                        level: log.level,
+                        origin: log.origin,
+                        isSystemMessage: log.origin == 'system',
+                      ));
                     }
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.circular(8.0),
-                        border: Border.all(
-                          color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
-                          width: 1,
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: _displayLines.isEmpty
-                            ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.terminal, size: 48, color: Colors.grey[700]),
-                              const SizedBox(height: 16),
-                              Text(
-                                'No console output',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 15,
+
+                    // Auto-scroll if enabled
+                    if (_isAutoScrollEnabled) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted && widget.scrollController.hasClients) {
+                          widget.scrollController.animateTo(
+                            widget.scrollController.position.maxScrollExtent,
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeOut,
+                          );
+                        }
+                      });
+                    }
+
+                    // Display terminal content
+                    return _displayLines.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.terminal, size: 48, color: Colors.grey[700]),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No console output',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 15,
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        )
-                            : SingleChildScrollView(
-                          controller: widget.scrollController,
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: SelectableText.rich(
-                              TextSpan(
-                                children: _displayLines.map((line) {
-                                  final icon = line.getIcon();
-                                  return TextSpan(
-                                    children: [
-                                      if (icon != null)
-                                        WidgetSpan(
-                                          alignment: PlaceholderAlignment.middle,
-                                          child: Padding(
-                                            padding: const EdgeInsets.only(right: 8),
-                                            child: Icon(
-                                              icon,
-                                              size: 14,
-                                              color: line.getColor(isDarkTheme),
+                              ],
+                            ),
+                          )
+                        : SingleChildScrollView(
+                            controller: widget.scrollController,
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: SelectableText.rich(
+                                TextSpan(
+                                  children: _displayLines.map((line) {
+                                    final icon = line.getIcon();
+                                    return TextSpan(
+                                      children: [
+                                        // Icon for message type
+                                        if (icon != null)
+                                          WidgetSpan(
+                                            alignment: PlaceholderAlignment.middle,
+                                            child: Padding(
+                                              padding: const EdgeInsets.only(right: 8),
+                                              child: Icon(
+                                                icon,
+                                                size: 14,
+                                                color: line.getColor(isDarkTheme),
+                                              ),
                                             ),
                                           ),
+                                        // Timestamp
+                                        TextSpan(
+                                          text: '[${line.timestamp}] ',
+                                          style: TextStyle(
+                                            color: line.isSystemMessage
+                                                ? Colors.yellow.withOpacity(0.8)
+                                                : Colors.grey.withOpacity(0.7),
+                                            fontFamily: 'Courier New',
+                                            fontSize: 12.0,
+                                            height: 1.5,
+                                          ),
                                         ),
-                                      TextSpan(
-                                        text: '[${line.timestamp}] ',
-                                        style: TextStyle(
-                                          color: line.isSystemMessage
-                                              ? Colors.yellow.withOpacity(0.8)
-                                              : Colors.grey.withOpacity(0.7),
-                                          fontFamily: 'Courier New',
-                                          fontSize: 12.0,
-                                          height: 1.5,
+                                        // Message content
+                                        TextSpan(
+                                          text: '${line.content}\n',
+                                          style: TextStyle(
+                                            color: line.isSystemMessage
+                                                ? Colors.yellow
+                                                : line.getColor(true), // Always use dark theme colors
+                                            fontFamily: 'Courier New',
+                                            fontSize: 14.0,
+                                            height: 1.5,
+                                            fontWeight: _getLineWeight(line),
+                                          ),
                                         ),
-                                      ),
-                                      TextSpan(
-                                        text: '${line.content}\n',
-                                        style: TextStyle(
-                                          color: line.isSystemMessage
-                                              ? Colors.yellow
-                                              : line.getColor(true),
-                                          fontFamily: 'Courier New',
-                                          fontSize: 14.0,
-                                          height: 1.5,
-                                          fontWeight: _getLineWeight(line),
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                }).toList(),
+                                      ],
+                                    );
+                                  }).toList(),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                      ),
-                    );
+                          );
                   },
-                )
+                ),
               ),
             ),
           ),
 
-          // Control bar - similar to SerialMonitorTerminalWidget
+          // Control bar
           Container(
             margin: const EdgeInsets.only(top: 8.0),
             child: Row(
@@ -319,10 +317,9 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
                   ),
                   child: IconButton(
                     onPressed: () {
-                      // Clear logs through service
                       setState(() {
-                        // This will keep the UI in sync until the next stream update
-                        widget.logs.clear();
+                        widget.logs.clear(); // Clear the underlying log list
+                        _displayLines.clear(); // Clear display lines
                       });
                     },
                     icon: const Icon(Icons.clear_all),

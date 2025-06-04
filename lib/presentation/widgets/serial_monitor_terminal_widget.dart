@@ -46,11 +46,16 @@ class _SerialMonitorTerminalWidgetState
   bool _isMonitorActive = false;
   bool _wasActiveBefore = false; // Lưu trạng thái trước đó
 
+  // Các tùy chọn baudrate phổ biến
+  final List<int> _baudRates = [300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 74880, 115200, 230400, 250000, 500000, 921600, 1000000, 2000000];
+  int _selectedBaudRate = 115200; // Mặc định 115200
+
   @override
   void initState() {
     super.initState();
     _ansi = Ansi(Ansi.terminalSupportsAnsi);
     _wasActiveBefore = widget.isActiveTab;
+    _selectedBaudRate = widget.initialBaudRate;
 
     // Thêm welcome message
     final timestamp = DateTime.now().toString().split('.').first;
@@ -94,7 +99,7 @@ class _SerialMonitorTerminalWidgetState
 
     if (widget.initialPort != null &&
         widget.initialPort!.isNotEmpty &&
-        widget.initialBaudRate > 0) {
+        _selectedBaudRate > 0) {
       // Dừng kết nối hiện tại trước
       _stopMonitor();
 
@@ -102,10 +107,10 @@ class _SerialMonitorTerminalWidgetState
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted && widget.isActiveTab) {
           _monitorService.startMonitor(
-              widget.initialPort!, widget.initialBaudRate);
+              widget.initialPort!, _selectedBaudRate);
           _isMonitorActive = true;
           _addLine(
-              'Starting monitor on ${widget.initialPort} at ${widget.initialBaudRate} baud...',
+              'Starting monitor on ${widget.initialPort} at ${_selectedBaudRate} baud...',
               isSystemMessage: true);
         }
       });
@@ -117,6 +122,24 @@ class _SerialMonitorTerminalWidgetState
       _monitorService.stopMonitor();
       _isMonitorActive = false;
       _addLine('Serial monitor stopped', isSystemMessage: true);
+    }
+  }
+
+  void _restartMonitor() {
+    if (widget.initialPort != null && widget.initialPort!.isNotEmpty) {
+      _stopMonitor();
+
+      // Thêm độ trễ nhỏ để đảm bảo cổng được giải phóng
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted && widget.isActiveTab) {
+          _monitorService.startMonitor(
+              widget.initialPort!, _selectedBaudRate);
+          _isMonitorActive = true;
+          _addLine(
+              'Restarting monitor on ${widget.initialPort} at ${_selectedBaudRate} baud...',
+              isSystemMessage: true);
+        }
+      });
     }
   }
 
@@ -141,10 +164,8 @@ class _SerialMonitorTerminalWidgetState
       }
     }
     // Xử lý khi có thay đổi cổng hoặc tốc độ baud
-    else if (widget.isActiveTab &&
-        (oldWidget.initialPort != widget.initialPort ||
-            oldWidget.initialBaudRate != widget.initialBaudRate)) {
-      _addLine('Port or baud rate changed - restarting monitor...',
+    else if (widget.isActiveTab && oldWidget.initialPort != widget.initialPort) {
+      _addLine('Port changed - restarting monitor...',
           isSystemMessage: true);
       _initializeMonitor();
     }
@@ -279,11 +300,51 @@ class _SerialMonitorTerminalWidgetState
             ),
           ),
 
-          // Khu vực nhập lệnh
+          // Khu vực input đơn giản hóa - chỉ giữ lại một hàng
           Container(
             margin: const EdgeInsets.only(top: 8.0),
             child: Row(
               children: [
+                // Baud rate dropdown
+                Container(
+                  decoration: BoxDecoration(
+                    color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isDarkTheme
+                          ? Colors.grey.shade700
+                          : Colors.grey.shade300,
+                    ),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: DropdownButton<int>(
+                    value: _selectedBaudRate,
+                    dropdownColor: isDarkTheme ? Colors.grey.shade800 : Colors.white,
+                    style: TextStyle(
+                      color: isDarkTheme ? Colors.white : Colors.black,
+                      fontSize: 14,
+                    ),
+                    underline: Container(), // Ẩn underline
+                    items: _baudRates.map((rate) {
+                      return DropdownMenuItem<int>(
+                        value: rate,
+                        child: Text('$rate'),
+                      );
+                    }).toList(),
+                    onChanged: (int? newValue) {
+                      if (newValue != null && newValue != _selectedBaudRate) {
+                        setState(() {
+                          _selectedBaudRate = newValue;
+                        });
+                        _restartMonitor();
+                      }
+                    },
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+
+                // Input lệnh
                 Expanded(
                   child: TextField(
                     controller: _inputController,
@@ -311,8 +372,7 @@ class _SerialMonitorTerminalWidgetState
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide:
-                            const BorderSide(color: Colors.blue, width: 2),
+                        borderSide: const BorderSide(color: Colors.blue, width: 2),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 8),
@@ -323,35 +383,10 @@ class _SerialMonitorTerminalWidgetState
                     onSubmitted: (_) => _sendCommand(),
                   ),
                 ),
+
                 const SizedBox(width: 8.0),
-                Container(
-                  decoration: BoxDecoration(
-                    color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isDarkTheme
-                          ? Colors.grey.shade700
-                          : Colors.grey.shade300,
-                    ),
-                  ),
-                  child: IconButton(
-                    onPressed: () {
-                      setState(() {
-                        _isAutoScrollEnabled = !_isAutoScrollEnabled;
-                      });
-                    },
-                    icon: Icon(
-                      _isAutoScrollEnabled
-                          ? Icons.vertical_align_bottom
-                          : Icons.vertical_align_center,
-                      color: _isAutoScrollEnabled ? Colors.blue : Colors.grey,
-                    ),
-                    tooltip: _isAutoScrollEnabled
-                        ? 'Auto-scroll enabled'
-                        : 'Auto-scroll disabled',
-                  ),
-                ),
-                const SizedBox(width: 8.0),
+
+                // Nút gửi
                 ElevatedButton(
                   onPressed: _sendCommand,
                   style: ElevatedButton.styleFrom(
@@ -373,4 +408,3 @@ class _SerialMonitorTerminalWidgetState
     );
   }
 }
-
