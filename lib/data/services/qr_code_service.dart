@@ -117,8 +117,7 @@ class QrCodeService {
 
     DebugLogger.i('QR code server listening at address: http://${_bluetoothServer.serverAddress}:${_bluetoothServer.port}');
     _logService.addLog(
-      message: '🌐 Server đang lắng nghe kết nối tại địa chỉ: ' +
-               'http://${_bluetoothServer.serverAddress}:${_bluetoothServer.port}',
+      message: '🌐 Server đang lắng nghe kết nối tại địa chỉ: ' 'http://${_bluetoothServer.serverAddress}:${_bluetoothServer.port}',
       level: LogLevel.info,
       step: ProcessStep.scanQrCode,
       origin: 'qr-service',

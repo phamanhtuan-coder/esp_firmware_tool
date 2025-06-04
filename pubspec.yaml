@@ -51,6 +51,7 @@ dependencies:
   crypto: any
   http: ^1.4.0
 
+  provider: any
 dev_dependencies:
   flutter_test:
     sdk: flutter

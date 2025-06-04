@@ -132,7 +132,7 @@ class _BatchSelectionPanelState extends State<BatchSelectionPanel> {
       decoration: BoxDecoration(
         color: widget.isDarkTheme ? AppColors.darkSurface : AppColors.cardBackground,
         borderRadius: BorderRadius.circular(8),
-        boxShadow: [BoxShadow(color: AppColors.shadowColor, blurRadius: 8)],
+        boxShadow: const [BoxShadow(color: AppColors.shadowColor, blurRadius: 8)],
       ),
       child: Column(
         children: [

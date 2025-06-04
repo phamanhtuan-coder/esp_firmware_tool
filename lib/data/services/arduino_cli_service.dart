@@ -93,17 +93,17 @@ class ArduinoCliService {
 
     // Get the application documents directory
     final appDir = await getApplicationDocumentsDirectory();
-    String _appName;
+    String appName;
     if (Platform.isWindows) {
-      _appName = 'arduino-cli';
+      appName = 'arduino-cli';
     } else if (Platform.isMacOS) {
-      _appName = 'arduino-cli-macos';
+      appName = 'arduino-cli-macos';
     } else if (Platform.isLinux) {
-      _appName = 'arduino-cli-linux';
+      appName = 'arduino-cli-linux';
     } else {
       throw UnsupportedError('Unsupported platform: ${Platform.operatingSystem}');
     }
-    final arduinoDir = Directory(path.join(appDir.path, _appName));
+    final arduinoDir = Directory(path.join(appDir.path, appName));
 
     // Create the directory if it doesn't exist
     if (!await arduinoDir.exists()) {
@@ -128,7 +128,7 @@ class ArduinoCliService {
     // Extract executable if it doesn't exist
     if (!await File(_arduinoCliPath!).exists()) {
       // Copy from assets to the app directory
-      final byteData = await rootBundle.load('assets/$_appName/$executableName');
+      final byteData = await rootBundle.load('assets/$appName/$executableName');
       final buffer = byteData.buffer;
       await File(_arduinoCliPath!).writeAsBytes(
           buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
@@ -248,7 +248,6 @@ class ArduinoCliService {
 
       _activeProcess = await startProcess(['compile', '--fqbn', fqbn, '--verbose', sketchPath]);
 
-      final completer = Completer<bool>();
 
       // Handle stdout
       _activeProcess!.stdout.transform(utf8.decoder).listen((output) {
@@ -343,7 +342,6 @@ class ArduinoCliService {
 
       _activeProcess = await startProcess(['upload', '-p', port, '--fqbn', fqbn, '--verbose', sketchPath]);
 
-      final completer = Completer<bool>();
 
       // Handle stdout
       _activeProcess!.stdout.transform(utf8.decoder).listen((output) {

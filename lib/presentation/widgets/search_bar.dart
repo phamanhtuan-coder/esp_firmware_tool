@@ -32,7 +32,7 @@ class SearchBar extends StatelessWidget {
                 fillColor: isDarkTheme ? AppColors.idle : AppColors.dividerColor,
                 filled: true,
               ),
-              onChanged: (value) => context.read<LogBloc>().add(FilterLogEvent()),
+              onChanged: (value) => context.read<LogBloc>().add(const FilterLogEvent()),
             ),
           ),
           IconButton(

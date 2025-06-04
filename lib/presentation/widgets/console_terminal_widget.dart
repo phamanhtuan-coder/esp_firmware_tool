@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
-import 'package:smart_net_firmware_loader/utils/app_colors.dart';
 
 class ConsoleLineDisplay {
   final String timestamp;

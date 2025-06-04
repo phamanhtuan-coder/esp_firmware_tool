@@ -9,7 +9,7 @@ class AppTheme {
     scaffoldBackgroundColor: AppColors.background,
 
     // Enhanced Text Theme
-    textTheme: TextTheme(
+    textTheme: const TextTheme(
       displayLarge: TextStyle(
         fontSize: 32,
         fontWeight: FontWeight.bold,
@@ -30,7 +30,7 @@ class AppTheme {
       ),
     ),
 
-    colorScheme: ColorScheme.light(
+    colorScheme: const ColorScheme.light(
       primary: AppColors.primary,
       secondary: AppColors.accent,
       surface: AppColors.background,
@@ -80,12 +80,12 @@ class AppTheme {
         ),
         side: WidgetStateProperty.resolveWith<BorderSide>((states) {
           if (states.contains(WidgetState.disabled)) {
-            return BorderSide(color: AppColors.buttonDisabled);
+            return const BorderSide(color: AppColors.buttonDisabled);
           }
           if (states.contains(WidgetState.pressed)) {
-            return BorderSide(color: AppColors.buttonPressed, width: 2);
+            return const BorderSide(color: AppColors.buttonPressed, width: 2);
           }
-          return BorderSide(color: AppColors.primary);
+          return const BorderSide(color: AppColors.primary);
         }),
         foregroundColor: WidgetStateProperty.resolveWith<Color>((states) {
           if (states.contains(WidgetState.disabled)) return AppColors.buttonDisabled;
@@ -104,7 +104,7 @@ class AppTheme {
       shadowColor: Colors.black26,
     ),
 
-    appBarTheme: AppBarTheme(
+    appBarTheme: const AppBarTheme(
       backgroundColor: AppColors.background,
       elevation: 0,
       centerTitle: true,
@@ -121,7 +121,7 @@ class AppTheme {
       backgroundColor: AppColors.cardBackground,
       indicatorColor: AppColors.primary.withOpacity(0.12),
       labelTextStyle: WidgetStateProperty.all(
-        TextStyle(
+        const TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w500,
           color: AppColors.primary,

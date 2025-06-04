@@ -2,7 +2,6 @@ import 'dart:developer' as developer;
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/data/services/api_client.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
-import 'package:smart_net_firmware_loader/di/service_locator.dart';
 
 class DeviceStatusService {
   final ApiClient _apiClient;

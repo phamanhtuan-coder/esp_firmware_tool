@@ -518,7 +518,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                       onClose: () {
                                         setState(() => _isSearching = false);
                                         _searchController.clear();
-                                        context.read<LogBloc>().add(FilterLogEvent());
+                                        context.read<LogBloc>().add(const FilterLogEvent());
                                       },
                                     ),
                                 ],
@@ -674,4 +674,5 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   }
 
 }
+
 

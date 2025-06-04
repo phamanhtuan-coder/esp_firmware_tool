@@ -102,8 +102,8 @@ class _LoginViewState extends State<LoginView> {
                           color: AppColors.error.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Row(
-                          children: const [
+                        child: const Row(
+                          children: [
                             Icon(Icons.error_outline, size: 20, color: AppColors.error),
                             SizedBox(width: 12),
                             Text(

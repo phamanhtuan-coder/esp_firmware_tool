@@ -31,7 +31,7 @@ class RoundedButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
       ),
       child: isLoading
-        ? SizedBox(
+        ? const SizedBox(
             width: 20,
             height: 20,
             child: CircularProgressIndicator(

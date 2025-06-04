@@ -401,7 +401,7 @@ class LogBloc extends Bloc<LogEvent, LogState> {
         )));
       }
 
-    } catch (e, stackTrace) {
+    } catch (e) {
       final errorMessage = 'Lỗi trong quá trình flash: $e';
 
       emit(state.copyWith(
