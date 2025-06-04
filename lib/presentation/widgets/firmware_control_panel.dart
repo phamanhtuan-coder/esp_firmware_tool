@@ -451,11 +451,11 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                             ),
                             fillColor: widget.isDarkTheme
                                 ? widget.isLocalFileMode
-                                ? AppColors.darkCardBackground.withOpacity(0.5)
-                                : AppColors.darkCardBackground
+                                    ? AppColors.darkCardBackground.withAlpha(128)
+                                    : AppColors.darkCardBackground
                                 : widget.isLocalFileMode
-                                ? AppColors.cardBackground.withOpacity(0.5)
-                                : AppColors.cardBackground,
+                                    ? AppColors.cardBackground.withAlpha(128)
+                                    : AppColors.cardBackground,
                             filled: true,
                             enabled: !widget.isLocalFileMode && widget.firmwares.isNotEmpty,
                           ),
