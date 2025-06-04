@@ -39,14 +39,45 @@ class BluetoothServer {
     }
 
     try {
+      // Check if port is available first
+      try {
+        final socket = await ServerSocket.bind(InternetAddress.anyIPv4, port, shared: true);
+        await socket.close();
+      } catch (e) {
+        DebugLogger.w('Port $port is not available, trying alternative port');
+        // Try an alternative port
+        port = 12346;
+      }
+
       _port = port;
       _onSerialReceived = onSerialReceived;
-      _server = await ServerSocket.bind(InternetAddress.anyIPv4, port);
+
+      // Try to bind with more detailed error logging
+      try {
+        _server = await ServerSocket.bind(
+          InternetAddress.anyIPv4,
+          port,
+          shared: true, // Allow port sharing
+        );
+      } catch (e) {
+        throw Exception('Failed to bind to port $port. Please check if the port is available and not blocked by firewall. Error: $e');
+      }
+
       _isRunning = true;
 
-      DebugLogger.i('Server started successfully on ${_server!.address.address}:$port');
+      final localAddresses = await NetworkInterface.list();
+      String addressInfo = 'Available on:\n';
+      for (var interface in localAddresses) {
+        for (var addr in interface.addresses) {
+          if (addr.type == InternetAddressType.IPv4) {
+            addressInfo += '  http://${addr.address}:$port\n';
+          }
+        }
+      }
+
+      DebugLogger.i('Server started successfully.\n$addressInfo');
       logService.addLog(
-        message: '🟢 Server listening on ${_server!.address.address}:$port',
+        message: '🟢 Server listening on multiple addresses:\n$addressInfo',
         level: LogLevel.success,
         step: ProcessStep.scanQrCode,
         origin: 'bluetooth-server',
@@ -60,7 +91,7 @@ class BluetoothServer {
     } catch (e) {
       DebugLogger.e('Failed to start server', error: e);
       logService.addLog(
-        message: '❌ Server error: $e',
+        message: '❌ Server error: $e\nPlease check your firewall settings and make sure port $port is not blocked.',
         level: LogLevel.error,
         step: ProcessStep.scanQrCode,
         origin: 'bluetooth-server',
