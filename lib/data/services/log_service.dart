@@ -146,6 +146,7 @@ class LogService {
     }
 
     _logStreamController.add(entry);
+    print('DEBUG: LogService emitted log: ${entry.message}, level: ${entry.level}');
 
     // Add to serial buffer if it's serial output
     if (level == LogLevel.serialOutput) {

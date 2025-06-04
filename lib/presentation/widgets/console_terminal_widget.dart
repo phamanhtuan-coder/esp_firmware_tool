@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
+import 'package:smart_net_firmware_loader/data/services/log_service.dart';
+import 'package:get_it/get_it.dart';
 
 class ConsoleLineDisplay {
   final String timestamp;
@@ -54,13 +56,13 @@ class ConsoleLineDisplay {
 
     switch (level) {
       case LogLevel.error:
-        return Icons.error_outline;
+        return Icons.not_interested_rounded;
       case LogLevel.warning:
-        return Icons.warning_amber;
+        return Icons.warning;
       case LogLevel.success:
-        return Icons.check_circle_outline;
+        return Icons.check_circle;
       case LogLevel.info:
-        return Icons.info_outline;
+        return Icons.info;
       default:
         return null;
     }
@@ -88,11 +90,12 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
   bool _isAutoScrollEnabled = true;
   bool _isListening = false;
   StreamSubscription? _logsSubscription;
+  late final LogService _logService;
 
   @override
   void initState() {
     super.initState();
-    _processLogs();
+    _logService = GetIt.instance<LogService>();
     if (widget.isActiveTab) {
       _startListening();
     }
@@ -101,10 +104,6 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
   @override
   void didUpdateWidget(ConsoleTerminalWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    if (widget.logs != oldWidget.logs) {
-      _processLogs();
-    }
 
     // Handle tab activation/deactivation
     if (widget.isActiveTab != oldWidget.isActiveTab) {
@@ -118,34 +117,20 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
 
   void _startListening() {
     if (_isListening) return;
-
     _isListening = true;
-    // Additional listener logic if needed
   }
 
   void _stopListening() {
     if (!_isListening) return;
-
     _isListening = false;
     _logsSubscription?.cancel();
     _logsSubscription = null;
   }
 
-  void _processLogs() {
-    _displayLines.clear();
-    for (var log in widget.logs) {
-      _displayLines.add(ConsoleLineDisplay(
-        log.formattedTimestamp,
-        log.message,
-        level: log.level,
-        origin: log.origin,
-        isSystemMessage: log.origin == 'system',
-      ));
-    }
-
-    if (_isAutoScrollEnabled) {
+  void _scrollToBottom() {
+    if (_isAutoScrollEnabled && widget.scrollController.hasClients) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && widget.scrollController.hasClients) {
+        if (mounted) {
           widget.scrollController.animateTo(
             widget.scrollController.position.maxScrollExtent,
             duration: const Duration(milliseconds: 200),
@@ -155,6 +140,7 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
       });
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -177,80 +163,120 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
               ),
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
-                child: _displayLines.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.terminal,
-                                size: 48,
-                                color: Colors.grey[700]),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No console output',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 15,
-                              ),
-                            ),
-                          ],
+                child: StreamBuilder<List<LogEntry>>(
+                  stream: _logService.logStream.transform(
+                    StreamTransformer<LogEntry, List<LogEntry>>.fromHandlers(
+                      handleData: (log, sink) {
+                        final currentLogs = [..._displayLines.map((line) => LogEntry(
+                          message: line.content,
+                          timestamp: DateTime.parse(line.timestamp),
+                          level: line.level,
+                          step: ProcessStep.consoleLog,
+                          origin: line.origin,
+                        )), log];
+                        sink.add(currentLogs);
+                      },
+                    ),
+                  ),
+                  builder: (context, snapshot) {
+                    final logs = snapshot.data ?? widget.logs;
+                    print('DEBUG: StreamBuilder received ${logs.length} logs'); // Debug
+                    if (snapshot.hasData) {
+                      _displayLines.clear(); // Chỉ xóa khi có dữ liệu mới
+                      for (var log in logs) {
+                        _displayLines.add(ConsoleLineDisplay(
+                          log.formattedTimestamp,
+                          log.message,
+                          level: log.level,
+                          origin: log.origin,
+                          isSystemMessage: log.origin == 'system',
+                        ));
+                      }
+                    }
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        borderRadius: BorderRadius.circular(8.0),
+                        border: Border.all(
+                          color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
+                          width: 1,
                         ),
-                      )
-                    : SingleChildScrollView(
-                        controller: widget.scrollController,
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: SelectableText.rich(
-                            TextSpan(
-                              children: _displayLines.map((line) {
-                                final icon = line.getIcon();
-                                return TextSpan(
-                                  children: [
-                                    // Icon for message type
-                                    if (icon != null)
-                                      WidgetSpan(
-                                        alignment: PlaceholderAlignment.middle,
-                                        child: Padding(
-                                          padding: const EdgeInsets.only(right: 8),
-                                          child: Icon(
-                                            icon,
-                                            size: 14,
-                                            color: line.getColor(isDarkTheme),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: _displayLines.isEmpty
+                            ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.terminal, size: 48, color: Colors.grey[700]),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No console output',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                            : SingleChildScrollView(
+                          controller: widget.scrollController,
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: SelectableText.rich(
+                              TextSpan(
+                                children: _displayLines.map((line) {
+                                  final icon = line.getIcon();
+                                  return TextSpan(
+                                    children: [
+                                      if (icon != null)
+                                        WidgetSpan(
+                                          alignment: PlaceholderAlignment.middle,
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(right: 8),
+                                            child: Icon(
+                                              icon,
+                                              size: 14,
+                                              color: line.getColor(isDarkTheme),
+                                            ),
                                           ),
                                         ),
+                                      TextSpan(
+                                        text: '[${line.timestamp}] ',
+                                        style: TextStyle(
+                                          color: line.isSystemMessage
+                                              ? Colors.yellow.withOpacity(0.8)
+                                              : Colors.grey.withOpacity(0.7),
+                                          fontFamily: 'Courier New',
+                                          fontSize: 12.0,
+                                          height: 1.5,
+                                        ),
                                       ),
-                                    // Timestamp with same style as SerialMonitorTerminalWidget
-                                    TextSpan(
-                                      text: '[${line.timestamp}] ',
-                                      style: TextStyle(
-                                        color: line.isSystemMessage
-                                            ? Colors.yellow.withOpacity(0.8)
-                                            : Colors.grey.withOpacity(0.7),
-                                        fontFamily: 'Courier New',
-                                        fontSize: 12.0,
-                                        height: 1.5,
+                                      TextSpan(
+                                        text: '${line.content}\n',
+                                        style: TextStyle(
+                                          color: line.isSystemMessage
+                                              ? Colors.yellow
+                                              : line.getColor(true),
+                                          fontFamily: 'Courier New',
+                                          fontSize: 14.0,
+                                          height: 1.5,
+                                          fontWeight: _getLineWeight(line),
+                                        ),
                                       ),
-                                    ),
-                                    // Message content with similar style to SerialMonitorTerminalWidget
-                                    TextSpan(
-                                      text: '${line.content}\n',
-                                      style: TextStyle(
-                                        color: line.isSystemMessage
-                                            ? Colors.yellow
-                                            : line.getColor(true), // Always use dark theme colors on black background
-                                        fontFamily: 'Courier New',
-                                        fontSize: 14.0,
-                                        height: 1.5,
-                                        fontWeight: _getLineWeight(line),
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              }).toList(),
+                                    ],
+                                  );
+                                }).toList(),
+                              ),
                             ),
                           ),
                         ),
                       ),
+                    );
+                  },
+                )
               ),
             ),
           ),
@@ -293,8 +319,10 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
                   ),
                   child: IconButton(
                     onPressed: () {
+                      // Clear logs through service
                       setState(() {
-                        _displayLines.clear();
+                        // This will keep the UI in sync until the next stream update
+                        widget.logs.clear();
                       });
                     },
                     icon: const Icon(Icons.clear_all),
@@ -308,6 +336,21 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
         ],
       ),
     );
+  }
+
+  void _processLogs() {
+    _displayLines.clear();
+    for (var log in widget.logs) {
+      _displayLines.add(ConsoleLineDisplay(
+        log.formattedTimestamp,
+        log.message,
+        level: log.level,
+        origin: log.origin,
+        isSystemMessage: log.origin == 'system',
+      ));
+    }
+
+    _scrollToBottom();
   }
 
   FontWeight _getLineWeight(ConsoleLineDisplay line) {

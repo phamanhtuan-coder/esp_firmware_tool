@@ -75,14 +75,12 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     if (!mounted) return;
     setState(() {});
     _logService.addLog(
-      message: 'Đã chuyển sang tab ${_tabController.index == 0
-          ? "Console Log"
-          : "Serial Monitor"}',
+      message: 'Đã chuyển sang tab ${_tabController.index == 0 ? "Console Log" : "Serial Monitor"}',
       level: LogLevel.debug,
-      step: _tabController.index == 0 ? ProcessStep.consoleLog : ProcessStep
-          .serialMonitor,
+      step: _tabController.index == 0 ? ProcessStep.consoleLog : ProcessStep.serialMonitor,
       origin: 'system',
     );
+    print('DEBUG: Tab changed to ${_tabController.index}');
   }
 
   Future<void> _initializeServices() async {
