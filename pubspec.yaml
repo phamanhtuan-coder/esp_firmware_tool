@@ -90,3 +90,6 @@ flutter:
   assets:
     - assets/
     - assets/app_icon.png
+    - assets/arduino-cli/arduino-cli.exe
+    - assets/arduino-cli-linux/arduino-cli
+    - assets/arduino-cli-macos/arduino-cli

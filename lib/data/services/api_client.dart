@@ -8,7 +8,7 @@ class ApiClient {
 
   ApiClient({
     // this.baseUrl = 'http://localhost:3000/api',
-    this.baseUrl = 'https://c3e7-171-250-162-57.ngrok-free.app/api',
+    this.baseUrl = 'https://iothomeconnectapiv2-production.up.railway.app/api',
 
     http.Client? httpClient,
   }) : _httpClient = httpClient ?? http.Client();

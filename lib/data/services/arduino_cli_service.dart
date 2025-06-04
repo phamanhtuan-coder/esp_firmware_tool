@@ -1,12 +1,17 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
+import 'package:flutter/services.dart';
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 
 /// Service for interacting with the Arduino CLI
 class ArduinoCliService {
   // Current active process (compile, upload, etc.)
   Process? _activeProcess;
+  String? _arduinoCliPath;
+
 
   /// Map of device types to their FQBN (Fully Qualified Board Name)
   final Map<String, String> _boardFqbns = {
@@ -52,14 +57,18 @@ class ArduinoCliService {
 
     // Otherwise, try to detect the port by calling Arduino CLI
     try {
-      final process = await Process.run(
-        'arduino-cli',
-        ['board', 'list', '--format', 'json'],
-        stdoutEncoding: const Utf8Codec(),
-      );
+      final process = await startProcess(['board', 'list', '--format', 'json']);
 
-      if (process.exitCode != 0) {
-        print('Error detecting boards: ${process.stderr}');
+      final stdout = StringBuffer();
+      final stderr = StringBuffer();
+
+      process.stdout.transform(utf8.decoder).listen(stdout.write);
+      process.stderr.transform(utf8.decoder).listen(stderr.write);
+
+      final exitCode = await process.exitCode;
+
+      if (exitCode != 0) {
+        print('Error detecting boards: ${stderr.toString()}');
         return null;
       }
 
@@ -77,35 +86,96 @@ class ArduinoCliService {
     }
   }
 
+
+  // Initialize the Arduino CLI path
+  Future<void> init() async {
+    if (_arduinoCliPath != null) return;
+
+    // Get the application documents directory
+    final appDir = await getApplicationDocumentsDirectory();
+    String _appName;
+    if (Platform.isWindows) {
+      _appName = 'arduino-cli';
+    } else if (Platform.isMacOS) {
+      _appName = 'arduino-cli-macos';
+    } else if (Platform.isLinux) {
+      _appName = 'arduino-cli-linux';
+    } else {
+      throw UnsupportedError('Unsupported platform: ${Platform.operatingSystem}');
+    }
+    final arduinoDir = Directory(path.join(appDir.path, _appName));
+
+    // Create the directory if it doesn't exist
+    if (!await arduinoDir.exists()) {
+      await arduinoDir.create(recursive: true);
+    }
+
+    // Set platform-specific executable path and file name
+    String executableName;
+    if (Platform.isWindows) {
+      executableName = 'arduino-cli.exe';
+    } else if (Platform.isMacOS) {
+      executableName = 'arduino-cli';
+    } else if (Platform.isLinux) {
+      executableName = 'arduino-cli';
+    } else {
+      throw UnsupportedError('Unsupported platform: ${Platform.operatingSystem}');
+    }
+
+    // Path to the executable
+    _arduinoCliPath = path.join(arduinoDir.path, executableName);
+
+    // Extract executable if it doesn't exist
+    if (!await File(_arduinoCliPath!).exists()) {
+      // Copy from assets to the app directory
+      final byteData = await rootBundle.load('assets/$_appName/$executableName');
+      final buffer = byteData.buffer;
+      await File(_arduinoCliPath!).writeAsBytes(
+          buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
+
+      // Make the file executable on Unix-based systems
+      if (!Platform.isWindows) {
+        await Process.run('chmod', ['+x', _arduinoCliPath!]);
+      }
+    }
+  }
+
+  // Use the Arduino CLI with the proper path
+  Future<Process> startProcess(List<String> arguments) async {
+    await init(); // Make sure the CLI is initialized
+    return Process.start(_arduinoCliPath!, arguments);
+  }
+
   /// Run a process and stream its output as logs
   Future<int> runProcess(
-    String executable,
-    List<String> arguments, {
-    required ProcessStep step,
-    String workingDirectory = '',
-    String deviceId = '',
-    Map<String, String>? environment,
-    bool showCommandInLogs = true,
-  }) async {
+      List<String> arguments, {
+        required ProcessStep step,
+        String workingDirectory = '',
+        String deviceId = '',
+        Map<String, String>? environment,
+        bool showCommandInLogs = true,
+      }) async {
+    await init(); // Make sure the CLI is initialized
+
     try {
       // Kill any existing process
       await killActiveProcess();
 
-      print('DEBUG: Executing command: $executable ${arguments.join(' ')}');
+      print('DEBUG: Executing command: $_arduinoCliPath ${arguments.join(' ')}');
       if (workingDirectory.isNotEmpty) {
         print('DEBUG: Working directory: $workingDirectory');
       }
 
-      // Start the new process
+      // Start the new process with the proper path
       _activeProcess = await Process.start(
-        executable,
+        _arduinoCliPath!,
         arguments,
         workingDirectory: workingDirectory.isNotEmpty ? workingDirectory : null,
         environment: environment,
       );
 
       if (showCommandInLogs) {
-        final commandString = '$executable ${arguments.join(' ')}';
+        final commandString = '$_arduinoCliPath ${arguments.join(' ')}';
         print('Running command: $commandString');
       }
 
@@ -176,11 +246,7 @@ class ArduinoCliService {
         ));
       }
 
-      _activeProcess = await Process.start(
-        'arduino-cli',
-        ['compile', '--fqbn', fqbn, '--verbose', sketchPath],
-        runInShell: true,
-      );
+      _activeProcess = await startProcess(['compile', '--fqbn', fqbn, '--verbose', sketchPath]);
 
       final completer = Completer<bool>();
 
@@ -275,11 +341,7 @@ class ArduinoCliService {
         ));
       }
 
-      _activeProcess = await Process.start(
-        'arduino-cli',
-        ['upload', '-p', port, '--fqbn', fqbn, '--verbose', sketchPath],
-        runInShell: true,
-      );
+      _activeProcess = await startProcess(['upload', '-p', port, '--fqbn', fqbn, '--verbose', sketchPath]);
 
       final completer = Completer<bool>();
 
@@ -384,15 +446,23 @@ class ArduinoCliService {
   Future<bool> isCliAvailable() async {
     try {
       print('DEBUG: Checking Arduino CLI availability...');
-      final result = await Process.run('arduino-cli', ['version']);
+      final process = await startProcess(['version']);
 
-      if (result.exitCode == 0) {
+      final stdout = StringBuffer();
+      final stderr = StringBuffer();
+
+      process.stdout.transform(utf8.decoder).listen(stdout.write);
+      process.stderr.transform(utf8.decoder).listen(stderr.write);
+
+      final exitCode = await process.exitCode;
+
+      if (exitCode == 0) {
         print('DEBUG: Arduino CLI is available. Version info:');
-        print(result.stdout);
+        print(stdout);
         return true;
       } else {
-        print('DEBUG: Arduino CLI check failed with exit code ${result.exitCode}');
-        print('Error output: ${result.stderr}');
+        print('DEBUG: Arduino CLI check failed with exit code $exitCode');
+        print('Error output: $stderr');
         return false;
       }
     } catch (e) {
@@ -407,13 +477,12 @@ class ArduinoCliService {
     if (core == null) return false;
 
     try {
-      final process = await Process.run(
-        'arduino-cli',
-        ['core', 'install', core],
-        stdoutEncoding: const Utf8Codec(),
-      );
-      return process.exitCode == 0;
+      final process = await startProcess(['core', 'install', core]);
+
+      final exitCode = await process.exitCode;
+      return exitCode == 0;
     } catch (e) {
+      print('Error installing core: $e');
       return false;
     }
   }
@@ -421,13 +490,20 @@ class ArduinoCliService {
   /// Install a library required by a firmware
   Future<bool> installLibrary(String libraryName) async {
     try {
-      final process = await Process.run(
-        'arduino-cli',
-        ['lib', 'install', libraryName],
-        stdoutEncoding: const Utf8Codec(),
-      );
-      return process.exitCode == 0;
+      final process = await startProcess(['lib', 'install', libraryName]);
+      final stdout = StringBuffer();
+      final stderr = StringBuffer();
+
+      process.stdout.transform(utf8.decoder).listen(stdout.write);
+      process.stderr.transform(utf8.decoder).listen(stderr.write);
+
+      final exitCode = await process.exitCode;
+      if (exitCode != 0) {
+        print('Failed to install library: ${stderr.toString()}');
+      }
+      return exitCode == 0;
     } catch (e) {
+      print('Error installing library: $e');
       return false;
     }
   }
