@@ -48,14 +48,16 @@ class InitiateFlashEvent extends LogEvent {
   final String firmwareVersion;
   final String deviceSerial;
   final String deviceType;
+  final String? localFilePath;
   const InitiateFlashEvent({
     required this.deviceId,
     required this.firmwareVersion,
     required this.deviceSerial,
     required this.deviceType,
+    this.localFilePath,
   });
   @override
-  List<Object?> get props => [deviceId, firmwareVersion, deviceSerial, deviceType];
+  List<Object?> get props => [deviceId, firmwareVersion, deviceSerial, deviceType, localFilePath];
 }
 class StopProcessEvent extends LogEvent {}
 class ClearLogsEvent extends LogEvent {}

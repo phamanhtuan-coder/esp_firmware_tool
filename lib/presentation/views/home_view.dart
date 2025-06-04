@@ -221,17 +221,22 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     }
   }
 
-  Future<void> _flashFirmware(String deviceId,
+  Future<void> _flashFirmware(
+      String deviceId,
       String firmwareVersion,
       String deviceSerial,
-      String deviceType) async {
+      String deviceType,
+      String? localFilePath
+    ) async {
     final firmwareFlashService = serviceLocator<FirmwareFlashService>();
+    localFilePath ??= context.read<LogBloc>().state.localFilePath;
 
     print('DEBUG: _flashFirmware called with:');
     print('DEBUG: deviceId: $deviceId');
     print('DEBUG: firmwareVersion: $firmwareVersion');
     print('DEBUG: deviceSerial: $deviceSerial');
     print('DEBUG: deviceType: $deviceType');
+    print('DEBUG: localFilePath: $localFilePath');
 
     if (_selectedPort == null || _selectedPort!.isEmpty) {
       _logService.addLog(
@@ -243,29 +248,22 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       return;
     }
 
-    // Start the flashing process
-    context.read<LogBloc>().add(InitiateFlashEvent(
-      deviceId: deviceId,
-      firmwareVersion: firmwareVersion,
-      deviceSerial: deviceSerial,
-      deviceType: deviceType,
-    ));
-
+    // When using local file, we don't need to pass firmware version or batch ID
     final success = await firmwareFlashService.flash(
       serialNumber: deviceSerial,
       deviceType: deviceType,
-      firmwareVersion: firmwareVersion,
-      selectedBatch: _selectedBatch,
+      firmwareVersion: localFilePath != null ? '' : firmwareVersion,
+      localFilePath: localFilePath,
+      selectedBatch: localFilePath != null ? null : _selectedBatch,
       selectedPort: _selectedPort,
-      onLog: (log) =>
-          _logService.addLog(
-            message: log.message,
-            level: log.level,
-            step: log.step,
-            origin: log.origin,
-            deviceId: deviceSerial,
-            rawOutput: log.rawOutput,
-          ),
+      onLog: (log) => _logService.addLog(
+        message: log.message,
+        level: log.level,
+        step: log.step,
+        origin: log.origin,
+        deviceId: deviceSerial,
+        rawOutput: log.rawOutput,
+      ),
     );
 
     if (success) {
@@ -497,7 +495,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                     }
                                   } else {
                                     _logService.addLog(
-                                      message: 'Vui lòng chọn lô sản xuất trước khi nhập serial',
+                                      message: 'Vui lòng chọn lô sản xuất tr��ớc khi nhập serial',
                                       level: LogLevel.warning,
                                       step: ProcessStep.deviceSelection,
                                       origin: 'system',
@@ -572,10 +570,10 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                 context.read<LogBloc>().add(ClearLogsEvent());
                               },
                               onInitiateFlash: (deviceId, firmwareVersion,
-                                  deviceSerial, deviceType) {
+                                  deviceSerial, deviceType, localFilePath) {
                                 _flashFirmware(
                                     deviceId, firmwareVersion, deviceSerial,
-                                    deviceType);
+                                    deviceType, localFilePath);
                               },
                               isFlashing: state.isFlashing,
                               selectedPort: _selectedPort,
@@ -680,4 +678,3 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   }
 
 }
-

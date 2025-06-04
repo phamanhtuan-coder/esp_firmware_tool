@@ -309,6 +309,7 @@ class ArduinoCliService {
   /// Compile a sketch using arduino-cli
   Future<bool> compileSketch(String sketchPath, String fqbn, {void Function(LogEntry)? onLog}) async {
     try {
+      print('DEBUG: Starting compile for sketch: $sketchPath with FQBN: $fqbn');
       if (onLog != null) {
         onLog(LogEntry(
           message: '🔨 Starting compilation...',
@@ -406,6 +407,7 @@ class ArduinoCliService {
         return false;
       }
     } catch (e) {
+      print('DEBUG: Compile error: $e');
       if (onLog != null) {
         onLog(LogEntry(
           message: '❌ Error during compilation: $e',

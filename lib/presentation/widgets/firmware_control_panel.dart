@@ -58,7 +58,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
 
   void _handleFilePick(BuildContext context) async {
     final logBloc = context.read<LogBloc>();
-
     setState(() {
       _isFileButtonLoading = true;
     });
@@ -76,6 +75,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
       if (result != null && result.files.single.path != null) {
         final filePath = result.files.single.path!;
         logBloc.add(SelectLocalFileEvent(filePath));
+        widget.onFirmwareVersionSelected(null); // Đặt selectedFirmwareVersion về null
       } else {
         logBloc.add(
           AddLogEvent(
@@ -90,19 +90,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
         );
       }
     } catch (e) {
-      if (mounted) {
-        logBloc.add(
-          AddLogEvent(
-            LogEntry(
-              message: 'Lỗi khi chọn file: $e',
-              timestamp: DateTime.now(),
-              level: LogLevel.error,
-              step: ProcessStep.firmwareDownload,
-              origin: 'system',
-            ),
-          ),
-        );
-      }
+      // Xử lý lỗi...
     } finally {
       if (mounted) {
         setState(() {
@@ -111,7 +99,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
       }
     }
   }
-
   void _clearLocalFile(BuildContext context) async {
     setState(() {
       _isVersionButtonLoading = true;

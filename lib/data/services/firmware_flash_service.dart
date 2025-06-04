@@ -16,18 +16,25 @@ class FirmwareFlashService {
   final UsbService _usbService;
 
   FirmwareFlashService(
-      this._arduinoCliService,
-      this._templateService,
-      this._batchService,
-      this._usbService,
-      );
+    this._arduinoCliService,
+    this._templateService,
+    this._batchService,
+    this._usbService,
+  );
 
   /// Retrieve board type from metadata file created during template processing
   Future<String> _getBoardTypeFromMetadata(String sketchPath) async {
     try {
       final sketchDir = File(sketchPath).parent.path;
       final metadataFile = File(path.join(sketchDir, 'board_metadata.json'));
-
+      final sketchFile = File(sketchPath);
+      if (await sketchFile.exists()) {
+        final content = await sketchFile.readAsString();
+        final boardTypeMatch = RegExp(r'BOARD_TYPE: (\w+.*?)\s*\(ACTIVE\)').firstMatch(content);
+        if (boardTypeMatch != null) {
+          return boardTypeMatch.group(1)!.toLowerCase();
+        }
+      }
       if (await metadataFile.exists()) {
         final jsonData = json.decode(await metadataFile.readAsString());
         final boardType = jsonData['boardType'] as String?;
@@ -56,45 +63,55 @@ class FirmwareFlashService {
     try {
       // Debug info
       print('DEBUG: Starting firmware flash process');
-      print('DEBUG: Serial: $serialNumber, Device type: $deviceType, FW Version: $firmwareVersion');
-      print('DEBUG: Local file: $localFilePath, Batch: $selectedBatch, Port: $selectedPort');
+      print(
+        'DEBUG: Serial: $serialNumber, Device type: $deviceType, FW Version: $firmwareVersion',
+      );
+      print(
+        'DEBUG: Local file: $localFilePath, Batch: $selectedBatch, Port: $selectedPort',
+      );
 
       // Check port selection
       if (selectedPort == null || selectedPort.isEmpty) {
-        onLog(LogEntry(
-          message: '❌ Chưa chọn cổng COM để flash',
-          timestamp: DateTime.now(),
-          level: LogLevel.error,
-          step: ProcessStep.flash,
-          deviceId: serialNumber,
-          origin: 'system',
-        ));
+        onLog(
+          LogEntry(
+            message: '❌ Chưa chọn cổng COM để flash',
+            timestamp: DateTime.now(),
+            level: LogLevel.error,
+            step: ProcessStep.flash,
+            deviceId: serialNumber,
+            origin: 'system',
+          ),
+        );
         return false;
       }
 
       // Prepare firmware
-      onLog(LogEntry(
-        message: '📝 Đang chuẩn bị firmware...',
-        timestamp: DateTime.now(),
-        level: LogLevel.info,
-        step: ProcessStep.flash,
-        deviceId: serialNumber,
-        origin: 'system',
-      ));
+      onLog(
+        LogEntry(
+          message: '📝 Đang chuẩn bị firmware...',
+          timestamp: DateTime.now(),
+          level: LogLevel.info,
+          step: ProcessStep.flash,
+          deviceId: serialNumber,
+          origin: 'system',
+        ),
+      );
 
       String? processedPath;
 
       // If using a local file
       if (localFilePath != null && localFilePath.isNotEmpty) {
         print('DEBUG: Processing local file: $localFilePath');
-        onLog(LogEntry(
-          message: '📂 Đang xử lý file local: $localFilePath',
-          timestamp: DateTime.now(),
-          level: LogLevel.info,
-          step: ProcessStep.firmwareDownload,
-          origin: 'system',
-          deviceId: serialNumber,
-        ));
+        onLog(
+          LogEntry(
+            message: '📂 Đang xử lý file local: $localFilePath',
+            timestamp: DateTime.now(),
+            level: LogLevel.info,
+            step: ProcessStep.firmwareDownload,
+            origin: 'system',
+            deviceId: serialNumber,
+          ),
+        );
 
         processedPath = await _templateService.prepareFirmwareTemplate(
           localFilePath,
@@ -103,45 +120,41 @@ class FirmwareFlashService {
           useQuotesForDefines: useQuotesForDefines,
         );
         print('DEBUG: Local file processed path: $processedPath');
-      } else {
-        // Using firmware version from server/batch
-        if (selectedBatch == null) {
-          onLog(LogEntry(
-            message: '❌ Không có batch được chọn cho firmware version $firmwareVersion',
+      } else if (selectedBatch != null && firmwareVersion.isNotEmpty) {
+        // Fetch từ server chỉ khi không có file local
+        print(
+          'DEBUG: Fetching firmware from server. Version: $firmwareVersion, Batch: $selectedBatch',
+        );
+        onLog(
+          LogEntry(
+            message:
+                '🌐 Đang tải firmware phiên bản $firmwareVersion từ lô $selectedBatch',
             timestamp: DateTime.now(),
-            level: LogLevel.error,
+            level: LogLevel.info,
             step: ProcessStep.firmwareDownload,
             origin: 'system',
             deviceId: serialNumber,
-          ));
-          return false;
-        }
-
-        print('DEBUG: Fetching firmware from server. Version: $firmwareVersion, Batch: $selectedBatch');
-        onLog(LogEntry(
-          message: '🌐 Đang tải firmware phiên bản $firmwareVersion từ lô $selectedBatch',
-          timestamp: DateTime.now(),
-          level: LogLevel.info,
-          step: ProcessStep.firmwareDownload,
-          origin: 'system',
-          deviceId: serialNumber,
-        ));
+          ),
+        );
 
         final sourceCode = await _batchService.fetchVersionFirmware(
           batchId: selectedBatch,
           firmwareId: firmwareVersion,
         );
+
         print('DEBUG: Fetched source code length: ${sourceCode?.length ?? 0}');
 
         if (sourceCode == null || sourceCode.isEmpty) {
-          onLog(LogEntry(
-            message: '❌ Không thể tải mã nguồn firmware',
-            timestamp: DateTime.now(),
-            level: LogLevel.error,
-            step: ProcessStep.firmwareDownload,
-            origin: 'system',
-            deviceId: serialNumber,
-          ));
+          onLog(
+            LogEntry(
+              message: '❌ Không thể tải mã nguồn firmware',
+              timestamp: DateTime.now(),
+              level: LogLevel.error,
+              step: ProcessStep.firmwareDownload,
+              origin: 'system',
+              deviceId: serialNumber,
+            ),
+          );
           return false;
         }
 
@@ -154,14 +167,16 @@ class FirmwareFlashService {
         print('DEBUG: Template path: $templatePath');
 
         if (templatePath == null) {
-          onLog(LogEntry(
-            message: '❌ Không thể lưu template firmware',
-            timestamp: DateTime.now(),
-            level: LogLevel.error,
-            step: ProcessStep.firmwareDownload,
-            origin: 'system',
-            deviceId: serialNumber,
-          ));
+          onLog(
+            LogEntry(
+              message: '❌ Không thể lưu template firmware',
+              timestamp: DateTime.now(),
+              level: LogLevel.error,
+              step: ProcessStep.firmwareDownload,
+              origin: 'system',
+              deviceId: serialNumber,
+            ),
+          );
           return false;
         }
 
@@ -173,32 +188,47 @@ class FirmwareFlashService {
           useQuotesForDefines: useQuotesForDefines,
         );
         print('DEBUG: Processed path: $processedPath');
-      }
 
-      if (processedPath == null) {
+        if (processedPath == null) {
+          onLog(
+            LogEntry(
+              message: '❌ Không thể xử lý template firmware',
+              timestamp: DateTime.now(),
+              level: LogLevel.error,
+              step: ProcessStep.templatePreparation,
+              origin: 'system',
+              deviceId: serialNumber,
+            ),
+          );
+          return false;
+        }
+
+      } else {
         onLog(LogEntry(
-          message: '❌ Không thể xử lý template firmware',
+          message: '❌ Cần chọn file local hoặc phiên bản firmware từ lô sản xuất',
           timestamp: DateTime.now(),
           level: LogLevel.error,
-          step: ProcessStep.templatePreparation,
+          step: ProcessStep.firmwareDownload,
           origin: 'system',
           deviceId: serialNumber,
         ));
         return false;
       }
 
-      onLog(LogEntry(
-        message: '✅ Đã xử lý template thành công',
-        timestamp: DateTime.now(),
-        level: LogLevel.success,
-        step: ProcessStep.templatePreparation,
-        origin: 'system',
-        deviceId: serialNumber,
-      ));
+      onLog(
+        LogEntry(
+          message: '✅ Đã xử lý template thành công',
+          timestamp: DateTime.now(),
+          level: LogLevel.success,
+          step: ProcessStep.templatePreparation,
+          origin: 'system',
+          deviceId: serialNumber,
+        ),
+      );
 
       // Determine board type
       print('DEBUG: Getting board type from metadata');
-      final boardType = await _getBoardTypeFromMetadata(processedPath);
+      final boardType = await _getBoardTypeFromMetadata(processedPath!);
       final fqbn = _arduinoCliService.getBoardFqbn(boardType);
       print('DEBUG: Board type: $boardType, FQBN: $fqbn');
 
@@ -208,68 +238,91 @@ class FirmwareFlashService {
       print('DEBUG: Arduino CLI available: $cliAvailable');
 
       if (!cliAvailable) {
+        onLog(
+          LogEntry(
+            message:
+                '❌ Arduino CLI không khả dụng. Vui lòng cài đặt hoặc kiểm tra lại.',
+            timestamp: DateTime.now(),
+            level: LogLevel.error,
+            step: ProcessStep.firmwareCompile,
+            deviceId: serialNumber,
+            origin: 'system',
+          ),
+        );
+        return false;
+      }
+
+      final coreInstalled = await _arduinoCliService.installCore(boardType);
+      if (!coreInstalled) {
         onLog(LogEntry(
-          message: '❌ Arduino CLI không khả dụng. Vui lòng cài đặt hoặc kiểm tra lại.',
+          message: '❌ Không thể cài đặt core cho board $boardType',
           timestamp: DateTime.now(),
           level: LogLevel.error,
-          step: ProcessStep.firmwareCompile,
-          deviceId: serialNumber,
+          step: ProcessStep.installCore,
           origin: 'system',
         ));
         return false;
       }
 
       // Compile firmware
-      onLog(LogEntry(
-        message: '🔨 Đang biên dịch firmware...',
-        timestamp: DateTime.now(),
-        level: LogLevel.info,
-        step: ProcessStep.firmwareCompile,
-        deviceId: serialNumber,
-        origin: 'system',
-      ));
+      onLog(
+        LogEntry(
+          message: '🔨 Đang biên dịch firmware...',
+          timestamp: DateTime.now(),
+          level: LogLevel.info,
+          step: ProcessStep.firmwareCompile,
+          deviceId: serialNumber,
+          origin: 'system',
+        ),
+      );
 
       print('DEBUG: Starting compile sketch: $processedPath');
       final compiled = await _arduinoCliService.compileSketch(
-        processedPath,
+        processedPath!,
         fqbn,
         onLog: (log) {
           print('DEBUG: Compile log: ${log.message}');
           onLog(log);
-        }
+        },
       );
 
       print('DEBUG: Compile result: $compiled');
       if (!compiled) {
-        onLog(LogEntry(
-          message: '❌ Biên dịch firmware thất bại',
-          timestamp: DateTime.now(),
-          level: LogLevel.error,
-          step: ProcessStep.firmwareCompile,
-          deviceId: serialNumber,
-          origin: 'system',
-        ));
+        onLog(
+          LogEntry(
+            message: '❌ Biên dịch firmware thất bại',
+            timestamp: DateTime.now(),
+            level: LogLevel.error,
+            step: ProcessStep.firmwareCompile,
+            deviceId: serialNumber,
+            origin: 'system',
+          ),
+        );
         return false;
       }
 
-      onLog(LogEntry(
-        message: '✅ Biên dịch firmware thành công',
-        timestamp: DateTime.now(),
-        level: LogLevel.success,
-        step: ProcessStep.firmwareCompile,
-        deviceId: serialNumber,
-        origin: 'system',
-      ));
+      onLog(
+        LogEntry(
+          message: '✅ Biên dịch firmware thành công',
+          timestamp: DateTime.now(),
+          level: LogLevel.success,
+          step: ProcessStep.firmwareCompile,
+          deviceId: serialNumber,
+          origin: 'system',
+        ),
+      );
 
       // Upload firmware
-      onLog(LogEntry(
-        message: '📤 Đang upload firmware...',
-        timestamp: DateTime.now(),
-        level: LogLevel.info,
-        step: ProcessStep.flash,
-        deviceId: serialNumber,
-        origin: 'system',
-      ));
+      onLog(
+        LogEntry(
+          message: '📤 Đang upload firmware...',
+          timestamp: DateTime.now(),
+          level: LogLevel.info,
+          step: ProcessStep.flash,
+          deviceId: serialNumber,
+          origin: 'system',
+        ),
+      );
 
       print('DEBUG: Starting upload sketch to port: $selectedPort');
       final uploaded = await _arduinoCliService.uploadSketch(
@@ -279,42 +332,47 @@ class FirmwareFlashService {
         onLog: (log) {
           print('DEBUG: Upload log: ${log.message}');
           onLog(log);
-        }
+        },
       );
 
       print('DEBUG: Upload result: $uploaded');
       if (!uploaded) {
-        onLog(LogEntry(
-          message: '❌ Upload firmware thất bại',
+        onLog(
+          LogEntry(
+            message: '❌ Upload firmware thất bại',
+            timestamp: DateTime.now(),
+            level: LogLevel.error,
+            step: ProcessStep.flash,
+            deviceId: serialNumber,
+            origin: 'system',
+          ),
+        );
+        return false;
+      }
+
+      onLog(
+        LogEntry(
+          message: '✅ Upload firmware thành công',
+          timestamp: DateTime.now(),
+          level: LogLevel.success,
+          step: ProcessStep.flash,
+          deviceId: serialNumber,
+          origin: 'system',
+        ),
+      );
+
+      return true;
+    } catch (e) {
+      onLog(
+        LogEntry(
+          message: '❌ Lỗi trong quá trình flash: $e',
           timestamp: DateTime.now(),
           level: LogLevel.error,
           step: ProcessStep.flash,
           deviceId: serialNumber,
           origin: 'system',
-        ));
-        return false;
-      }
-
-      onLog(LogEntry(
-        message: '✅ Upload firmware thành công',
-        timestamp: DateTime.now(),
-        level: LogLevel.success,
-        step: ProcessStep.flash,
-        deviceId: serialNumber,
-        origin: 'system',
-      ));
-
-      return true;
-
-    } catch (e) {
-      onLog(LogEntry(
-        message: '❌ Lỗi trong quá trình flash: $e',
-        timestamp: DateTime.now(),
-        level: LogLevel.error,
-        step: ProcessStep.flash,
-        deviceId: serialNumber,
-        origin: 'system',
-      ));
+        ),
+      );
       return false;
     }
   }
@@ -325,13 +383,16 @@ class FirmwareFlashService {
     void Function(LogEntry)? onLog,
   }) async {
     try {
-      onLog?.call(LogEntry(
-        message: 'Starting sketch compilation...',
-        timestamp: DateTime.now(),
-        level: LogLevel.info,
-        step: ProcessStep.firmwareCompile,  // Changed from compile
-        origin: 'system',
-      ));
+      onLog?.call(
+        LogEntry(
+          message: 'Starting sketch compilation...',
+          timestamp: DateTime.now(),
+          level: LogLevel.info,
+          step: ProcessStep.firmwareCompile,
+          // Changed from compile
+          origin: 'system',
+        ),
+      );
 
       final boardType = await _getBoardTypeFromMetadata(sketchPath);
       final fqbn = _arduinoCliService.getBoardFqbn(boardType);
@@ -339,32 +400,41 @@ class FirmwareFlashService {
       final result = await _arduinoCliService.compileSketch(sketchPath, fqbn);
 
       if (result) {
-        onLog?.call(LogEntry(
-          message: 'Compilation successful',
-          timestamp: DateTime.now(),
-          level: LogLevel.success,
-          step: ProcessStep.firmwareCompile,  // Changed from compile
-          origin: 'system',
-        ));
+        onLog?.call(
+          LogEntry(
+            message: 'Compilation successful',
+            timestamp: DateTime.now(),
+            level: LogLevel.success,
+            step: ProcessStep.firmwareCompile,
+            // Changed from compile
+            origin: 'system',
+          ),
+        );
         return true;
       } else {
-        onLog?.call(LogEntry(
-          message: 'Compilation failed',
-          timestamp: DateTime.now(),
-          level: LogLevel.error,
-          step: ProcessStep.firmwareCompile,  // Changed from compile
-          origin: 'system',
-        ));
+        onLog?.call(
+          LogEntry(
+            message: 'Compilation failed',
+            timestamp: DateTime.now(),
+            level: LogLevel.error,
+            step: ProcessStep.firmwareCompile,
+            // Changed from compile
+            origin: 'system',
+          ),
+        );
         return false;
       }
     } catch (e) {
-      onLog?.call(LogEntry(
-        message: 'Error during compilation: $e',
-        timestamp: DateTime.now(),
-        level: LogLevel.error,
-        step: ProcessStep.firmwareCompile,  // Changed from compile
-        origin: 'system',
-      ));
+      onLog?.call(
+        LogEntry(
+          message: 'Error during compilation: $e',
+          timestamp: DateTime.now(),
+          level: LogLevel.error,
+          step: ProcessStep.firmwareCompile,
+          // Changed from compile
+          origin: 'system',
+        ),
+      );
       return false;
     }
   }

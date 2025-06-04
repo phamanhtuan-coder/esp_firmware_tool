@@ -6,7 +6,7 @@ import 'package:smart_net_firmware_loader/utils/app_colors.dart';
 class ActionButtons extends StatelessWidget {
   final bool isDarkTheme;
   final VoidCallback onClearLogs;
-  final Function(String, String, String, String) onInitiateFlash;
+  final Function(String, String, String, String, String?) onInitiateFlash;
   final bool isFlashing;
   final String? selectedPort;
   final String? selectedFirmwareVersion;
@@ -68,20 +68,27 @@ class ActionButtons extends StatelessWidget {
             onPressed: isFlashing || !isFlashEnabled
                 ? null
                 : () {
+              // Don't send firmware version if using local file
+              final logState = context.read<LogBloc>().state;
+              final localFilePath = logState.localFilePath;
+              final firmwareVersion = localFilePath != null ? '' : selectedFirmwareVersion ?? '';
+
               // First notify the LogBloc about the flashing event
               context.read<LogBloc>().add(InitiateFlashEvent(
                 deviceId: selectedDevice ?? '',
-                firmwareVersion: selectedFirmwareVersion ?? '',
+                firmwareVersion: firmwareVersion,
                 deviceSerial: deviceSerial,
                 deviceType: 'esp32',
+                localFilePath: localFilePath,
               ));
 
               // Then call the onInitiateFlash callback with required parameters
               onInitiateFlash(
                 selectedDevice ?? '',
-                selectedFirmwareVersion ?? '',
+                firmwareVersion,
                 deviceSerial,
                 'esp32',
+                localFilePath,
               );
             },
           ),
@@ -90,4 +97,3 @@ class ActionButtons extends StatelessWidget {
     );
   }
 }
-
