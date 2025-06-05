@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class AppColors {
   // Primary colors
   static const Color primary = Color(0xFF1976D2);
-  static const Color secondary = Color(0xFF26C6DA);
+  static const Color secondary = Color(0xFF26A69A);
   static const Color accent = Color(0xFF42A5F5);
   static const Color background = Color(0xFFF5F5F5);
   static const Color text = Color(0xFF212121);
@@ -20,22 +20,24 @@ class AppColors {
   static const Color info = Color(0xFF2196F3); // Blue
   static const Color flash = Color(0xFFFF6F00); // Amber 900 for firmware flashing
 
-  // Additional UI colors
-  static const Color idle = Color(0xFF757575); // Grey
+  // Light theme specific colors
   static const Color cardBackground = Colors.white;
-  static const Color shadowColor = Color(0x1F000000); // 12% black
-  static const Color dividerColor = Color(0xFFEEEEEE);
-  static const Color buttonPressed = Color(
-    0xFF1565C0,
-  ); // Darker blue for pressed state
+  static const Color inputBackground = Color(0xFFFFFFFF);
+  static const Color buttonNormal = Color(0xFF1976D2);
+  static const Color buttonPressed = Color(0xFF1565C0);
+  static const Color buttonHover = Color(0xFF1E88E5);
   static const Color buttonDisabled = Color(0xFFBDBDBD);
-  static const Color buttonHover = Color(
-    0xFF90CAF9,
-  ); // Lighter blue for hover state
+  static const Color dividerColor = Color(0xFFE0E0E0);
+  static const Color shadowColor = Color(0x1A000000);
+
+  // Action button colors
+  static const Color toggleSelected = Color(0xFF1976D2);
+  static const Color toggleUnselected = Color(0xFFE0E0E0);
   static const Color findFile = Color(0xFF42A5F5); // Blue
-  static const Color selectVersion = Color(0xFF4CAF50); // Green
+  static const Color selectVersion = Color(0xFF66BB6A); // Green
   static const Color refresh = Color(0xFFFFA726); // Orange
-  static const Color scanQr = Color(0xFF9C27B0); // Purple
+  static const Color scanQr = Color(0xFF7E57C2); // Purple
+  static const Color upload = Color(0xFF26A69A); // Teal
 
   // Dark theme colors
   static const Color darkBackground = Color(

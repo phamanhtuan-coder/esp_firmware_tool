@@ -57,10 +57,22 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
   String? _serialSuccessText;
   bool _isSerialValid = false;
 
-  void _handleModeToggle() {
-    widget.onWarningRequested(
-      widget.isLocalFileMode ? 'switch_to_version' : 'switch_to_local',
-    );
+  final List<bool> _selections = [true, false]; // [Version mode, File mode]
+
+  void _handleModeToggle(int index) {
+    setState(() {
+      for (int i = 0; i < _selections.length; i++) {
+        _selections[i] = i == index;
+      }
+    });
+
+    if (index == 0) {
+      // Version mode
+      widget.onWarningRequested('switch_to_version');
+    } else {
+      // File mode
+      widget.onWarningRequested('switch_to_local');
+    }
   }
 
   void _handleFirmwareVersionChange(String? value) {
@@ -115,7 +127,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     final state = context.read<HomeBloc>().state;
     if (state.selectedBatchId == null) {
       setState(() {
-        _serialErrorText = 'Vui lòng chọn lô sản xuất trước khi quét QR';
+        _serialErrorText = 'Vui lòng ch���n lô sản xuất trước khi quét QR';
         _serialSuccessText = null;
         _isSerialValid = false;
       });
@@ -259,139 +271,142 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Row 1: Firmware version selection and mode toggle button
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Phiên bản Firmware',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+              // Mode selection toggle
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: ToggleButtons(
+                  isSelected: _selections,
+                  onPressed: _handleModeToggle,
+                  children: const [
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.storage),
+                          SizedBox(width: 8),
+                          Text('Chọn Version'),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: widget.selectedFirmwareVersion,
-                          decoration: InputDecoration(
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(AppConfig.cardBorderRadius),
-                              borderSide: BorderSide(
-                                width: 2,
-                                color: widget.isDarkTheme ? Colors.grey[600]! : Colors.grey[400]!,
-                              ),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                            fillColor: widget.isDarkTheme
-                                ? widget.isLocalFileMode
-                                    ? AppColors.darkCardBackground.withAlpha(128)
-                                    : AppColors.darkPanelBackground
-                                : widget.isLocalFileMode
-                                    ? AppColors.cardBackground.withAlpha(200)
-                                    : Colors.white,
-                            filled: true,
-                            enabled: !widget.isLocalFileMode,
-                          ),
-                          icon: Icon(
-                            Icons.arrow_drop_down,
-                            color: widget.isDarkTheme ? Colors.white70 : Colors.black87,
-                          ),
-                          isExpanded: true,
-                          dropdownColor: widget.isDarkTheme ? AppColors.darkPanelBackground : Colors.white,
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: widget.isDarkTheme ? Colors.white : Colors.black87,
-                          ),
-                          items: widget.firmwares.map((firmware) {
-                            return DropdownMenuItem(
-                              value: firmware.firmwareId.toString(),
-                              child: Text(firmware.version),
-                            );
-                          }).toList(),
-                          onChanged: widget.isLocalFileMode ? null : _handleFirmwareVersionChange,
-                          hint: Text(
-                            'Chọn phiên bản',
-                            style: TextStyle(
-                              color: widget.isDarkTheme ? Colors.grey[400] : Colors.grey[600],
-                            ),
-                          ),
-                        ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.upload_file),
+                          SizedBox(width: 8),
+                          Text('Upload File'),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      ElevatedButton.icon(
-                        onPressed: _handleModeToggle,
-                        icon: Icon(widget.isLocalFileMode ? Icons.storage : Icons.upload_file),
-                        label: Text(
-                          widget.isLocalFileMode ? 'Chọn version' : 'Upload file',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: widget.isDarkTheme ? AppColors.accent : AppColors.secondary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
 
-              const SizedBox(height: 16),
-
-              // Row 2: Local file selection
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'File Firmware',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+              // Firmware version selection
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: widget.isDarkTheme ? AppColors.darkPanelBackground : Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: TextEditingController(
-                            text: state.localFilePath != null
-                                ? state.localFilePath!.split(Platform.pathSeparator).last
-                                : '',
-                          ),
-                          decoration: InputDecoration(
-                            labelText: 'File firmware được chọn',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(AppConfig.cardBorderRadius),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text(
+                        'Phiên bản Firmware',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: DropdownButtonFormField<String>(
+                        value: widget.selectedFirmwareVersion,
+                        onChanged: _selections[0] ? _handleFirmwareVersionChange : null,
+                        items: widget.firmwares.map((firmware) {
+                          return DropdownMenuItem(
+                            value: firmware.firmwareId.toString(),
+                            child: Text(firmware.version),
+                          );
+                        }).toList(),
+                        decoration: InputDecoration(
+                          enabled: _selections[0],
+                          hintText: 'Chọn phiên bản',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // File selection
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: widget.isDarkTheme ? AppColors.darkPanelBackground : Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text(
+                        'File Firmware',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: TextEditingController(
+                                text: state.localFilePath != null
+                                    ? state.localFilePath!.split(Platform.pathSeparator).last
+                                    : '',
+                              ),
+                              enabled: false,
+                              decoration: const InputDecoration(
+                                hintText: 'Chưa có file nào được chọn',
+                              ),
                             ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                            fillColor: widget.isDarkTheme ? AppColors.darkCardBackground : AppColors.cardBackground,
-                            filled: true,
-                            enabled: false,
                           ),
-                        ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            onPressed: _selections[1] ? widget.onLocalFileSearch : null,
+                            icon: const Icon(Icons.upload_file),
+                            label: const Text('Chọn file'),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      ElevatedButton.icon(
-                        onPressed: widget.isLocalFileMode ? widget.onLocalFileSearch : null,
-                        icon: const Icon(Icons.upload_file),
-                        label: const Text('Chọn file'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: widget.isDarkTheme ? AppColors.accent : AppColors.secondary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
 
               const SizedBox(height: 16),
@@ -449,7 +464,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.scanQr,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                         ),
                       ),
                     ],
@@ -521,7 +535,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: widget.isDarkTheme ? AppColors.accent : AppColors.secondary,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                         ),
                       ),
                     ],
@@ -556,7 +569,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.flash,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                         disabledBackgroundColor: Colors.grey[400],
                       ),
                     );

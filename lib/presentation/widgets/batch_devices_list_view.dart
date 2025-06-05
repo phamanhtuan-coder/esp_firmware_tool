@@ -153,33 +153,47 @@ class BatchDevicesListView extends StatelessWidget {
                                       child: Row(
                                         mainAxisAlignment: MainAxisAlignment.end,
                                         children: [
-                                          ElevatedButton.icon(
+                                          ElevatedButton(
                                             onPressed: () => onUpdateDeviceStatus(device.id, 'completed'),
-                                            icon: const Icon(Icons.check_circle_outline, size: 16),
-                                            label: const Text('Hoàn thành'),
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor: AppColors.success,
                                               foregroundColor: Colors.white,
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                              textStyle: const TextStyle(fontSize: 12),
+                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                              minimumSize: const Size(90, 32),
+                                              textStyle: const TextStyle(fontSize: 13),
                                               shape: RoundedRectangleBorder(
                                                 borderRadius: BorderRadius.circular(6),
                                               ),
                                             ),
+                                            child: const Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.check_circle_outline, size: 16),
+                                                SizedBox(width: 4),
+                                                Text('Hoàn thành'),
+                                              ],
+                                            ),
                                           ),
                                           const SizedBox(width: 8),
-                                          ElevatedButton.icon(
+                                          ElevatedButton(
                                             onPressed: () => onUpdateDeviceStatus(device.id, 'error'),
-                                            icon: const Icon(Icons.error_outline, size: 16),
-                                            label: const Text('Báo lỗi'),
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor: AppColors.error,
                                               foregroundColor: Colors.white,
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                              textStyle: const TextStyle(fontSize: 12),
+                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                              minimumSize: const Size(90, 32),
+                                              textStyle: const TextStyle(fontSize: 13),
                                               shape: RoundedRectangleBorder(
                                                 borderRadius: BorderRadius.circular(6),
                                               ),
+                                            ),
+                                            child: const Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.error_outline, size: 16),
+                                                SizedBox(width: 4),
+                                                Text('Báo lỗi'),
+                                              ],
                                             ),
                                           ),
                                         ],
