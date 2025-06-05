@@ -95,51 +95,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     _validateSerial(value);
   }
 
-  // void _validateSerial(String value) {
-  //   if (value.isEmpty) {
-  //     setState(() {
-  //       _serialErrorText = 'Số serial không được để trống';
-  //       _serialSuccessText = null;
-  //       _isSerialValid = false;
-  //     });
-  //     return;
-  //   }
-  //
-  //   final state = context.read<LogBloc>().state;
-  //   if (state.selectedBatchId == null) {
-  //     setState(() {
-  //       _serialErrorText = 'Cần chọn lô sản xuất để xác thực serial';
-  //       _serialSuccessText = null;
-  //       _isSerialValid = false;
-  //     });
-  //     return;
-  //   }
-  //
-  //   final matchingDevice = state.devices.firstWhere(
-  //     (device) => device.serial.trim().toLowerCase() == value.trim().toLowerCase(),
-  //     orElse: () => Device(id: '', batchId: '', serial: ''),
-  //   );
-  //
-  //   setState(() {
-  //     if (matchingDevice.id.isEmpty) {
-  //       _serialErrorText = 'Serial không tồn tại trong lô ${state.selectedBatchId}';
-  //       _serialSuccessText = null;
-  //       _isSerialValid = false;
-  //       return;
-  //     }
-  //
-  //     if (matchingDevice.status == 'firmware_uploading') {
-  //       _serialErrorText = null;
-  //       _serialSuccessText = '✅ Serial hợp lệ - Thiết bị sẵn sàng cho nạp firmware';
-  //       _isSerialValid = true;
-  //       widget.onSerialSubmitted(value);
-  //     } else {
-  //       _serialErrorText = 'Thiết bị không ở trạng thái cho phép nạp firmware';
-  //       _serialSuccessText = null;
-  //       _isSerialValid = false;
-  //     }
-  //   });
-  // }
   void _validateSerial(String value) {
     setState(() {
       if (value.isEmpty) {
@@ -163,7 +118,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
       );
 
       if (matchingDevice.id.isEmpty) {
-        _serialErrorText = 'Serial không tồn t��i trong lô ${state.selectedBatchId}';
+        _serialErrorText = 'Serial không tồn tại trong lô ${state.selectedBatchId}';
         _serialSuccessText = null;
         _isSerialValid = false;
         return;
