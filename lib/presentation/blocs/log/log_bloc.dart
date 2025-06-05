@@ -548,9 +548,10 @@ class LogBloc extends Bloc<LogEvent, LogState> {
 
   Future<void> _onAddLog(AddLogEvent event, Emitter<LogState> emit) async {
     final updatedLogs = List<LogEntry>.from(state.logs)..add(event.log);
+    print('DEBUG: Adding log: ${event.log.message}, level: ${event.log.level}, total logs: ${updatedLogs.length}');
     emit(state.copyWith(
       logs: updatedLogs,
-      filteredLogs: updatedLogs,
+      filteredLogs: updatedLogs, // Ensure filteredLogs includes all logs
     ));
   }
 

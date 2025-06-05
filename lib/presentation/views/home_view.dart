@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:smart_net_firmware_loader/data/services/firmware_flash_service.dart';
 import 'package:smart_net_firmware_loader/data/services/qr_code_service.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart' hide SearchBar;
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/data/services/arduino_cli_service.dart';
@@ -15,10 +15,10 @@ import 'package:smart_net_firmware_loader/presentation/widgets/app_header.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/batch_selection_panel.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/console_terminal_widget.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/firmware_control_panel.dart';
-import 'package:smart_net_firmware_loader/presentation/widgets/search_bar.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/serial_monitor_terminal_widget.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/warning_dialog.dart';
 import 'package:smart_net_firmware_loader/utils/app_colors.dart';
+import 'package:synchronized/synchronized.dart';
 
 import '../../data/models/batch.dart';
 import '../../data/models/device.dart';
@@ -32,7 +32,6 @@ class HomeView extends StatefulWidget {
 
 class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin {
   final TextEditingController _serialController = TextEditingController();
-  final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   late TabController _tabController;
   String? _selectedPlanning;
@@ -41,14 +40,12 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   String? _selectedFirmwareVersion;
   String? _selectedPort;
   bool _isDarkTheme = false;
-  bool _isSearching = false;
   final TextEditingController _serialInputController = TextEditingController();
   final int _selectedBaudRate = 115200;
 
   final LogService _logService = serviceLocator<LogService>();
   final UsbService _usbService = serviceLocator<UsbService>();
-  final ArduinoCliService _arduinoCliService = serviceLocator<
-      ArduinoCliService>();
+  final ArduinoCliService _arduinoCliService = serviceLocator<ArduinoCliService>();
   final QrCodeService _qrCodeService = serviceLocator<QrCodeService>();
 
   bool _showWarningDialog = false;
@@ -77,10 +74,9 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   void _handleTabChange() {
     if (!mounted) return;
 
-    // Cleanup serial monitor khi chuyển từ tab Serial Monitor sang tab khác
-    if (_tabController.index != 1) { // Nếu không phải tab Serial Monitor
+    if (_tabController.index != 1) {
       final logService = serviceLocator<LogService>();
-      logService.stopSerialMonitor(); // Stop và cleanup serial monitor
+      logService.stopSerialMonitor();
     }
 
     setState(() {});
@@ -272,17 +268,20 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     }
   }
 
+  final _flashLock = Lock();
+
   Future<void> _flashFirmware(
       String deviceId,
       String firmwareVersion,
       String deviceSerial,
       String deviceType,
-      String? localFilePath
-    ) async {
-    final firmwareFlashService = serviceLocator<FirmwareFlashService>();
-    localFilePath ??= context.read<LogBloc>().state.localFilePath;
+      String? localFilePath,
+      ) async {
+    await _flashLock.synchronized(() async {
+      final firmwareFlashService = serviceLocator<FirmwareFlashService>();
+      localFilePath ??= context.read<LogBloc>().state.localFilePath;
 
-    try {
+      print('DEBUG: Starting flash for device: $deviceSerial, port: $_selectedPort');
       if (_selectedPort == null || _selectedPort!.isEmpty) {
         _logService.addLog(
           message: 'No COM port selected. Please select a COM port first.',
@@ -290,75 +289,65 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
           step: ProcessStep.flash,
           origin: 'system',
         );
-        // Make sure to stop process if port is not selected
         if (mounted) {
-          print('DEBUG: No port selected, stopping flash process');
           context.read<LogBloc>().add(StopProcessEvent());
         }
         return;
       }
 
-      // When using local file, we don't need to pass firmware version or batch ID
-      final success = await firmwareFlashService.flash(
-        serialNumber: deviceSerial,
-        deviceType: deviceType,
-        firmwareVersion: localFilePath != null ? '' : firmwareVersion,
-        localFilePath: localFilePath,
-        selectedBatch: localFilePath != null ? null : _selectedBatch,
-        selectedPort: _selectedPort,
-        onLog: (log) => _logService.addLog(
-          message: log.message,
-          level: log.level,
-          step: log.step,
-          origin: log.origin,
-          deviceId: deviceSerial,
-          rawOutput: log.rawOutput,
-        ),
-      );
-
-      print('DEBUG: Flash result: $success');
-
-      if (success) {
-        // Add explicit debug log to confirm upload success
-        print('DEBUG: Upload successful!');
-        _logService.addLog(
-          message: '✅ Upload firmware thành công',
-          level: LogLevel.success,
-          step: ProcessStep.flash,
-          origin: 'system',
-          deviceId: deviceSerial,
+      try {
+        final success = await firmwareFlashService.flash(
+          serialNumber: deviceSerial,
+          deviceType: deviceType,
+          firmwareVersion: localFilePath != null ? '' : firmwareVersion,
+          localFilePath: localFilePath,
+          selectedBatch: localFilePath != null ? null : _selectedBatch,
+          selectedPort: _selectedPort,
+          onLog: (log) => _logService.addLog(
+            message: log.message,
+            level: log.level,
+            step: log.step,
+            origin: log.origin,
+            deviceId: deviceSerial,
+            rawOutput: log.rawOutput,
+          ),
         );
 
-        _startSerialMonitor(deviceSerial);
-      } else {
-        // Add explicit debug log for failure
-        print('DEBUG: Upload failed');
+        print('DEBUG: Flash result: $success');
+        if (success) {
+          _logService.addLog(
+            message: '✅ Upload firmware thành công',
+            level: LogLevel.success,
+            step: ProcessStep.flash,
+            origin: 'system',
+            deviceId: deviceSerial,
+          );
+          _startSerialMonitor(deviceSerial);
+        } else {
+          _logService.addLog(
+            message: '❌ Upload firmware thất bại',
+            level: LogLevel.error,
+            step: ProcessStep.flash,
+            origin: 'system',
+            deviceId: deviceSerial,
+          );
+        }
+      } catch (e) {
+        print('DEBUG: Error during flash: $e');
         _logService.addLog(
-          message: '❌ Upload firmware thất bại',
+          message: 'Lỗi khi nạp firmware: $e',
           level: LogLevel.error,
           step: ProcessStep.flash,
           origin: 'system',
           deviceId: deviceSerial,
         );
+      } finally {
+        if (mounted) {
+          await Future.delayed(const Duration(milliseconds: 200));
+          context.read<LogBloc>().add(StopProcessEvent());
+        }
       }
-    } catch (e) {
-      print('DEBUG: Error during flash: $e');
-      _logService.addLog(
-        message: 'Lỗi khi nạp firmware: $e',
-        level: LogLevel.error,
-        step: ProcessStep.flash,
-        origin: 'system',
-        deviceId: deviceSerial,
-      );
-    } finally {
-      // Always reset flashing state when done, whether successful or not
-      if (mounted) {
-        print('DEBUG: Resetting flashing state in finally block');
-        // Explicitly wait a moment to ensure UI updates properly
-        await Future.delayed(const Duration(milliseconds: 200));
-        context.read<LogBloc>().add(StopProcessEvent());
-      }
-    }
+    });
   }
 
   Widget _buildSerialMonitorTab(BuildContext context, LogState state) {
@@ -489,7 +478,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       case 'switch_to_version':
         return 'Chuyển sang chế độ Chọn Version';
       case 'select_local_file':
-        return 'Cảnh báo: Sử dụng File Cục Bộ';
+        return 'Cảnh báo: Sử dụng File C��c Bộ';
       case 'version_change':
         return 'Cảnh báo: Thay đổi Phiên bản Firmware';
       case 'manual_serial':
@@ -589,7 +578,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         context: context,
         builder: (context) => AlertDialog(
           title: Text(_getWarningTitle()),
-          content: Text('Bạn đang thay đổi phiên bản firmware từ "${_selectedFirmwareVersion ?? 'không có'}" sang "$newVersion". Điều này có thể ảnh hưởng đến hoạt động của thiết bị. Bạn có chắc chắn muốn tiếp tục?'),
+          content: Text('Bạn đang thay đổi phiên b���n firmware từ "${_selectedFirmwareVersion ?? 'không có'}" sang "$newVersion". Điều này có thể ảnh hưởng đến hoạt động của thiết bị. Bạn có chắc chắn muốn tiếp tục?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -624,293 +613,233 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => LogBloc()..add(LoadInitialDataEvent()),
-      child: BlocBuilder<LogBloc, LogState>(
-        builder: (context, state) {
-          return MaterialApp(
-            debugShowCheckedModeBanner: false,
-            theme: _isDarkTheme ? ThemeData.dark() : ThemeData.light(),
-            home: Scaffold(
-              backgroundColor: _isDarkTheme ? AppColors.darkBackground : Colors.grey[50],
-              appBar: AppHeader(
-                isDarkTheme: _isDarkTheme,
-                onThemeToggled: () => setState(() => _isDarkTheme = !_isDarkTheme),
-              ),
-              body: Stack(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: BatchSelectionPanel(
-                          batches: state.batches,
-                          devices: state.devices,
-                          selectedBatch: _selectedBatch,
-                          selectedDevice: _selectedDevice,
-                          selectedPlanning: _selectedPlanning,
-                          onBatchSelected: (value) {
-                            setState(() => _selectedBatch = value);
-                            if (value != null) {
-                              // Find the batch to get its firmware_id
-                              final selectedBatch = state.batches.firstWhere(
-                                    (batch) => batch.id == value,
-                                orElse: () => Batch(id: '', firmwareId: null, name: '', planningId: '', templateId: ''), // Replace with your Batch model's default constructor
-                              );
+    return BlocBuilder<LogBloc, LogState>(
+      builder: (context, state) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: _isDarkTheme ? ThemeData.dark() : ThemeData.light(),
+          home: Scaffold(
+            backgroundColor: _isDarkTheme ? AppColors.darkBackground : Colors.grey[50],
+            appBar: AppHeader(
+              isDarkTheme: _isDarkTheme,
+              onThemeToggled: () => setState(() => _isDarkTheme = !_isDarkTheme),
+            ),
+            body: Stack(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: BatchSelectionPanel(
+                        batches: state.batches,
+                        devices: state.devices,
+                        selectedBatch: _selectedBatch,
+                        selectedDevice: _selectedDevice,
+                        selectedPlanning: _selectedPlanning,
+                        onBatchSelected: (value) {
+                          setState(() => _selectedBatch = value);
+                          if (value != null) {
+                            // Find the batch to get its firmware_id
+                            final selectedBatch = state.batches.firstWhere(
+                                  (batch) => batch.id == value,
+                              orElse: () => Batch(id: '', firmwareId: null, name: '', planningId: '', templateId: ''), // Replace with your Batch model's default constructor
+                            );
 
-                              if (selectedBatch?.firmwareId != null) {
-                                // Auto select firmware version based on batch's firmware_id
-                                _selectedFirmwareVersion = selectedBatch!.firmwareId.toString();
-                              }
-                              context.read<LogBloc>().add(SelectBatchEvent(value));
+                            if (selectedBatch?.firmwareId != null) {
+                              // Auto select firmware version based on batch's firmware_id
+                              _selectedFirmwareVersion = selectedBatch!.firmwareId.toString();
                             }
-                          },
-                          onDeviceSelected: (value) {
-                            setState(() => _selectedDevice = value);
-                            context.read<LogBloc>().add(
-                                SelectDeviceEvent(value!));
-                          },
-                          onPlanningSelected: (value) {
-                            setState(() {
-                              _selectedPlanning = value;
-                              _selectedBatch = null;
-                            });
-                            context.read<LogBloc>().add(
-                                LoadBatchesForPlanningEvent(value!));
-                          },
-                          onDeviceMarkDefective: (device) {
-                            context.read<LogBloc>().add(
-                                MarkDeviceDefectiveEvent(
-                                    device.id.toString(), reason: ''));
-                          },
-                          isDarkTheme: _isDarkTheme,
-                        ),
+                            context.read<LogBloc>().add(SelectBatchEvent(value));
+                          }
+                        },
+                        onDeviceSelected: (value) {
+                          setState(() => _selectedDevice = value);
+                          context.read<LogBloc>().add(
+                              SelectDeviceEvent(value!));
+                        },
+                        onPlanningSelected: (value) {
+                          setState(() {
+                            _selectedPlanning = value;
+                            _selectedBatch = null;
+                          });
+                          context.read<LogBloc>().add(
+                              LoadBatchesForPlanningEvent(value!));
+                        },
+                        onDeviceMarkDefective: (device) {
+                          context.read<LogBloc>().add(
+                              MarkDeviceDefectiveEvent(
+                                  device.id.toString(), reason: ''));
+                        },
+                        isDarkTheme: _isDarkTheme,
                       ),
-                      Expanded(
-                        child: Column(
-                          children: [
-                            FirmwareControlPanel(
-                              isDarkTheme: _isDarkTheme,
-                              selectedFirmwareVersion: _selectedFirmwareVersion,
-                              selectedPort: _selectedPort,
-                              serialController: _serialController,
-                              isLocalFileMode: state.isLocalFileMode,
-                              firmwares: state.firmwares,
-                              availablePorts: state.availablePorts,
-                              onFirmwareVersionSelected: (value) {
-                                setState(() => _selectedFirmwareVersion = value);
-                              },
-                              onUsbPortSelected: (value) {
-                                setState(() => _selectedPort = value);
-                                context.read<LogBloc>().add(SelectUsbPortEvent(value!));
-                              },
-                              onLocalFileSearch: () => _handleFilePick(context),
-                              onUsbPortRefresh: () {
-                                context.read<LogBloc>().add(ScanUsbPortsEvent());
-                                _usbService.getAvailablePorts();
-                              },
-                              onSerialSubmitted: (value) {
-                                if (value.isNotEmpty) {
-                                  context.read<LogBloc>().add(SelectSerialEvent(value));
-                                  _serialController.text = value;
+                    ),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          FirmwareControlPanel(
+                            isDarkTheme: _isDarkTheme,
+                            selectedFirmwareVersion: _selectedFirmwareVersion,
+                            selectedPort: _selectedPort,
+                            serialController: _serialController,
+                            isLocalFileMode: state.isLocalFileMode,
+                            firmwares: state.firmwares,
+                            availablePorts: state.availablePorts,
+                            onFirmwareVersionSelected: (value) {
+                              setState(() => _selectedFirmwareVersion = value);
+                            },
+                            onUsbPortSelected: (value) {
+                              setState(() => _selectedPort = value);
+                              context.read<LogBloc>().add(SelectUsbPortEvent(value!));
+                            },
+                            onLocalFileSearch: () => _handleFilePick(context),
+                            onUsbPortRefresh: () {
+                              context.read<LogBloc>().add(ScanUsbPortsEvent());
+                              _usbService.getAvailablePorts();
+                            },
+                            onSerialSubmitted: (value) {
+                              if (value.isNotEmpty) {
+                                context.read<LogBloc>().add(SelectSerialEvent(value));
+                                _serialController.text = value;
 
-                                  if (_selectedBatch != null) {
-                                    final matchingDevice = state.devices
-                                        .firstWhere(
-                                          (device) => device.serial.trim().toLowerCase() == value.trim().toLowerCase(),
-                                          orElse: () => Device(id: '', batchId: '', serial: ''),
-                                    );
+                                if (_selectedBatch != null) {
+                                  final matchingDevice = state.devices
+                                      .firstWhere(
+                                        (device) => device.serial.trim().toLowerCase() == value.trim().toLowerCase(),
+                                        orElse: () => Device(id: '', batchId: '', serial: ''),
+                                  );
 
-                                    if (matchingDevice.id.isNotEmpty) {
-                                      if (matchingDevice.status == 'firmware_uploading') {
-                                        setState(() => _selectedDevice = matchingDevice.id);
-                                        context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id));
-                                        _startSerialMonitor(value);
-                                      }
+                                  if (matchingDevice.id.isNotEmpty) {
+                                    if (matchingDevice.status == 'firmware_uploading') {
+                                      setState(() => _selectedDevice = matchingDevice.id);
+                                      context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id));
+                                      _startSerialMonitor(value);
                                     }
                                   }
                                 }
-                              },
-                              onQrCodeScan: () {
-                                // Existing QR code scan logic
-                              },
-                              onQrCodeAvailabilityChanged: (isAvailable) {
-                                setState(() {
-                                  _isQrCodeAvailable = isAvailable;
-                                });
-                              },
-                              onWarningRequested: (action, {String? value}) {
-                                switch (action) {
-                                  case 'switch_to_version':
-                                    setState(() {
-                                      _selectedFirmwareVersion = null;
-                                      context.read<LogBloc>().add(const SwitchToVersionModeEvent());
-                                    });
-                                    break;
-                                  case 'switch_to_local':
-                                    setState(() {
-                                      _selectedFirmwareVersion = null;
-                                      context.read<LogBloc>().add(const SwitchToLocalModeEvent());
-                                    });
-                                    break;
-                                  case 'select_local_file':
-                                    _handleFilePick(context);
-                                    break;
-                                  case 'version_change':
-                                    if (value != null) {
-                                      setState(() => _selectedFirmwareVersion = value);
-                                    }
-                                    break;
-                                }
-                              },
-                            ),
-                            const SizedBox(height: 16),
-                            ActionButtons(
-                              isDarkTheme: _isDarkTheme,
-                              onClearLogs: () {
-                                context.read<LogBloc>().add(ClearLogsEvent());
-                              },
-                              onInitiateFlash: (deviceId, firmwareVersion,
-                                  deviceSerial, deviceType, localFilePath) {
-                                // Store state before flashing for more detailed debug logs
-                                final currentIsFlashing = state.isFlashing;
-                                print('DEBUG: onInitiateFlash called, current state.isFlashing=$currentIsFlashing');
+                              }
+                            },
+                            onQrCodeScan: () {
+                              // Existing QR code scan logic
+                            },
+                            onQrCodeAvailabilityChanged: (isAvailable) {
+                              setState(() {
+                                _isQrCodeAvailable = isAvailable;
+                              });
+                            },
+                            onWarningRequested: (action, {String? value}) {
+                              switch (action) {
+                                case 'switch_to_version':
+                                  setState(() {
+                                    _selectedFirmwareVersion = null;
+                                    context.read<LogBloc>().add(const SwitchToVersionModeEvent());
+                                  });
+                                  break;
+                                case 'switch_to_local':
+                                  setState(() {
+                                    _selectedFirmwareVersion = null;
+                                    context.read<LogBloc>().add(const SwitchToLocalModeEvent());
+                                  });
+                                  break;
+                                case 'select_local_file':
+                                  _handleFilePick(context);
+                                  break;
+                                case 'version_change':
+                                  if (value != null) {
+                                    setState(() => _selectedFirmwareVersion = value);
+                                  }
+                                  break;
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          ActionButtons(
+                            isDarkTheme: _isDarkTheme,
+                            onClearLogs: () {
+                              context.read<LogBloc>().add(ClearLogsEvent());
+                            },
+                            onInitiateFlash: (deviceId, firmwareVersion,
+                                deviceSerial, deviceType, localFilePath) {
+                              // Store state before flashing for more detailed debug logs
+                              final currentIsFlashing = state.isFlashing;
+                              print('DEBUG: onInitiateFlash called, current state.isFlashing=$currentIsFlashing');
 
-                                _flashFirmware(
-                                    deviceId, firmwareVersion, deviceSerial,
-                                    deviceType, localFilePath);
-                              },
-                              // Pass the state's isFlashing property for compatibility
-                              selectedPort: _selectedPort,
-                              selectedFirmwareVersion: _selectedFirmwareVersion,
-                              selectedDevice: _selectedDevice,
-                              deviceSerial: _serialController.text,
-                            ),
-                            Expanded(
-                              child: Column(
-                                children: [
-                                  Container(
-                                    color: _isDarkTheme ? AppColors
-                                        .darkTabBackground : Colors.grey[200],
-                                    child: TabBar(
-                                      controller: _tabController,
-                                      tabs: const [
-                                        Tab(text: 'Console Log'),
-                                        Tab(text: 'Serial Monitor'),
-                                      ],
-                                      labelColor: _isDarkTheme ? AppColors
-                                          .accent : Colors.blue,
-                                      unselectedLabelColor: _isDarkTheme
-                                          ? AppColors.darkTextSecondary
-                                          : Colors.grey,
-                                      indicatorColor: _isDarkTheme ? AppColors
-                                          .accent : Colors.blue,
-                                    ),
+                              _flashFirmware(
+                                  deviceId, firmwareVersion, deviceSerial,
+                                  deviceType, localFilePath);
+                            },
+                            // Pass the state's isFlashing property for compatibility
+                            selectedPort: _selectedPort,
+                            selectedFirmwareVersion: _selectedFirmwareVersion,
+                            selectedDevice: _selectedDevice,
+                            deviceSerial: _serialController.text,
+                          ),
+                          Expanded(
+                            child: Column(
+                              children: [
+                                Container(
+                                  color: _isDarkTheme ? AppColors
+                                      .darkTabBackground : Colors.grey[200],
+                                  child: TabBar(
+                                    controller: _tabController,
+                                    tabs: const [
+                                      Tab(text: 'Console Log'),
+                                      Tab(text: 'Serial Monitor'),
+                                    ],
+                                    labelColor: _isDarkTheme ? AppColors
+                                        .accent : Colors.blue,
+                                    unselectedLabelColor: _isDarkTheme
+                                        ? AppColors.darkTextSecondary
+                                        : Colors.grey,
+                                    indicatorColor: _isDarkTheme ? AppColors
+                                        .accent : Colors.blue,
                                   ),
-                                  Expanded(
-                                    child: TabBarView(
-                                      controller: _tabController,
-                                      children: [
-                                        // Let ConsoleTerminalWidget handle the stream transformation internally
-                                        Container(
-                                          padding: const EdgeInsets.all(8.0),
-                                          child: ConsoleTerminalWidget(
-                                            logs: state.filteredLogs,
-                                            scrollController: _scrollController,
-                                            isActiveTab: _tabController.index == 0,
-                                          ),
+                                ),
+                                Expanded(
+                                  child: TabBarView(
+                                    controller: _tabController,
+                                    children: [
+                                      // Let ConsoleTerminalWidget handle the stream transformation internally
+                                      Container(
+                                        padding: const EdgeInsets.all(8.0),
+                                        child: ConsoleTerminalWidget(
+                                          scrollController: _scrollController,
+                                          isActiveTab: _tabController.index == 0,
                                         ),
-                                        _buildSerialMonitorTab(context, state),
-                                      ],
-                                    ),
+                                      ),
+                                      _buildSerialMonitorTab(context, state),
+                                    ],
                                   ),
-                                  if (_isSearching)
-                                    SearchBar(
-                                      controller: _searchController,
-                                      isDarkTheme: _isDarkTheme,
-                                      onClose: () {
-                                        setState(() => _isSearching = false);
-                                        _searchController.clear();
-                                        context.read<LogBloc>().add(
-                                            const FilterLogEvent());
-                                      },
-                                    ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (_showWarningDialog)
-                    Container(
-                      color: Colors.black54,
-                      child: Center(
-                        child: WarningDialog(
-                          isDarkTheme: _isDarkTheme,
-                          onCancel: () {
-                            setState(() {
-                              _showWarningDialog = false;
-                            });
-                          },
-                          onContinue: _handleWarningContinue,
-                          title: _getWarningTitle(),
-                          message: _getWarningMessage(),
-                        ),
+                          ),
+                        ],
                       ),
                     ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildFlashingButton(BuildContext context, LogState state) {
-    final hasLocalFile = state.localFilePath != null;
-    final isValidPort = _selectedPort != null && _selectedPort!.isNotEmpty;
-    final isValidFirmware = hasLocalFile || _selectedFirmwareVersion != null;
-    final isValidSerial = _serialController.text.isNotEmpty;
-    final isFlashEnabled = !state.isFlashing && isValidPort && isValidFirmware && isValidSerial;
-    final selectedFirmware = state.isLocalFileMode ? '' : _selectedFirmwareVersion ?? '';
-
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: isFlashEnabled ? () {
-          // NOTE: Do not dispatch InitiateFlashEvent here as it's already done in ActionButtons
-          _flashFirmware(
-            _selectedDevice ?? '',
-            selectedFirmware,
-            _serialController.text,
-            'esp32',
-            state.localFilePath,
-          );
-        } : null,
-        icon: state.isFlashing
-            ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation(Colors.white),
+                  ],
                 ),
-              )
-            : const Icon(Icons.flash_on, size: 20),
-        label: Text(
-          state.isFlashing ? 'Đang nạp firmware...' : 'Nạp Firmware',
-          style: const TextStyle(fontSize: 16),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isFlashEnabled ? AppColors.primary : AppColors.buttonDisabled,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+                if (_showWarningDialog)
+                  Container(
+                    color: Colors.black54,
+                    child: Center(
+                      child: WarningDialog(
+                        isDarkTheme: _isDarkTheme,
+                        onCancel: () {
+                          setState(() {
+                            _showWarningDialog = false;
+                          });
+                        },
+                        onContinue: _handleWarningContinue,
+                        title: _getWarningTitle(),
+                        message: _getWarningMessage(),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
+
 }

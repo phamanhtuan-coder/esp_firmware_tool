@@ -52,6 +52,7 @@ dependencies:
   http: ^1.4.0
 
   provider: any
+  synchronized: ^3.3.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
