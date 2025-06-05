@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
 import 'package:smart_net_firmware_loader/core/config/app_routes.dart';
+import 'package:smart_net_firmware_loader/core/utils/debug_logger.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -16,10 +17,13 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+  bool _navigated = false;
 
   @override
   void initState() {
     super.initState();
+    DebugLogger.lifecycle('SplashScreen initialized');
+
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -49,15 +53,25 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    Timer(const Duration(seconds: 3), () {
-      if (mounted) {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.login);
-      }
-    });
+    // Use a minimum display time for the splash screen (3 seconds)
+    // This ensures users can see the splash screen even if initialization is fast
+    Timer(const Duration(seconds: 3), _checkNavigationToLogin);
+  }
+
+  void _checkNavigationToLogin() {
+    DebugLogger.lifecycle('Checking navigation from splash to login');
+    if (mounted && !_navigated) {
+      setState(() {
+        _navigated = true;
+      });
+      DebugLogger.lifecycle('Navigating from splash to login');
+      Navigator.of(context).pushReplacementNamed(AppRoutes.login);
+    }
   }
 
   @override
   void dispose() {
+    DebugLogger.lifecycle('SplashScreen disposed');
     _controller.dispose();
     super.dispose();
   }
@@ -99,8 +113,11 @@ class _SplashScreenState extends State<SplashScreen>
                     'assets/app_icon.png',
                     fit: BoxFit.contain,
                     errorBuilder: (context, error, stackTrace) {
-                      debugPrint('Error loading app icon: $error');
-                      debugPrint('Stack trace: $stackTrace');
+                      DebugLogger.e(
+                        'Error loading app icon',
+                        error: error,
+                        stackTrace: stackTrace,
+                      );
                       return Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
