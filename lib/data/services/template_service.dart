@@ -369,18 +369,26 @@ class TemplateService {
         await _initTemplatesDir();
       }
 
-      // Use device type for directory instead of COM port
+      // Follow exact same structure as _getLocalTemplatePath
       final deviceTemplateDir = path.join(_templatesDir!, '${deviceType}_template');
       final firmwareFolderName = firmwareVersion.replaceAll('.', '_');
       final firmwareFolderPath = path.join(deviceTemplateDir, firmwareFolderName);
-
-      // Create directories if they don't exist
-      await Directory(firmwareFolderPath).create(recursive: true);
-
       final fileName = '$firmwareFolderName.ino';
       final filePath = path.join(firmwareFolderPath, fileName);
-      final file = File(filePath);
 
+      // Create the device template directory first
+      final deviceDir = Directory(deviceTemplateDir);
+      if (!await deviceDir.exists()) {
+        await deviceDir.create(recursive: true);
+      }
+
+      // Create firmware version directory
+      final firmwareDir = Directory(firmwareFolderPath);
+      if (!await firmwareDir.exists()) {
+        await firmwareDir.create(recursive: true);
+      }
+
+      // Validate hash if provided
       if (expectedHash != null) {
         final contentHash = md5.convert(utf8.encode(sourceCode)).toString();
         print('DEBUG: Content hash: $contentHash');
@@ -397,9 +405,12 @@ class TemplateService {
         }
       }
 
+      // Save the firmware file
+      final file = File(filePath);
       await file.writeAsString(sourceCode);
-      print('DEBUG: Source code written to file');
+      print('DEBUG: Source code written to file: $filePath');
 
+      // Save metadata in the same directory structure
       await _saveMetadata(firmwareVersion, deviceType, filePath);
       print('DEBUG: Metadata saved');
 
@@ -427,16 +438,30 @@ class TemplateService {
   }
 
   Future<void> _saveMetadata(String firmwareVersion, String deviceType, String filePath) async {
-    final metadataDir = path.join(_templatesDir!, deviceType, 'metadata');
-    final metadataFile = File(path.join(metadataDir, '${firmwareVersion.replaceAll('.', '_')}.json'));
-    final metadata = {
-      'version': firmwareVersion,
-      'deviceType': deviceType,
-      'filePath': filePath,
-      'timestamp': DateTime.now().toIso8601String(),
-    };
-    await Directory(metadataDir).create(recursive: true);
-    await metadataFile.writeAsString(json.encode(metadata));
+    try {
+      // Use the same directory structure as the template
+      final deviceTemplateDir = path.join(_templatesDir!, '${deviceType}_template');
+      final firmwareFolderName = firmwareVersion.replaceAll('.', '_');
+      final metadataDir = path.join(deviceTemplateDir, firmwareFolderName, 'metadata');
+
+      // Create metadata directory if it doesn't exist
+      await Directory(metadataDir).create(recursive: true);
+
+      // Save metadata file in the same folder as the firmware
+      final metadataFile = File(path.join(metadataDir, 'template_info.json'));
+      final metadata = {
+        'version': firmwareVersion,
+        'deviceType': deviceType,
+        'filePath': filePath,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+
+      await metadataFile.writeAsString(json.encode(metadata));
+      print('DEBUG: Metadata saved to: ${metadataFile.path}');
+    } catch (e) {
+      print('DEBUG: Error saving metadata: $e');
+      throw e; // Re-throw to be handled by the caller
+    }
   }
 
   Future<String?> _getLocalTemplatePath(String firmwareVersion, String deviceType) async {
@@ -478,7 +503,7 @@ class TemplateService {
       }
     }
     if (result.isEmpty) {
-      result.addAll(['1.0.0', '1.1.0', '2.0.0']);
+      result.addAll(['Không có firmware nào được lưu trữ']);
     }
     return result;
   }

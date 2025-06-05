@@ -47,6 +47,34 @@ class ArduinoCliService {
     return _boardFqbns[deviceType.toLowerCase()] ?? 'esp32:esp32:esp32'; // Default to ESP32
   }
 
+  /// Validate if a port is accessible before using it
+  Future<bool> validatePortAccess(String port) async {
+    try {
+      final process = await startProcess(['board', 'list', '--format', 'json']);
+      final exitCode = await process.exitCode;
+
+      if (exitCode != 0) {
+        print('DEBUG: Port validation failed for $port');
+        return false;
+      }
+
+      // Try to release the port if it might be in use
+      if (Platform.isWindows) {
+        try {
+          await Process.run('net', ['stop', 'SerialPort']);
+          await Future.delayed(const Duration(milliseconds: 500));
+        } catch (e) {
+          print('DEBUG: Error releasing port: $e');
+        }
+      }
+
+      return true;
+    } catch (e) {
+      print('DEBUG: Port validation error: $e');
+      return false;
+    }
+  }
+
   /// Get the port for a specific device ID
   Future<String?> getPortForDevice(String deviceId) async {
     // Try to get from cached map first
@@ -71,14 +99,15 @@ class ArduinoCliService {
         return null;
       }
 
-      // Parse the JSON output to find the port
-      // In a real implementation, you would parse this properly with json.decode
-      // and match the device ID to the serial number or other identifier
-
-      // For now, we'll just return a mock port for testing
       final port = deviceId.contains('COM') ? deviceId : 'COM3';
-      _devicePorts[deviceId] = port;
-      return port;
+
+      // Validate port access before returning
+      if (await validatePortAccess(port)) {
+        _devicePorts[deviceId] = port;
+        return port;
+      } else {
+        throw Exception('Port $port is not accessible. Make sure no other program is using it and you have proper permissions.');
+      }
     } catch (e) {
       print('Exception in getPortForDevice: $e');
       return null;
@@ -470,6 +499,23 @@ class ArduinoCliService {
   /// Upload a sketch using arduino-cli
   Future<bool> uploadSketch(String sketchPath, String port, String fqbn, {void Function(LogEntry)? onLog}) async {
     try {
+      // Validate port access before attempting upload
+      if (!await validatePortAccess(port)) {
+        if (onLog != null) {
+          onLog(LogEntry(
+            message: '❌ Cannot access port $port. Please check if:\n' +
+                     '1. Another program is using the port\n' +
+                     '2. You have sufficient permissions\n' +
+                     '3. The device is properly connected',
+            timestamp: DateTime.now(),
+            level: LogLevel.error,
+            step: ProcessStep.flash,
+            origin: 'arduino-cli',
+          ));
+        }
+        return false;
+      }
+
       if (onLog != null) {
         onLog(LogEntry(
           message: '📤 Starting upload...',
@@ -482,6 +528,16 @@ class ArduinoCliService {
 
       // Kill any existing process first
       await killActiveProcess();
+
+      // Try to reset the port before upload on Windows
+      if (Platform.isWindows) {
+        try {
+          await Process.run('mode', [port]);
+          await Future.delayed(const Duration(milliseconds: 500));
+        } catch (e) {
+          print('DEBUG: Error resetting port: $e');
+        }
+      }
 
       // Start upload process
       _activeProcess = await startProcess([
@@ -677,4 +733,3 @@ class ArduinoCliService {
     _devicePorts.remove(deviceId);
   }
 }
-

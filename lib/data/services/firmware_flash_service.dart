@@ -162,7 +162,7 @@ class FirmwareFlashService {
         final templatePath = await _templateService.saveFirmwareTemplate(
           sourceCode,
           firmwareVersion,
-          deviceType,
+          deviceType.toLowerCase(), // Use lowercase device type for consistency
         );
         print('DEBUG: Template path: $templatePath');
 
