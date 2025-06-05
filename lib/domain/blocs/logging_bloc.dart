@@ -547,12 +547,32 @@ class LogBloc extends Bloc<LogEvent, LogState> {
   }
 
   Future<void> _onAddLog(AddLogEvent event, Emitter<LogState> emit) async {
-    final updatedLogs = List<LogEntry>.from(state.logs)..add(event.log);
-    print('DEBUG: Adding log: ${event.log.message}, level: ${event.log.level}, total logs: ${updatedLogs.length}');
-    emit(state.copyWith(
-      logs: updatedLogs,
-      filteredLogs: updatedLogs, // Ensure filteredLogs includes all logs
-    ));
+    try {
+      // Create new lists to trigger state change
+      final List<LogEntry> updatedLogs = List<LogEntry>.from(state.logs);
+
+      // Add new log entry
+      updatedLogs.add(event.log);
+      print('DEBUG: Adding log: ${event.log.message}, level: ${event.log.level}, total logs: ${updatedLogs.length}');
+
+      // Update filtered logs if needed
+      final List<LogEntry> updatedFilteredLogs;
+      if (state.filteredLogs.isEmpty) {
+        // If no filter is active, show all logs
+        updatedFilteredLogs = List<LogEntry>.from(updatedLogs);
+      } else {
+        // Apply existing filter to new list
+        updatedFilteredLogs = List<LogEntry>.from(state.filteredLogs)..add(event.log);
+      }
+
+      // Emit new state with both lists updated
+      emit(state.copyWith(
+        logs: updatedLogs,
+        filteredLogs: updatedFilteredLogs,
+      ));
+    } catch (e) {
+      print('ERROR: Failed to add log: $e');
+    }
   }
 
   Future<void> _onSelectLocalFile(SelectLocalFileEvent event, Emitter<LogState> emit) async {
