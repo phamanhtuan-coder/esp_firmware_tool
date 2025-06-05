@@ -73,6 +73,8 @@ class HomeState {
   final String? selectedPort;
   final bool isLocalFileMode;
   final bool isFlashing;
+  final String? selectedDeviceId;
+  final String? selectedDeviceType;
 
   HomeState({
     this.plannings = const [],
@@ -88,6 +90,8 @@ class HomeState {
     this.selectedPort,
     this.isLocalFileMode = false,
     this.isFlashing = false,
+    this.selectedDeviceId,
+    this.selectedDeviceType,
   });
 
   HomeState copyWith({
@@ -104,6 +108,8 @@ class HomeState {
     String? selectedPort,
     bool? isLocalFileMode,
     bool? isFlashing,
+    String? selectedDeviceId,
+    String? selectedDeviceType,
   }) {
     return HomeState(
       plannings: plannings ?? this.plannings,
@@ -119,6 +125,8 @@ class HomeState {
       selectedPort: selectedPort ?? this.selectedPort,
       isLocalFileMode: isLocalFileMode ?? this.isLocalFileMode,
       isFlashing: isFlashing ?? this.isFlashing,
+      selectedDeviceId: selectedDeviceId ?? this.selectedDeviceId,
+      selectedDeviceType: selectedDeviceType ?? this.selectedDeviceType,
     );
   }
 }

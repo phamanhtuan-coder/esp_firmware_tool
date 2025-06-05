@@ -26,8 +26,8 @@ void setupServiceLocator() {
 Future<void> setupWindow() async {
   await windowManager.ensureInitialized();
   const windowOptions = WindowOptions(
-    size: Size(1280, 720), // Default window size
-    minimumSize: Size(800, 600), // Minimum window size
+    size: Size(1600, 900), // Default window size
+    minimumSize: Size(1280, 720), // Minimum window size
     center: true, // Center window on screen
     title: 'SmartNet Firmware Loader',
     titleBarStyle: TitleBarStyle.normal,

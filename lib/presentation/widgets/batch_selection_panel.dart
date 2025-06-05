@@ -26,15 +26,13 @@ class BatchSelectionPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveDarkTheme =
-        isDarkTheme ?? Theme.of(context).brightness == Brightness.dark;
+    final effectiveDarkTheme = isDarkTheme ?? Theme.of(context).brightness == Brightness.dark;
 
     return Padding(
       padding: const EdgeInsets.all(AppConfig.defaultPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Planning Selection
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -52,20 +50,23 @@ class BatchSelectionPanel extends StatelessWidget {
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(AppConfig.cardBorderRadius),
+                    borderSide: BorderSide(
+                      width: 2,
+                      color: effectiveDarkTheme ? Colors.grey[600]! : Colors.grey[400]!,
+                    ),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 14,
-                  ),
-                  fillColor: effectiveDarkTheme
-                      ? AppColors.darkCardBackground
-                      : AppColors.cardBackground,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  fillColor: effectiveDarkTheme ? AppColors.darkPanelBackground : Colors.white,
                   filled: true,
                 ),
-                dropdownColor: effectiveDarkTheme
-                    ? AppColors.darkCardBackground
-                    : AppColors.cardBackground,
+                icon: Icon(
+                  Icons.arrow_drop_down,
+                  color: effectiveDarkTheme ? Colors.white70 : Colors.black87,
+                ),
+                isExpanded: true,
+                dropdownColor: effectiveDarkTheme ? AppColors.darkPanelBackground : Colors.white,
                 style: TextStyle(
+                  fontSize: 15,
                   color: effectiveDarkTheme ? Colors.white : Colors.black87,
                 ),
                 items: plannings.map((planning) {
@@ -75,12 +76,16 @@ class BatchSelectionPanel extends StatelessWidget {
                   );
                 }).toList(),
                 onChanged: onPlanningSelected,
-                hint: const Text('-- Chọn kế hoạch sản xuất --'),
+                hint: Text(
+                  '-- Chọn kế hoạch sản xuất --',
+                  style: TextStyle(
+                    color: effectiveDarkTheme ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          // Batch Selection
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -98,21 +103,24 @@ class BatchSelectionPanel extends StatelessWidget {
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(AppConfig.cardBorderRadius),
+                    borderSide: BorderSide(
+                      width: 2,
+                      color: effectiveDarkTheme ? Colors.grey[600]! : Colors.grey[400]!,
+                    ),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 14,
-                  ),
-                  fillColor: effectiveDarkTheme
-                      ? AppColors.darkCardBackground
-                      : AppColors.cardBackground,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  fillColor: effectiveDarkTheme ? AppColors.darkPanelBackground : Colors.white,
                   filled: true,
                   enabled: selectedPlanningId != null,
                 ),
-                dropdownColor: effectiveDarkTheme
-                    ? AppColors.darkCardBackground
-                    : AppColors.cardBackground,
+                icon: Icon(
+                  Icons.arrow_drop_down,
+                  color: effectiveDarkTheme ? Colors.white70 : Colors.black87,
+                ),
+                isExpanded: true,
+                dropdownColor: effectiveDarkTheme ? AppColors.darkPanelBackground : Colors.white,
                 style: TextStyle(
+                  fontSize: 15,
                   color: effectiveDarkTheme ? Colors.white : Colors.black87,
                 ),
                 items: batches.map((batch) {
@@ -123,9 +131,10 @@ class BatchSelectionPanel extends StatelessWidget {
                 }).toList(),
                 onChanged: selectedPlanningId != null ? onBatchSelected : null,
                 hint: Text(
-                  selectedPlanningId != null
-                      ? '-- Chọn lô sản xuất --'
-                      : 'Vui lòng chọn kế hoạch trước',
+                  selectedPlanningId != null ? '-- Chọn lô sản xuất --' : 'Vui lòng chọn kế hoạch trước',
+                  style: TextStyle(
+                    color: effectiveDarkTheme ? Colors.grey[400] : Colors.grey[600],
+                  ),
                 ),
               ),
             ],

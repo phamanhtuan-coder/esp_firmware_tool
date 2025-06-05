@@ -83,6 +83,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
                         fontWeight: FontWeight.w500,
                         fontSize: 14,
                       ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                     Text(
                       userRole!,
@@ -91,6 +92,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
                         fontSize: 12,
                         fontWeight: FontWeight.w400,
                       ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),

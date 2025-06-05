@@ -18,6 +18,7 @@ class AppColors {
   static const Color success = Color(0xFF4CAF50);
   static const Color warning = Color(0xFFFFC107); // Yellow
   static const Color info = Color(0xFF2196F3); // Blue
+  static const Color flash = Color(0xFFFF6F00); // Amber 900 for firmware flashing
 
   // Additional UI colors
   static const Color idle = Color(0xFF757575); // Grey
