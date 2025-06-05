@@ -283,7 +283,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                         borderRadius: BorderRadius.circular(8),
                         selectedBorderColor: Colors.transparent,
                         borderColor: Colors.transparent,
-                        fillColor: AppColors.primary.withOpacity(0.1),
+                        fillColor: AppColors.componentBackground.withOpacity(0.5),
                         selectedColor: AppColors.primary,
                         color: widget.isDarkTheme ? Colors.grey[400] : Colors.grey[700],
                         constraints: const BoxConstraints(
@@ -323,7 +323,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                 Container(
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: widget.isDarkTheme ? AppColors.darkPanelBackground : Colors.white,
+                    color: widget.isDarkTheme ? AppColors.darkPanelBackground : AppColors.componentBackground,
                     borderRadius: BorderRadius.circular(8),
                     boxShadow: [
                       BoxShadow(
@@ -360,6 +360,35 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                           decoration: InputDecoration(
                             enabled: _selections[0],
                             hintText: 'Chọn phiên bản',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.grey.shade300),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.grey.shade300),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            fillColor: AppColors.componentBackground,
+                            filled: true,
+                          ),
+                          icon: const Icon(Icons.arrow_drop_down, color: Colors.black87),
+                          dropdownColor: AppColors.componentBackground,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.black87,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          hint: Text(
+                            'Chọn phiên bản',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w400,
+                            ),
                           ),
                         ),
                       ),
@@ -405,9 +434,11 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                                       ? state.localFilePath!.split(Platform.pathSeparator).last
                                       : '',
                                 ),
-                                enabled: false,
+                                enabled: true,
+                                readOnly: true,
                                 decoration: const InputDecoration(
                                   hintText: 'Chưa có file nào được chọn',
+
                                 ),
                               ),
                             ),
@@ -449,10 +480,10 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                                 decoration: InputDecoration(
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(8),
-                                    borderSide: BorderSide.none,
+                                    borderSide: BorderSide(color: Colors.grey.shade300),
                                   ),
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                  fillColor: widget.isDarkTheme ? AppColors.darkPanelBackground : AppColors.componentBackground,
+                                  fillColor: Colors.white,
                                   filled: true,
                                   errorText: _serialErrorText,
                                   suffixIcon: _serialSuccessText != null
@@ -460,16 +491,14 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                                     : null,
                                   hintText: 'Nhập số serial...',
                                   hintStyle: TextStyle(
-                                    color: widget.isDarkTheme ? Colors.grey[500] : Colors.grey[600],
-                                  ),
-                                  errorStyle: const TextStyle(
-                                    color: AppColors.error,
-                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w400,
                                   ),
                                 ),
-                                style: TextStyle(
-                                  color: widget.isDarkTheme ? Colors.white : Colors.black87,
+                                style: const TextStyle(
+                                  color: Colors.black87,
                                   fontSize: 14,
+                                  fontWeight: FontWeight.w500,
                                 ),
                                 onChanged: _validateSerial,
                               ),
@@ -521,20 +550,21 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                             decoration: InputDecoration(
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide.none,
+                                borderSide: BorderSide(color: Colors.grey.shade300),
                               ),
                               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              fillColor: widget.isDarkTheme ? AppColors.darkPanelBackground : AppColors.componentBackground,
+                              fillColor: Colors.white,
                               filled: true,
                             ),
-                            icon: Icon(
+                            icon: const Icon(
                               Icons.arrow_drop_down,
-                              color: widget.isDarkTheme ? Colors.white70 : Colors.black87,
+                              color: Colors.black87,
                             ),
-                            dropdownColor: widget.isDarkTheme ? AppColors.darkPanelBackground : AppColors.componentBackground,
-                            style: TextStyle(
+                            dropdownColor: Colors.white,
+                            style: const TextStyle(
                               fontSize: 14,
-                              color: widget.isDarkTheme ? Colors.white : Colors.black87,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w500,
                             ),
                             items: widget.availablePorts.map((port) {
                               return DropdownMenuItem(
@@ -546,7 +576,8 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                             hint: Text(
                               'Chọn cổng COM',
                               style: TextStyle(
-                                color: widget.isDarkTheme ? Colors.grey[500] : Colors.grey[600],
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w400,
                               ),
                             ),
                           ),

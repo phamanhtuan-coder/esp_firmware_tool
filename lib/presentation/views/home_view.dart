@@ -140,13 +140,19 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       if (!mounted || result == null || result.files.single.path == null) return;
 
       final filePath = result.files.single.path!;
-      context.read<HomeBloc>().add(SelectLocalFileEvent(filePath));
-      _logService.addLog(
-        message: 'Selected firmware file: ${result.files.single.name}',
-        level: LogLevel.info,
-        step: ProcessStep.selectFirmware,
-        origin: 'system',
-      );
+
+      // Delay state update using microtask to avoid build cycle issues
+      Future.microtask(() {
+        if (mounted) {
+          context.read<HomeBloc>().add(SelectLocalFileEvent(filePath));
+          _logService.addLog(
+            message: 'Selected firmware file: ${result.files.single.name}',
+            level: LogLevel.info,
+            step: ProcessStep.selectFirmware,
+            origin: 'system',
+          );
+        }
+      });
     } catch (e) {
       _logService.addLog(
         message: 'Error selecting file: $e',
