@@ -42,12 +42,15 @@ class AppTheme {
           const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
         backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
-          if (states.contains(WidgetState.disabled))
+          if (states.contains(WidgetState.disabled)) {
             return AppColors.buttonDisabled;
-          if (states.contains(WidgetState.pressed))
+          }
+          if (states.contains(WidgetState.pressed)) {
             return AppColors.buttonPressed;
-          if (states.contains(WidgetState.hovered))
+          }
+          if (states.contains(WidgetState.hovered)) {
             return AppColors.buttonHover;
+          }
           return AppColors.primary;
         }),
         foregroundColor: WidgetStateProperty.all(Colors.white),
@@ -72,10 +75,12 @@ class AppTheme {
           return const BorderSide(color: AppColors.primary);
         }),
         foregroundColor: WidgetStateProperty.resolveWith<Color>((states) {
-          if (states.contains(WidgetState.disabled))
+          if (states.contains(WidgetState.disabled)) {
             return AppColors.buttonDisabled;
-          if (states.contains(WidgetState.pressed))
+          }
+          if (states.contains(WidgetState.pressed)) {
             return AppColors.buttonPressed;
+          }
           return AppColors.primary;
         }),
       ),
@@ -151,12 +156,15 @@ class AppTheme {
           const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
         backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
-          if (states.contains(WidgetState.disabled))
+          if (states.contains(WidgetState.disabled)) {
             return AppColors.buttonDisabled;
-          if (states.contains(WidgetState.pressed))
+          }
+          if (states.contains(WidgetState.pressed)) {
             return AppColors.buttonPressed;
-          if (states.contains(WidgetState.hovered))
+          }
+          if (states.contains(WidgetState.hovered)) {
             return AppColors.buttonHover;
+          }
           return AppColors.primary;
         }),
         foregroundColor: WidgetStateProperty.all(Colors.white),
@@ -181,10 +189,12 @@ class AppTheme {
           return const BorderSide(color: AppColors.primary);
         }),
         foregroundColor: WidgetStateProperty.resolveWith<Color>((states) {
-          if (states.contains(WidgetState.disabled))
+          if (states.contains(WidgetState.disabled)) {
             return AppColors.buttonDisabled;
-          if (states.contains(WidgetState.pressed))
+          }
+          if (states.contains(WidgetState.pressed)) {
             return AppColors.buttonPressed;
+          }
           return AppColors.primary;
         }),
       ),

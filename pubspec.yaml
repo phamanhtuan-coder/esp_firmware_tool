@@ -25,6 +25,8 @@ dependencies:
   path: ^1.8.0
   http: ^1.4.0
   synchronized: ^3.3.1
+  crypto: any
+  cli_util: ^0.4.2
 
 dev_dependencies:
   flutter_test:

@@ -10,7 +10,6 @@ import 'package:smart_net_firmware_loader/data/models/firmware.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/logging_bloc.dart';
-import 'package:smart_net_firmware_loader/presentation/widgets/rounded_button.dart';
 
 class FirmwareControlPanel extends StatefulWidget {
   final List<Firmware> firmwares;
@@ -28,6 +27,7 @@ class FirmwareControlPanel extends StatefulWidget {
   final Function(String, {String? value}) onWarningRequested;
   final bool isLocalFileMode;
   final Function(bool) onQrCodeAvailabilityChanged;
+  final Function(bool) onFlashStatusChanged;
 
   const FirmwareControlPanel({
     super.key,
@@ -46,6 +46,7 @@ class FirmwareControlPanel extends StatefulWidget {
     required this.onWarningRequested,
     required this.isLocalFileMode,
     required this.onQrCodeAvailabilityChanged,
+    required this.onFlashStatusChanged,
   });
 
   @override
@@ -53,9 +54,6 @@ class FirmwareControlPanel extends StatefulWidget {
 }
 
 class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
-  bool _isFileButtonLoading = false;
-  bool _isQrCodeButtonLoading = false;
-  bool _isRefreshButtonLoading = false;
   String? _serialErrorText;
   String? _serialSuccessText;
   bool _isSerialValid = false;
@@ -70,28 +68,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     if (value != widget.selectedFirmwareVersion) {
       widget.onWarningRequested('version_change', value: value);
     }
-  }
-
-  void _validateAndSubmitSerial(String value) {
-    final currentPosition = widget.serialController.selection;
-    widget.serialController.value = TextEditingValue(
-      text: value,
-      selection: currentPosition,
-    );
-
-    setState(() {
-      if (value.isEmpty) {
-        _serialErrorText = 'Số serial không được để trống';
-        _serialSuccessText = null;
-        _isSerialValid = false;
-      } else {
-        _serialErrorText = null;
-        _serialSuccessText = null;
-        _isSerialValid = true;
-      }
-    });
-
-    _validateSerial(value);
   }
 
   void _validateSerial(String value) {
@@ -166,7 +142,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     widget.onQrCodeAvailabilityChanged(true);
 
     setState(() {
-      _isQrCodeButtonLoading = true;
       _serialErrorText = null;
       _serialSuccessText = null;
     });
@@ -181,7 +156,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
           const SizedBox(width: 16),
           Expanded(
             child: Text(
-              'Đã bật chế độ nhận thông tin. Hãy dùng app mobile và quét mã sản phẩm muốn nạp firmware trong lô ${state.selectedBatchId}',
+              'Đã bật chế độ nhận thông tin. Hãy dùng app mobile và quét mã s��n phẩm muốn nạp firmware trong lô ${state.selectedBatchId}',
               style: const TextStyle(color: Colors.white),
             ),
           ),
@@ -233,17 +208,15 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
           Future.delayed(const Duration(milliseconds: 800), () {
             if (!mounted) return;
 
-            _validateReceivedSerial(newValue);
+            _validateSerial(newValue);
 
             setState(() {
-              _isQrCodeButtonLoading = false;
             });
             scaffoldMessenger.hideCurrentSnackBar();
           });
         } else {
-          _validateReceivedSerial(newValue);
+          _validateSerial(newValue);
           setState(() {
-            _isQrCodeButtonLoading = false;
           });
           scaffoldMessenger.hideCurrentSnackBar();
         }
@@ -253,7 +226,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
         timer.cancel();
         if (mounted) {
           setState(() {
-            _isQrCodeButtonLoading = false;
           });
           scaffoldMessenger.hideCurrentSnackBar();
         }
@@ -261,98 +233,42 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     });
   }
 
-  void _validateReceivedSerial(String value) {
-    if (!mounted) return;
-    _validateSerial(value);
-    if (_isQrCodeButtonLoading) {
-      setState(() {
-        _isQrCodeButtonLoading = false;
-      });
-    }
-  }
-
-  void _handleRefreshPorts() async {
-    setState(() {
-      _isRefreshButtonLoading = true;
-    });
-
-    try {
-      widget.onUsbPortRefresh();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Đã làm mới danh sách cổng COM'),
-          backgroundColor: AppColors.success,
-          duration: Duration(seconds: 2),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        await Future.delayed(const Duration(milliseconds: 500));
-        setState(() {
-          _isRefreshButtonLoading = false;
-        });
-      }
-    }
-  }
-
-  Widget _buildLoadingButton({
-    required bool isLoading,
-    required VoidCallback onPressed,
-    required String text,
-    required IconData icon,
-    required Color backgroundColor,
-    bool enabled = true,
-  }) {
-    return SizedBox(
-      height: 48,
-      child: RoundedButton(
-        label: isLoading ? 'Đang xử lý...' : text,
-        icon: isLoading ? null : icon,
-        onPressed: enabled ? onPressed : () {},
-        color: enabled ? backgroundColor : AppColors.buttonDisabled,
-        isLoading: isLoading,
-        enabled: enabled,
-      ),
-    );
-  }
-
   @override
   void didUpdateWidget(FirmwareControlPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.isLocalFileMode != widget.isLocalFileMode) {
-      setState(() {});
+    if (oldWidget.isLocalFileMode != widget.isLocalFileMode ||
+        oldWidget.selectedPort != widget.selectedPort ||
+        oldWidget.selectedFirmwareVersion != widget.selectedFirmwareVersion) {
+      _canFlash();
+      setState(() {}); // Trigger rebuild for mode change
     }
   }
 
   bool _canFlash() {
     if (widget.isLocalFileMode) {
       final state = context.read<HomeBloc>().state;
-      return state.localFilePath != null &&
+      final canFlash = state.localFilePath != null &&
           widget.selectedPort != null &&
           _isSerialValid;
+      widget.onFlashStatusChanged(canFlash);
+      return canFlash;
     } else {
-      return widget.selectedFirmwareVersion != null &&
+      final canFlash = widget.selectedFirmwareVersion != null &&
           widget.selectedPort != null &&
           _isSerialValid;
+      widget.onFlashStatusChanged(canFlash);
+      return canFlash;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<HomeBloc, HomeState>(
-      builder: (context, state) {
-        final hasLocalFile = state.localFilePath != null;
-        final fileName =
-            hasLocalFile
-                ? state.localFilePath!.split(Platform.pathSeparator).last
-                : 'Chưa chọn file';
-
-        final _ = _canFlash();
-        final bool canScanQR = state.selectedBatchId != null;
-
-        return Padding(
-          padding: const EdgeInsets.all(AppConfig.defaultPadding),
-          child: Column(
+    return Padding(
+      padding: const EdgeInsets.all(AppConfig.defaultPadding),
+      child: BlocBuilder<HomeBloc, HomeState>(
+        builder: (context, state) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -385,12 +301,11 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                             fillColor:
                                 widget.isDarkTheme
                                     ? widget.isLocalFileMode
-                                        ? AppColors.darkCardBackground
-                                            .withAlpha(128)
+                                        ? AppColors.darkCardBackground.withAlpha(128)
                                         : AppColors.darkCardBackground
                                     : widget.isLocalFileMode
-                                    ? AppColors.cardBackground.withAlpha(128)
-                                    : AppColors.cardBackground,
+                                        ? AppColors.cardBackground.withAlpha(128)
+                                        : AppColors.cardBackground,
                             filled: true,
                             enabled: !widget.isLocalFileMode,
                           ),
@@ -408,13 +323,26 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                           hint: const Text('Chọn phiên bản'),
                         ),
                         const SizedBox(height: 16),
-                        _buildLoadingButton(
-                          isLoading: _isFileButtonLoading,
-                          onPressed: widget.onLocalFileSearch,
-                          text: hasLocalFile ? fileName : 'Chọn file cục bộ',
-                          icon: Icons.folder_open,
-                          backgroundColor: AppColors.primary,
-                          enabled: widget.isLocalFileMode,
+                        TextButton.icon(
+                          onPressed: widget.isLocalFileMode ? widget.onLocalFileSearch : null,
+                          icon: const Icon(Icons.upload_file),
+                          label: Text(
+                            state.localFilePath != null
+                                ? state.localFilePath!.split(Platform.pathSeparator).last
+                                : 'Chọn file firmware',
+                          ),
+                          style: TextButton.styleFrom(
+                            backgroundColor: widget.isLocalFileMode
+                                ? widget.isDarkTheme
+                                    ? AppColors.darkCardBackground
+                                    : AppColors.cardBackground
+                                : Colors.grey.withAlpha(25),
+                            foregroundColor: widget.isLocalFileMode
+                                ? widget.isDarkTheme
+                                    ? Colors.white
+                                    : Colors.black87
+                                : Colors.grey,
+                          ),
                         ),
                       ],
                     ),
@@ -462,12 +390,14 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                           hint: const Text('Chọn cổng COM'),
                         ),
                         const SizedBox(height: 16),
-                        _buildLoadingButton(
-                          isLoading: _isRefreshButtonLoading,
-                          onPressed: _handleRefreshPorts,
-                          text: 'Làm mới cổng',
-                          icon: Icons.refresh,
-                          backgroundColor: AppColors.secondary,
+                        ElevatedButton.icon(
+                          onPressed: widget.onUsbPortRefresh,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Làm mới cổng'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.secondary,
+                            foregroundColor: Colors.white,
+                          ),
                         ),
                       ],
                     ),
@@ -515,7 +445,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                                     )
                                     : null,
                           ),
-                          onChanged: _validateAndSubmitSerial,
+                          onChanged: _validateSerial,
                         ),
                         if (_serialSuccessText != null)
                           Padding(
@@ -532,13 +462,14 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  _buildLoadingButton(
-                    isLoading: _isQrCodeButtonLoading,
+                  ElevatedButton.icon(
                     onPressed: _handleQrScan,
-                    text: 'Quét QR Code',
-                    icon: Icons.qr_code_scanner,
-                    backgroundColor: AppColors.scanQr,
-                    enabled: canScanQR,
+                    icon: const Icon(Icons.qr_code_scanner),
+                    label: const Text('Quét QR Code'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.scanQr,
+                      foregroundColor: Colors.white,
+                    ),
                   ),
                 ],
               ),
@@ -562,9 +493,9 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                 ),
               ),
             ],
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

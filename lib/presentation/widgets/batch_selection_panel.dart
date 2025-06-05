@@ -1,19 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
 import 'package:smart_net_firmware_loader/core/config/app_config.dart';
-import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
+import 'package:smart_net_firmware_loader/data/models/batch.dart';
+import 'package:smart_net_firmware_loader/data/models/planning.dart';
 
 class BatchSelectionPanel extends StatelessWidget {
-  final List<String> batches;
+  final List<Planning> plannings;
+  final List<Batch> batches;
+  final String? selectedPlanningId;
   final String? selectedBatchId;
+  final Function(String?) onPlanningSelected;
   final Function(String?) onBatchSelected;
   final bool? isDarkTheme;
 
   const BatchSelectionPanel({
     super.key,
+    required this.plannings,
     required this.batches,
+    required this.selectedPlanningId,
     required this.selectedBatchId,
+    required this.onPlanningSelected,
     required this.onBatchSelected,
     this.isDarkTheme,
   });
@@ -28,47 +34,101 @@ class BatchSelectionPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Lô Sản Xuất',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: effectiveDarkTheme ? Colors.white : Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 4),
-          DropdownButtonFormField<String>(
-            value: selectedBatchId,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppConfig.cardBorderRadius),
+          // Planning Selection
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Kế hoạch sản xuất',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: effectiveDarkTheme ? Colors.white : Colors.black87,
+                ),
               ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 14,
-              ),
-              fillColor:
-                  effectiveDarkTheme
+              const SizedBox(height: 4),
+              DropdownButtonFormField<String?>(
+                value: selectedPlanningId,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppConfig.cardBorderRadius),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 14,
+                  ),
+                  fillColor: effectiveDarkTheme
                       ? AppColors.darkCardBackground
                       : AppColors.cardBackground,
-              filled: true,
-            ),
-            dropdownColor:
-                effectiveDarkTheme
+                  filled: true,
+                ),
+                dropdownColor: effectiveDarkTheme
                     ? AppColors.darkCardBackground
                     : AppColors.cardBackground,
-            style: TextStyle(
-              color: effectiveDarkTheme ? Colors.white : Colors.black87,
-            ),
-            items:
-                batches.map((batch) {
-                  return DropdownMenuItem(value: batch, child: Text(batch));
+                style: TextStyle(
+                  color: effectiveDarkTheme ? Colors.white : Colors.black87,
+                ),
+                items: plannings.map((planning) {
+                  return DropdownMenuItem<String?>(
+                    value: planning.id,
+                    child: Text(planning.name ?? 'Unnamed Planning'),
+                  );
                 }).toList(),
-            onChanged: (value) {
-              onBatchSelected(value);
-              context.read<HomeBloc>().add(SelectBatchEvent(value));
-            },
-            hint: const Text('-- Chọn lô sản xuất --'),
+                onChanged: onPlanningSelected,
+                hint: const Text('-- Chọn kế hoạch sản xuất --'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Batch Selection
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Lô sản xuất',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: effectiveDarkTheme ? Colors.white : Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 4),
+              DropdownButtonFormField<String?>(
+                value: selectedBatchId,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppConfig.cardBorderRadius),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 14,
+                  ),
+                  fillColor: effectiveDarkTheme
+                      ? AppColors.darkCardBackground
+                      : AppColors.cardBackground,
+                  filled: true,
+                  enabled: selectedPlanningId != null,
+                ),
+                dropdownColor: effectiveDarkTheme
+                    ? AppColors.darkCardBackground
+                    : AppColors.cardBackground,
+                style: TextStyle(
+                  color: effectiveDarkTheme ? Colors.white : Colors.black87,
+                ),
+                items: batches.map((batch) {
+                  return DropdownMenuItem<String?>(
+                    value: batch.id,
+                    child: Text(batch.name),
+                  );
+                }).toList(),
+                onChanged: selectedPlanningId != null ? onBatchSelected : null,
+                hint: Text(
+                  selectedPlanningId != null
+                      ? '-- Chọn lô sản xuất --'
+                      : 'Vui lòng chọn kế hoạch trước',
+                ),
+              ),
+            ],
           ),
         ],
       ),

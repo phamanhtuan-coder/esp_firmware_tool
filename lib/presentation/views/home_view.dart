@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
+import 'package:smart_net_firmware_loader/data/models/device.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/data/services/arduino_service.dart';
 import 'package:smart_net_firmware_loader/data/services/bluetooth_service.dart';
@@ -27,8 +28,7 @@ class HomeView extends StatefulWidget {
   State<HomeView> createState() => _HomeViewState();
 }
 
-class _HomeViewState extends State<HomeView>
-    with SingleTickerProviderStateMixin {
+class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin {
   final TextEditingController _serialController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   late TabController _tabController;
@@ -45,6 +45,7 @@ class _HomeViewState extends State<HomeView>
 
   bool _showWarningDialog = false;
   String _warningType = '';
+  bool _canFlash = false;
 
   @override
   void initState() {
@@ -303,8 +304,108 @@ class _HomeViewState extends State<HomeView>
       case 'manual_serial':
         return 'Bạn đang nhập serial thủ công thay vì quét QR code. Việc này có thể gây ra rủi ro nếu serial không chính xác. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       default:
-        return 'Hành động này có thể gây ra rủi ro. Bạn có chắc muốn tiếp tục?';
+        return 'H����nh động này có thể gây ra rủi ro. Bạn có chắc muốn tiếp tục?';
     }
+  }
+
+  Widget _buildBatchDevicesTable(List<Device> devices) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: _isDarkTheme ? AppColors.darkCardBackground : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(25),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _isDarkTheme
+                ? AppColors.darkHeaderBackground
+                : AppColors.primary.withAlpha(25),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(8),
+                topRight: Radius.circular(8),
+              ),
+            ),
+            child: const Text(
+              'Danh sách thiết bị trong lô',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columns: const [
+                DataColumn(label: Text('Serial')),
+                DataColumn(label: Text('Trạng thái')),
+                DataColumn(label: Text('Thao tác')),
+              ],
+              rows: devices.map((device) {
+                // Since Device fields are non-nullable now, we don't need the null check
+                final isSelected = device.serial == _serialController.text;
+                return DataRow(
+                  selected: isSelected,
+                  cells: [
+                    DataCell(Text(device.serial)),
+                    DataCell(Text(_getStatusText(device.status))),
+                    DataCell(Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.check_circle_outline),
+                          color: AppColors.success,
+                          onPressed: () => _updateDeviceStatus(device.id, 'firmware_uploading'),
+                          tooltip: 'Xác nhận',
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.error_outline),
+                          color: AppColors.error,
+                          onPressed: () => _updateDeviceStatus(device.id, 'error'),
+                          tooltip: 'Báo lỗi',
+                        ),
+                      ],
+                    )),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getStatusText(String status) {
+    switch (status) {
+      case 'firmware_uploading':
+        return 'Sẵn sàng nạp firmware';
+      case 'error':
+        return 'Lỗi';
+      default:
+        return status;
+    }
+  }
+
+  void _updateDeviceStatus(String deviceId, String status) {
+    context.read<HomeBloc>().add(UpdateDeviceStatusEvent(deviceId, status));
+  }
+
+  void _handleFlashStatusChanged(bool canFlash) {
+    setState(() {
+      _canFlash = canFlash;
+    });
   }
 
   @override
@@ -312,26 +413,40 @@ class _HomeViewState extends State<HomeView>
     return BlocBuilder<HomeBloc, HomeState>(
       builder: (context, state) {
         return Scaffold(
-          backgroundColor:
-              _isDarkTheme ? AppColors.darkBackground : Colors.grey[50],
+          backgroundColor: _isDarkTheme ? AppColors.darkBackground : Colors.grey[50],
           appBar: AppHeader(
             isDarkTheme: _isDarkTheme,
             onThemeToggled: () => setState(() => _isDarkTheme = !_isDarkTheme),
           ),
-          body: Stack(
+          body: Column(
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: BatchSelectionPanel(
-                      batches: state.batches.map((b) => b.id).toList(),
-                      selectedBatchId: state.selectedBatchId,
-                      onBatchSelected: (value) {
-                        context.read<HomeBloc>().add(SelectBatchEvent(value));
-                      },
+                    flex: 2,
+                    child: Column(
+                      children: [
+                        BatchSelectionPanel(
+                          plannings: state.plannings,
+                          batches: state.batches,
+                          selectedPlanningId: state.selectedPlanningId,
+                          selectedBatchId: state.selectedBatchId,
+                          onPlanningSelected: (value) {
+                            context.read<HomeBloc>().add(SelectPlanningEvent(value));
+                          },
+                          onBatchSelected: (value) {
+                            context.read<HomeBloc>().add(SelectBatchEvent(value));
+                          },
+                          isDarkTheme: _isDarkTheme,
+                        ),
+                        if (state.devices.isNotEmpty)
+                          _buildBatchDevicesTable(state.devices),
+                      ],
                     ),
                   ),
                   Expanded(
+                    flex: 3,
                     child: Column(
                       children: [
                         FirmwareControlPanel(
@@ -368,6 +483,7 @@ class _HomeViewState extends State<HomeView>
                           onQrCodeAvailabilityChanged:
                               (_) {}, // We don't need to track QR availability
                           onWarningRequested: _handleWarningAction,
+                          onFlashStatusChanged: _handleFlashStatusChanged,
                         ),
                         const SizedBox(height: 16),
                         ActionButtons(
@@ -383,12 +499,14 @@ class _HomeViewState extends State<HomeView>
                             deviceType,
                             localFilePath,
                           ) {
-                            _flashFirmware(
-                              deviceId,
-                              deviceSerial,
-                              deviceType,
-                              localFilePath,
-                            );
+                            if (_canFlash) {
+                              _flashFirmware(
+                                deviceId,
+                                deviceSerial,
+                                deviceType,
+                                localFilePath,
+                              );
+                            }
                           },
                           selectedPort: state.selectedPort,
                           selectedFirmwareVersion: state.selectedFirmwareId,

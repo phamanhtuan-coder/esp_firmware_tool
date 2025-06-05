@@ -100,10 +100,25 @@ class _SplashScreenState extends State<SplashScreen>
                     fit: BoxFit.contain,
                     errorBuilder: (context, error, stackTrace) {
                       debugPrint('Error loading app icon: $error');
-                      return const Icon(
-                        Icons.error_outline,
-                        size: 60,
-                        color: AppColors.primary,
+                      debugPrint('Stack trace: $stackTrace');
+                      return Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.error_outline,
+                            size: 60,
+                            color: AppColors.primary,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Error: $error',
+                            style: const TextStyle(
+                              color: AppColors.error,
+                              fontSize: 12,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       );
                     },
                   ),

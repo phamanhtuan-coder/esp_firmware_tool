@@ -12,7 +12,7 @@ class SerialMonitorService {
   StreamSubscription<List<int>>? _serialSubscription;
 
   Stream<String> get outputStream =>
-      _outputController?.stream ?? Stream.empty();
+      _outputController?.stream ?? const Stream.empty();
 
   Future<bool> startMonitor(String port, int baudRate) async {
     try {

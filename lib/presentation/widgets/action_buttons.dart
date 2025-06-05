@@ -28,15 +28,16 @@ class ActionButtons extends StatelessWidget {
     return BlocBuilder<HomeBloc, HomeState>(
       buildWhen:
           (previous, current) =>
-              previous.localFilePath != current.localFilePath,
+              previous.localFilePath != current.localFilePath ||
+              previous.selectedPort != current.selectedPort ||
+              previous.selectedFirmwareId != current.selectedFirmwareId ||
+              previous.selectedSerial != current.selectedSerial,
       builder: (context, state) {
         final hasLocalFile = state.localFilePath != null;
 
         // Calculate if the flash button should be enabled
-        final isFlashEnabled =
-            selectedPort != null &&
-            (hasLocalFile || selectedFirmwareVersion != null) &&
-            deviceSerial.isNotEmpty;
+        final isFlashEnabled = selectedPort != null && selectedDevice != null &&
+            (hasLocalFile || selectedFirmwareVersion != null);
 
         return Padding(
           padding: const EdgeInsets.all(16),

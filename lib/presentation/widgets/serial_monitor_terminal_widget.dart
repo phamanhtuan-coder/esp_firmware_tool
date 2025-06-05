@@ -43,7 +43,7 @@ class _SerialMonitorTerminalWidgetState
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   late final Ansi _ansi;
-  bool _isAutoScrollEnabled = true;
+  final bool _isAutoScrollEnabled = true;
   StreamSubscription? _subscription;
   bool _isMonitorActive = false;
 

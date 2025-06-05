@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_net_firmware_loader/data/models/batch.dart';
 import 'package:smart_net_firmware_loader/data/models/device.dart';
 import 'package:smart_net_firmware_loader/data/models/firmware.dart';
+import 'package:smart_net_firmware_loader/data/models/planning.dart';
 import 'package:smart_net_firmware_loader/data/services/api_client.dart';
 import 'package:smart_net_firmware_loader/data/services/arduino_service.dart';
 import 'package:smart_net_firmware_loader/data/services/bluetooth_service.dart';
@@ -10,6 +11,11 @@ import 'package:get_it/get_it.dart';
 abstract class HomeEvent {}
 
 class LoadInitialDataEvent extends HomeEvent {}
+
+class SelectPlanningEvent extends HomeEvent {
+  final String? planningId;
+  SelectPlanningEvent(this.planningId);
+}
 
 class SelectBatchEvent extends HomeEvent {
   final String? batchId;
@@ -45,9 +51,17 @@ class SelectPortEvent extends HomeEvent {
 
 class StartQrScanEvent extends HomeEvent {}
 
+class UpdateDeviceStatusEvent extends HomeEvent {
+  final String deviceId;
+  final String status;
+  UpdateDeviceStatusEvent(this.deviceId, this.status);
+}
+
 class FlashFirmwareEvent extends HomeEvent {}
 
 class HomeState {
+  final List<Planning> plannings;
+  final String? selectedPlanningId;
   final List<Batch> batches;
   final String? selectedBatchId;
   final List<Device> devices;
@@ -61,6 +75,8 @@ class HomeState {
   final bool isFlashing;
 
   HomeState({
+    this.plannings = const [],
+    this.selectedPlanningId,
     this.batches = const [],
     this.selectedBatchId,
     this.devices = const [],
@@ -75,6 +91,8 @@ class HomeState {
   });
 
   HomeState copyWith({
+    List<Planning>? plannings,
+    String? selectedPlanningId,
     List<Batch>? batches,
     String? selectedBatchId,
     List<Device>? devices,
@@ -88,6 +106,8 @@ class HomeState {
     bool? isFlashing,
   }) {
     return HomeState(
+      plannings: plannings ?? this.plannings,
+      selectedPlanningId: selectedPlanningId ?? this.selectedPlanningId,
       batches: batches ?? this.batches,
       selectedBatchId: selectedBatchId ?? this.selectedBatchId,
       devices: devices ?? this.devices,
@@ -110,6 +130,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
   HomeBloc() : super(HomeState()) {
     on<LoadInitialDataEvent>(_onLoadInitialData);
+    on<SelectPlanningEvent>(_onSelectPlanning);
     on<SelectBatchEvent>(_onSelectBatch);
     on<RefreshBatchDevicesEvent>(_onRefreshBatchDevices);
     on<SelectFirmwareEvent>(_onSelectFirmware);
@@ -118,6 +139,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<RefreshPortsEvent>(_onRefreshPorts);
     on<SelectPortEvent>(_onSelectPort);
     on<StartQrScanEvent>(_onStartQrScan);
+    on<UpdateDeviceStatusEvent>(_onUpdateDeviceStatus);
     on<FlashFirmwareEvent>(_onFlashFirmware);
   }
 
@@ -125,9 +147,28 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     LoadInitialDataEvent event,
     Emitter<HomeState> emit,
   ) async {
-    final batches = await _apiService.fetchBatches();
+    final plannings = await _apiService.fetchPlannings();
     final ports = await _arduinoService.getAvailablePorts();
-    emit(state.copyWith(batches: batches, availablePorts: ports));
+    emit(state.copyWith(plannings: plannings, availablePorts: ports));
+  }
+
+  Future<void> _onSelectPlanning(
+    SelectPlanningEvent event,
+    Emitter<HomeState> emit,
+  ) async {
+    emit(state.copyWith(
+      selectedPlanningId: event.planningId,
+      selectedBatchId: null,
+      devices: [],
+      firmwares: [],
+    ));
+
+    if (event.planningId != null) {
+      final batches = await _apiService.fetchBatches();
+      // Filter batches for the selected planning
+      final planningBatches = batches.where((b) => b.planningId == event.planningId).toList();
+      emit(state.copyWith(batches: planningBatches));
+    }
   }
 
   Future<void> _onSelectBatch(
@@ -139,14 +180,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       final batch = state.batches.firstWhere((b) => b.id == event.batchId);
       final devices = await _apiService.fetchDevices(event.batchId!);
       final firmwares = await _apiService.fetchFirmwares(
-        batch.templateId as int,
+        int.parse(batch.templateId),
       );
-      final defaultFirmwareId = batch.firmwareId?.toString();
       emit(
         state.copyWith(
           devices: devices,
           firmwares: firmwares,
-          selectedFirmwareId: defaultFirmwareId,
+          selectedFirmwareId: batch.firmwareId?.toString(),
         ),
       );
     }
@@ -156,8 +196,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     RefreshBatchDevicesEvent event,
     Emitter<HomeState> emit,
   ) async {
-    final devices = await _apiService.fetchDevices(event.batchId);
-    emit(state.copyWith(devices: devices));
+    if (event.batchId.isNotEmpty) {
+      final devices = await _apiService.fetchDevices(event.batchId);
+      emit(state.copyWith(devices: devices));
+    }
   }
 
   void _onSelectFirmware(SelectFirmwareEvent event, Emitter<HomeState> emit) {
@@ -205,6 +247,17 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           add(SubmitSerialEvent(serial));
         },
       );
+    }
+  }
+
+  Future<void> _onUpdateDeviceStatus(
+    UpdateDeviceStatusEvent event,
+    Emitter<HomeState> emit,
+  ) async {
+    await _apiService.updateDeviceStatus(event.deviceId, event.status);
+    if (state.selectedBatchId != null) {
+      final devices = await _apiService.fetchDevices(state.selectedBatchId!);
+      emit(state.copyWith(devices: devices));
     }
   }
 

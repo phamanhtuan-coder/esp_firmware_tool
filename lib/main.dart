@@ -40,10 +40,37 @@ Future<void> setupWindow() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Add error handling for asset loading
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return Material(
+      child: Container(
+        color: Colors.white,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.error_outline,
+              color: Colors.red,
+              size: 60,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Error: ${details.exception}',
+              style: const TextStyle(color: Colors.red),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  };
+
   await setupWindow(); // Initialize window settings
   setupServiceLocator();
   final arduinoService = GetIt.instance<ArduinoService>();
   await arduinoService.initialize();
+
   runApp(const MyApp());
 }
 
