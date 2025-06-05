@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:libserialport/libserialport.dart';
+import 'package:process_run/process_run.dart';
 
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:path_provider/path_provider.dart';
@@ -910,54 +911,69 @@ class LogService {
 
   // Stop the serial monitor with improved cleanup
   Future<void> stopSerialMonitor() async {
-    if (_serialPort != null) {
-      try {
+    try {
+      addLog(
+        message: 'Closing serial monitor...',
+        level: LogLevel.info,
+        step: ProcessStep.serialMonitor,
+        origin: 'system',
+      );
+
+      // Close native serial port if active
+      if (_serialPort != null && _serialPort!.isOpen) {
+        print('DEBUG: Closing native serial port');
         _serialPort!.close();
-      } catch (e) {
+        _serialPort = null;
+      }
+
+      // Check if we have a valid arduino-cli monitor process
+      if (_serialMonitorProcess != null) {
+        // Store the PID before killing the process
+        final pid = _serialMonitorProcess!.pid;
+        print('DEBUG: Killing serial monitor process with PID: $pid');
+
+        // Use the built-in kill method (no --exit flag needed)
+        final killed = _serialMonitorProcess!.kill(ProcessSignal.sigterm);
+
+        if (killed) {
+          print('DEBUG: Process kill signal sent successfully');
+        } else {
+          print('DEBUG: Process kill signal failed, trying force kill');
+          // Try force kill if normal kill fails
+          _serialMonitorProcess!.kill(ProcessSignal.sigkill);
+        }
+
+        // Wait for process to exit with timeout
+        try {
+          await _serialMonitorProcess!.exitCode.timeout(Duration(seconds: 3));
+        } catch (e) {
+          print('DEBUG: Process exit timeout, forcing cleanup');
+        }
+
+        _serialMonitorProcess = null;
+
         addLog(
-          message: 'Error closing serial port: $e',
-          level: LogLevel.error,
+          message: 'Serial monitor closed successfully',
+          level: LogLevel.success,
           step: ProcessStep.serialMonitor,
-          deviceId: _currentDeviceId ?? '',
           origin: 'system',
         );
+      } else {
+        print('DEBUG: No active serial monitor process to kill');
       }
-      _serialPort = null;
-    }
 
-    if (_serialMonitorProcess != null) {
       _serialMonitorActive = false;
-
-      // Send a final log if we know the device ID
-      if (_currentDeviceId != null) {
-        addLog(
-          message: 'Closing serial monitor...',
-          level: LogLevel.info,
-          step: ProcessStep.serialMonitor,
-          deviceId: _currentDeviceId!,
-          origin: 'system',
-        );
-      }
-
-      // Try to kill the process
-      try {
-        _serialMonitorProcess!.kill();
-        await _serialMonitorProcess!.exitCode;
-      } catch (e) {
-        addLog(
-          message: 'Error killing serial monitor: $e',
-          level: LogLevel.error,
-          step: ProcessStep.serialMonitor,
-          deviceId: _currentDeviceId ?? '',
-          origin: 'system',
-        );
-      }
-
-      _serialMonitorProcess = null;
       _currentDeviceId = null;
+    } catch (e) {
+      print('DEBUG: Exception in stopSerialMonitor: $e');
+      addLog(
+        message: 'Error killing serial monitor: $e',
+        level: LogLevel.error,
+        step: ProcessStep.serialMonitor,
+        origin: 'system',
+      );
     }
   }
-
   // Stop all monitors and close completely
   Future<void> stopAll() async {
     await stopSerialMonitor();

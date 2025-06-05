@@ -110,6 +110,9 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
     if (widget.isActiveTab != oldWidget.isActiveTab) {
       if (widget.isActiveTab) {
         _processLogs();
+      } else {
+        // Stop listening and cleanup when tab becomes inactive
+        _stopListening();
       }
     }
   }

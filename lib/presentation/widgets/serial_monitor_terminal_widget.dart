@@ -1,11 +1,10 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:cli_util/cli_logging.dart';
 import 'package:get_it/get_it.dart';
+import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 import '../../data/services/serial_monitor_service.dart';
 
-// Đối tượng để lưu trữ dữ liệu hiển thị
 class LineDisplay {
   final String timestamp;
   final String content;
@@ -18,7 +17,7 @@ class SerialMonitorTerminalWidget extends StatefulWidget {
   final String? initialPort;
   final int initialBaudRate;
   final bool autoStart;
-  final bool isActiveTab; // Nhận biết tab có đang active không
+  final bool isActiveTab;
 
   const SerialMonitorTerminalWidget({
     super.key,
@@ -29,25 +28,21 @@ class SerialMonitorTerminalWidget extends StatefulWidget {
   });
 
   @override
-  State<SerialMonitorTerminalWidget> createState() =>
-      _SerialMonitorTerminalWidgetState();
+  State<SerialMonitorTerminalWidget> createState() => _SerialMonitorTerminalWidgetState();
 }
 
-class _SerialMonitorTerminalWidgetState
-    extends State<SerialMonitorTerminalWidget> {
-  final SerialMonitorService _monitorService =
-      GetIt.instance<SerialMonitorService>();
+class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidget> {
+  final SerialMonitorService _monitorService = GetIt.instance<SerialMonitorService>();
   final List<LineDisplay> _lines = [];
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   late final Ansi _ansi;
-  final bool _isAutoScrollEnabled = true;
+  bool _isAutoScrollEnabled = true; // Make mutable to allow toggling
   StreamSubscription? _subscription;
   bool _isMonitorActive = false;
 
-  // Các tùy chọn baudrate phổ biến
   final List<int> _baudRates = [300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 74880, 115200, 230400, 250000, 500000, 921600, 1000000, 2000000];
-  int _selectedBaudRate = 115200; // Mặc định 115200
+  int _selectedBaudRate = 115200;
 
   @override
   void initState() {
@@ -55,68 +50,46 @@ class _SerialMonitorTerminalWidgetState
     _ansi = Ansi(Ansi.terminalSupportsAnsi);
     _selectedBaudRate = widget.initialBaudRate;
 
-    // Thêm welcome message
     final timestamp = DateTime.now().toString().split('.').first;
-    _lines.add(LineDisplay(timestamp, 'Welcome to Serial Monitor',
-        isSystemMessage: true));
-    _lines.add(LineDisplay(timestamp,
-        'Select COM port and baud rate to start monitoring',
-        isSystemMessage: true));
+    _lines.add(LineDisplay(timestamp, 'Welcome to Serial Monitor', isSystemMessage: true));
+    _lines.add(LineDisplay(timestamp, 'Select COM port and baud rate to start monitoring', isSystemMessage: true));
 
-    // Đảm bảo hủy subscription hiện có
-    _subscription?.cancel();
-
-    // Lắng nghe stream đầu ra
     _subscription = _monitorService.outputStream.listen(
-      (data) {
-        if (mounted) {
-          _addLine(data);
-        }
+          (data) {
+        if (mounted) _addLine(data);
       },
       onError: (error) {
-        if (mounted) {
-          _addLine('Error: $error', isSystemMessage: true);
-        }
+        if (mounted) _addLine('Error: $error', isSystemMessage: true);
       },
     );
 
-    // Khởi tạo monitor nếu tab đang active
     if (widget.isActiveTab) {
       _initializeMonitor();
     } else {
-      _addLine('Serial monitor paused - tab not active',
-          isSystemMessage: true);
+      _addLine('Serial monitor paused - tab not active', isSystemMessage: true);
     }
   }
 
   void _initializeMonitor() {
-    if (!widget.isActiveTab) {
+    if (!widget.isActiveTab || !mounted) {
       _addLine('Not starting monitor - tab not active', isSystemMessage: true);
       return;
     }
 
-    if (widget.initialPort != null &&
-        widget.initialPort!.isNotEmpty &&
-        _selectedBaudRate > 0) {
-      // Dừng kết nối hiện tại trước
+    if (widget.initialPort != null && widget.initialPort!.isNotEmpty && _selectedBaudRate > 0) {
       _stopMonitor();
-
-      // Thêm độ trễ nhỏ để đảm bảo cổng được giải phóng
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted && widget.isActiveTab) {
-          _monitorService.startMonitor(
-              widget.initialPort!, _selectedBaudRate);
+          _monitorService.startMonitor(widget.initialPort!, _selectedBaudRate);
           _isMonitorActive = true;
-          _addLine(
-              'Starting monitor on ${widget.initialPort} at $_selectedBaudRate baud...',
-              isSystemMessage: true);
+          _addLine('Starting monitor on ${widget.initialPort} at $_selectedBaudRate baud...', isSystemMessage: true);
         }
       });
     }
   }
 
   void _stopMonitor() {
-    if (_isMonitorActive) {
+    if (_isMonitorActive && mounted) {
       _monitorService.stopMonitor();
       _isMonitorActive = false;
       _addLine('Serial monitor stopped', isSystemMessage: true);
@@ -124,18 +97,13 @@ class _SerialMonitorTerminalWidgetState
   }
 
   void _restartMonitor() {
-    if (widget.initialPort != null && widget.initialPort!.isNotEmpty) {
+    if (widget.initialPort != null && widget.initialPort!.isNotEmpty && mounted) {
       _stopMonitor();
-
-      // Thêm độ trễ nhỏ để đảm bảo cổng được giải phóng
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted && widget.isActiveTab) {
-          _monitorService.startMonitor(
-              widget.initialPort!, _selectedBaudRate);
+          _monitorService.startMonitor(widget.initialPort!, _selectedBaudRate);
           _isMonitorActive = true;
-          _addLine(
-              'Restarting monitor on ${widget.initialPort} at $_selectedBaudRate baud...',
-              isSystemMessage: true);
+          _addLine('Restarting monitor on ${widget.initialPort} at $_selectedBaudRate baud...', isSystemMessage: true);
         }
       });
     }
@@ -144,25 +112,16 @@ class _SerialMonitorTerminalWidgetState
   @override
   void didUpdateWidget(SerialMonitorTerminalWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    // Xử lý sự thay đổi trạng thái active
-    if (widget.isActiveTab != oldWidget.isActiveTab) {
+    if (widget.isActiveTab != oldWidget.isActiveTab && mounted) {
       if (widget.isActiveTab) {
-        // Tab vừa được kích hoạt
-        _addLine('Tab activated - initializing monitor...',
-            isSystemMessage: true);
-        // Đợi một khoảng thời gian để cổng COM được giải phóng hoàn toàn
+        _addLine('Tab activated - initializing monitor...', isSystemMessage: true);
         Future.delayed(const Duration(milliseconds: 500), _initializeMonitor);
       } else {
-        // Tab vừa bị vô hiệu hóa
         _addLine('Tab deactivated - stopping monitor...', isSystemMessage: true);
-        _stopMonitor();
+        _stopMonitorAndCleanup();
       }
-    }
-    // Xử lý khi có thay đổi cổng hoặc tốc độ baud
-    else if (widget.isActiveTab && oldWidget.initialPort != widget.initialPort) {
-      _addLine('Port changed - restarting monitor...',
-          isSystemMessage: true);
+    } else if (widget.isActiveTab && oldWidget.initialPort != widget.initialPort && mounted) {
+      _addLine('Port changed - restarting monitor...', isSystemMessage: true);
       _initializeMonitor();
     }
   }
@@ -173,19 +132,13 @@ class _SerialMonitorTerminalWidgetState
     setState(() {
       final timestamp = DateTime.now().toString().split('.').first;
       final processedLine = _processAnsiCodes(line);
-
-      // Thêm dòng mới với timestamp và nội dung
-      _lines.add(LineDisplay(timestamp, processedLine,
-          isSystemMessage: isSystemMessage));
-
-      // Giữ kích thước buffer trong giới hạn
+      _lines.add(LineDisplay(timestamp, processedLine, isSystemMessage: isSystemMessage));
       while (_lines.length > 1000) {
         _lines.removeAt(0);
       }
     });
 
-    // Auto scroll to bottom if enabled
-    if (_isAutoScrollEnabled) {
+    if (_isAutoScrollEnabled && mounted && _scrollController.hasClients) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _scrollController.hasClients) {
           _scrollController.animateTo(
@@ -199,7 +152,6 @@ class _SerialMonitorTerminalWidgetState
   }
 
   String _processAnsiCodes(String text) {
-    // Simple ANSI code removal implementation
     return text
         .replaceAll(_ansi.bold, '')
         .replaceAll(_ansi.none, '')
@@ -214,16 +166,25 @@ class _SerialMonitorTerminalWidgetState
 
   void _sendCommand() {
     final command = _inputController.text.trim();
-    if (command.isNotEmpty) {
+    if (command.isNotEmpty && mounted) {
       _monitorService.sendCommand(command);
       _inputController.clear();
+    }
+  }
+
+  void _stopMonitorAndCleanup() {
+    if (mounted) {
+      final logService = GetIt.instance<LogService>();
+      logService.stopSerialMonitor();
+      _stopMonitor();
     }
   }
 
   @override
   void dispose() {
     _subscription?.cancel();
-    _stopMonitor(); // Đảm bảo dừng monitor khi dispose
+    _subscription = null;
+    _stopMonitorAndCleanup();
     _inputController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -237,16 +198,13 @@ class _SerialMonitorTerminalWidgetState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Terminal output area
           Expanded(
             child: Container(
               decoration: BoxDecoration(
                 color: Colors.black,
                 borderRadius: BorderRadius.circular(8.0),
                 border: Border.all(
-                  color: isDarkTheme
-                      ? Colors.grey.shade700
-                      : Colors.grey.shade300,
+                  color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
                   width: 1,
                 ),
               ),
@@ -261,25 +219,19 @@ class _SerialMonitorTerminalWidgetState
                         children: _lines.map((line) {
                           return TextSpan(
                             children: [
-                              // Timestamp với độ mờ nhẹ
                               TextSpan(
                                 text: '[${line.timestamp}] ',
                                 style: TextStyle(
-                                  color: line.isSystemMessage
-                                      ? Colors.yellow.withOpacity(0.8)
-                                      : Colors.grey.withOpacity(0.7),
+                                  color: line.isSystemMessage ? Colors.yellow.withOpacity(0.8) : Colors.grey.withOpacity(0.7),
                                   fontFamily: 'Courier New',
                                   fontSize: 12.0,
                                   height: 1.5,
                                 ),
                               ),
-                              // Nội dung thực tế
                               TextSpan(
                                 text: '${line.content}\n',
                                 style: TextStyle(
-                                  color: line.isSystemMessage
-                                      ? Colors.yellow
-                                      : Colors.lightGreenAccent,
+                                  color: line.isSystemMessage ? Colors.yellow : Colors.lightGreenAccent,
                                   fontFamily: 'Courier New',
                                   fontSize: 14.0,
                                   height: 1.5,
@@ -295,40 +247,29 @@ class _SerialMonitorTerminalWidgetState
               ),
             ),
           ),
-
-          // Khu vực input đơn giản hóa - chỉ giữ lại một hàng
           Container(
             margin: const EdgeInsets.only(top: 8.0),
             child: Row(
               children: [
-                // Baud rate dropdown
                 Container(
                   decoration: BoxDecoration(
                     color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: isDarkTheme
-                          ? Colors.grey.shade700
-                          : Colors.grey.shade300,
+                      color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
                     ),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: DropdownButton<int>(
                     value: _selectedBaudRate,
                     dropdownColor: isDarkTheme ? Colors.grey.shade800 : Colors.white,
-                    style: TextStyle(
-                      color: isDarkTheme ? Colors.white : Colors.black,
-                      fontSize: 14,
-                    ),
-                    underline: Container(), // Ẩn underline
+                    style: TextStyle(color: isDarkTheme ? Colors.white : Colors.black, fontSize: 14),
+                    underline: Container(),
                     items: _baudRates.map((rate) {
-                      return DropdownMenuItem<int>(
-                        value: rate,
-                        child: Text('$rate'),
-                      );
+                      return DropdownMenuItem<int>(value: rate, child: Text('$rate'));
                     }).toList(),
                     onChanged: (int? newValue) {
-                      if (newValue != null && newValue != _selectedBaudRate) {
+                      if (newValue != null && newValue != _selectedBaudRate && mounted) {
                         setState(() {
                           _selectedBaudRate = newValue;
                         });
@@ -337,62 +278,40 @@ class _SerialMonitorTerminalWidgetState
                     },
                   ),
                 ),
-
                 const SizedBox(width: 8),
-
-                // Input lệnh
                 Expanded(
                   child: TextField(
                     controller: _inputController,
-                    style: TextStyle(
-                      fontFamily: 'Courier New',
-                      color: isDarkTheme ? Colors.white : Colors.black,
-                    ),
+                    style: TextStyle(fontFamily: 'Courier New', color: isDarkTheme ? Colors.white : Colors.black),
                     decoration: InputDecoration(
                       hintText: 'Enter command...',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(
-                          color: isDarkTheme
-                              ? Colors.grey.shade700
-                              : Colors.grey.shade300,
-                        ),
+                        borderSide: BorderSide(color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(
-                          color: isDarkTheme
-                              ? Colors.grey.shade700
-                              : Colors.grey.shade300,
-                        ),
+                        borderSide: BorderSide(color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: const BorderSide(color: Colors.blue, width: 2),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      fillColor:
-                          isDarkTheme ? Colors.grey.shade800 : Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      fillColor: isDarkTheme ? Colors.grey.shade800 : Colors.white,
                       filled: true,
                     ),
                     onSubmitted: (_) => _sendCommand(),
                   ),
                 ),
-
                 const SizedBox(width: 8.0),
-
-                // Nút gửi
                 ElevatedButton(
                   onPressed: _sendCommand,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   child: const Text('Send'),
                 ),

@@ -8,6 +8,7 @@ class SerialMonitorService {
   io.Process? _process;
   bool _isRunning = false;
   Logger? _logger;
+  String? _currentPort;
 
   Stream<String> get outputStream => _controller.stream;
   bool get isRunning => _isRunning;
@@ -17,23 +18,34 @@ class SerialMonitorService {
   }
 
   Future<void> startMonitor(String port, int baudRate) async {
-    if (_isRunning) {
-      await stopMonitor();
+    // Check if already running on the same port with same baud rate
+    if (_isRunning && _currentPort == port) {
+      _logger?.trace('Monitor already running on port $port');
+      return;
     }
+
+    // Stop any existing monitor before starting new one
+    await stopMonitor();
 
     _isRunning = true;
     String buffer = '';
+    _currentPort = port;
 
     try {
-      // Create a process using Shell with proper stream handling
       final shell = Shell();
       final command = 'arduino-cli monitor --port $port --config baudrate=$baudRate';
 
-      _controller.add('Starting monitor on $port at $baudRate baud...');
       _logger?.trace('Starting monitor on $port at $baudRate baud...');
 
-      // Run command in shell with manual output handling
+      // Use a flag to prevent multiple process starts
+      bool processStarted = false;
+
       shell.run(command, onProcess: (process) {
+        if (processStarted) {
+          _logger?.stderr('Process already started for port $port');
+          return;
+        }
+        processStarted = true;
         _process = process;
 
         // Handle stdout with improved line buffering
@@ -77,6 +89,7 @@ class SerialMonitorService {
       }).then((_) {
         _isRunning = false;
         _process = null;
+        _currentPort = null;
         _controller.add('Monitor stopped');
         _logger?.trace('Monitor stopped');
       }).catchError((e) {
@@ -84,6 +97,7 @@ class SerialMonitorService {
         _logger?.stderr('Error: $e');
         _isRunning = false;
         _process = null;
+        _currentPort = null;
       });
 
       _logger?.trace('Started serial monitor on port $port at $baudRate baud');
@@ -91,23 +105,42 @@ class SerialMonitorService {
       _controller.add('Failed to start monitor: $e');
       _logger?.stderr('Error starting serial monitor: $e');
       _isRunning = false;
+      _process = null;
+      _currentPort = null;
     }
   }
 
   Future<void> stopMonitor() async {
     if (!_isRunning) return;
 
+    _isRunning = false;
     try {
-      _process?.kill();
+      if (_process != null) {
+        _process!.kill(io.ProcessSignal.sigterm);
+        await _process!.exitCode.timeout(Duration(seconds: 3), onTimeout: () {
+          _process!.kill(io.ProcessSignal.sigkill);
+          return -1;
+        });
+      }
+
+      if (io.Platform.isWindows && _currentPort != null) {
+        try {
+          final shell = Shell();
+          await shell.run('mode $_currentPort BAUD=9600 PARITY=n DATA=8 STOP=1');
+          await shell.run('taskkill /F /IM arduino-cli.exe');
+        } catch (e) {
+          _logger?.stderr('Error resetting port: $e');
+        }
+      }
+
       _logger?.trace('Stopped serial monitor');
     } catch (e) {
       _logger?.stderr('Error stopping serial monitor: $e');
     } finally {
-      _isRunning = false;
       _process = null;
+      _currentPort = null;
     }
   }
-
   Future<void> sendCommand(String command) async {
     if (!_isRunning || _process == null) {
       _controller.add('Cannot send command: monitor not running');
@@ -123,8 +156,8 @@ class SerialMonitorService {
     }
   }
 
-  void dispose() {
-    stopMonitor();
-    _controller.close();
+  Future<void> dispose() async {
+    await stopMonitor();
+    await _controller.close();
   }
 }

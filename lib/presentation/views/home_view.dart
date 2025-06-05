@@ -76,6 +76,13 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
 
   void _handleTabChange() {
     if (!mounted) return;
+
+    // Cleanup serial monitor khi chuyển từ tab Serial Monitor sang tab khác
+    if (_tabController.index != 1) { // Nếu không phải tab Serial Monitor
+      final logService = serviceLocator<LogService>();
+      logService.stopSerialMonitor(); // Stop và cleanup serial monitor
+    }
+
     setState(() {});
     _logService.addLog(
       message: 'Đã chuyển sang tab ${_tabController.index == 0 ? "Console Log" : "Serial Monitor"}',
