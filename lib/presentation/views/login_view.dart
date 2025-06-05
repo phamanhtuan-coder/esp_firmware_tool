@@ -134,6 +134,11 @@ class _LoginViewState extends State<LoginView> {
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -142,10 +147,14 @@ class _LoginViewState extends State<LoginView> {
                             width: 2,
                           ),
                         ),
+                        filled: true,
+                        fillColor: AppColors.componentBackground,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 16,
                         ),
+                        labelStyle: TextStyle(color: Colors.grey.shade700),
+                        hintStyle: TextStyle(color: Colors.grey.shade500),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -161,18 +170,18 @@ class _LoginViewState extends State<LoginView> {
                         ),
                         suffixIcon: IconButton(
                           icon: Icon(
-                            _showPassword
-                                ? Icons.visibility_off
-                                : Icons.visibility,
+                            _showPassword ? Icons.visibility_off : Icons.visibility,
                             color: AppColors.primary,
                           ),
-                          onPressed:
-                              () => setState(
-                                () => _showPassword = !_showPassword,
-                              ),
+                          onPressed: () => setState(() => _showPassword = !_showPassword),
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -181,10 +190,14 @@ class _LoginViewState extends State<LoginView> {
                             width: 2,
                           ),
                         ),
+                        filled: true,
+                        fillColor: AppColors.componentBackground,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 16,
                         ),
+                        labelStyle: TextStyle(color: Colors.grey.shade700),
+                        hintStyle: TextStyle(color: Colors.grey.shade500),
                       ),
                     ),
                     const SizedBox(height: 24),

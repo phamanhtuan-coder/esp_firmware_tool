@@ -21,8 +21,10 @@ class AppColors {
   static const Color flash = Color(0xFFFF6F00); // Amber 900 for firmware flashing
 
   // Light theme specific colors
-  static const Color cardBackground = Colors.white;
-  static const Color inputBackground = Color(0xFFFFFFFF);
+  static const Color cardBackground = Color(0xFFFAFAFA); // Lighter grey instead of pure white
+  static const Color inputBackground = Color(0xFFF5F5F5); // Very light grey for inputs
+  static const Color componentBackground = Color(0xFFEEEEEE); // Light grey for components
+  static const Color sectionBackground = Color(0xFFF0F0F0); // Slightly darker grey for sections
   static const Color buttonNormal = Color(0xFF1976D2);
   static const Color buttonPressed = Color(0xFF1565C0);
   static const Color buttonHover = Color(0xFF1E88E5);

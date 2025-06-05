@@ -63,9 +63,10 @@ class AppTheme {
       borderRadius: BorderRadius.circular(8),
       selectedBorderColor: Colors.transparent,
       borderColor: Colors.transparent,
-      fillColor: AppColors.toggleSelected,
-      selectedColor: Colors.white,
-      color: Colors.grey[700],
+      fillColor: AppColors.primary.withOpacity(0.1),
+      color: Colors.grey[600],
+      selectedColor: AppColors.primary,
+      hoverColor: AppColors.primary.withOpacity(0.04),
       constraints: const BoxConstraints(
         minWidth: 120,
         minHeight: 40,
@@ -77,7 +78,7 @@ class AppTheme {
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: Colors.white,
+      fillColor: AppColors.componentBackground,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),

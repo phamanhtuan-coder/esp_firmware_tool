@@ -101,6 +101,7 @@ class MyApp extends StatelessWidget {
         themeMode: ThemeMode.system,
         initialRoute: AppRoutes.splash,
         routes: AppRoutes.routes,
+        debugShowCheckedModeBanner: false,
       );
     }
 
@@ -119,6 +120,7 @@ class MyApp extends StatelessWidget {
         themeMode: ThemeMode.system,
         initialRoute: AppRoutes.splash,
         routes: AppRoutes.routes,
+        debugShowCheckedModeBanner: false,
       ),
     );
   }

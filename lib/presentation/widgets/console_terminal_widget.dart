@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/logging_bloc.dart';
 
@@ -104,206 +105,218 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
   Widget build(BuildContext context) {
     final isDarkTheme = Theme.of(context).brightness == Brightness.dark;
 
-    return SizedBox.expand(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(8.0),
-                border: Border.all(
-                  color:
-                      isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
-                  width: 1,
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: BlocBuilder<LoggingBloc, LoggingState>(
-                  buildWhen: (previous, current) {
-                    return previous.logs != current.logs ||
-                        previous.filter != current.filter;
-                  },
-                  builder: (context, state) {
-                    final logsToDisplay =
-                        state.filter != null && state.filter!.isNotEmpty
-                            ? state.logs
-                                .where(
-                                  (log) => log.message.toLowerCase().contains(
-                                    state.filter!.toLowerCase(),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final minHeight = constraints.maxHeight;
+        return SizedBox(
+          height: minHeight,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isDarkTheme ? Colors.black : AppColors.componentBackground,
+                    borderRadius: BorderRadius.circular(8.0),
+                    border: Border.all(
+                      color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
+                    ),
+                  ),
+                  child: Scrollbar(
+                    thumbVisibility: true,
+                    controller: widget.scrollController,
+                    child: SingleChildScrollView(
+                      controller: widget.scrollController,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: BlocBuilder<LoggingBloc, LoggingState>(
+                          buildWhen: (previous, current) {
+                            return previous.logs != current.logs ||
+                                previous.filter != current.filter;
+                          },
+                          builder: (context, state) {
+                            final logsToDisplay =
+                                state.filter != null && state.filter!.isNotEmpty
+                                    ? state.logs
+                                        .where(
+                                          (log) => log.message.toLowerCase().contains(
+                                            state.filter!.toLowerCase(),
+                                          ),
+                                        )
+                                        .toList()
+                                    : state.logs;
+
+                            _displayLines.clear();
+                            for (var log in logsToDisplay) {
+                              _displayLines.add(
+                                ConsoleLineDisplay(
+                                  log.formattedTimestamp,
+                                  log.message,
+                                  level: log.level,
+                                  origin: log.origin,
+                                  isSystemMessage: log.origin == 'system',
+                                ),
+                              );
+                            }
+
+                            if (_isAutoScrollEnabled) {
+                              _scrollToBottom();
+                            }
+
+                            return _displayLines.isEmpty
+                                ? Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.terminal,
+                                        size: 48,
+                                        color: Colors.grey[700],
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        'No console output',
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 )
-                                .toList()
-                            : state.logs;
-
-                    _displayLines.clear();
-                    for (var log in logsToDisplay) {
-                      _displayLines.add(
-                        ConsoleLineDisplay(
-                          log.formattedTimestamp,
-                          log.message,
-                          level: log.level,
-                          origin: log.origin,
-                          isSystemMessage: log.origin == 'system',
-                        ),
-                      );
-                    }
-
-                    if (_isAutoScrollEnabled) {
-                      _scrollToBottom();
-                    }
-
-                    return _displayLines.isEmpty
-                        ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.terminal,
-                                size: 48,
-                                color: Colors.grey[700],
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'No console output',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                        : SingleChildScrollView(
-                          controller: widget.scrollController,
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: SelectableText.rich(
-                              TextSpan(
-                                children:
-                                    _displayLines.map((line) {
-                                      final icon = line.getIcon();
-                                      return TextSpan(
-                                        children: [
-                                          if (icon != null)
-                                            WidgetSpan(
-                                              alignment:
-                                                  PlaceholderAlignment.middle,
-                                              child: Padding(
-                                                padding: const EdgeInsets.only(
-                                                  right: 8,
-                                                ),
-                                                child: Icon(
-                                                  icon,
-                                                  size: 14,
-                                                  color: line.getColor(
-                                                    isDarkTheme,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          TextSpan(
-                                            text: '[${line.timestamp}] ',
-                                            style: TextStyle(
-                                              color:
-                                                  line.isSystemMessage
-                                                      ? Colors.yellow
-                                                          .withOpacity(0.8)
-                                                      : Colors.grey.withOpacity(
-                                                        0.7,
+                                : SingleChildScrollView(
+                                  controller: widget.scrollController,
+                                  child: SizedBox(
+                                    width: double.infinity,
+                                    child: SelectableText.rich(
+                                      TextSpan(
+                                        children:
+                                            _displayLines.map((line) {
+                                              final icon = line.getIcon();
+                                              return TextSpan(
+                                                children: [
+                                                  if (icon != null)
+                                                    WidgetSpan(
+                                                      alignment:
+                                                          PlaceholderAlignment.middle,
+                                                      child: Padding(
+                                                        padding: const EdgeInsets.only(
+                                                          right: 8,
+                                                        ),
+                                                        child: Icon(
+                                                          icon,
+                                                          size: 14,
+                                                          color: line.getColor(
+                                                            isDarkTheme,
+                                                          ),
+                                                        ),
                                                       ),
-                                              fontFamily: 'Courier New',
-                                              fontSize: 12.0,
-                                              height: 1.5,
-                                            ),
-                                          ),
-                                          TextSpan(
-                                            text: '${line.content}\n',
-                                            style: TextStyle(
-                                              color:
-                                                  line.isSystemMessage
-                                                      ? Colors.yellow
-                                                      : line.getColor(true),
-                                              fontFamily: 'Courier New',
-                                              fontSize: 14.0,
-                                              height: 1.5,
-                                              fontWeight: _getLineWeight(line),
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    }).toList(),
-                              ),
-                            ),
-                          ),
-                        );
-                  },
+                                                    ),
+                                                  TextSpan(
+                                                    text: '[${line.timestamp}] ',
+                                                    style: TextStyle(
+                                                      color:
+                                                          line.isSystemMessage
+                                                              ? Colors.yellow
+                                                                  .withOpacity(0.8)
+                                                              : Colors.grey.withOpacity(
+                                                            0.7,
+                                                          ),
+                                                      fontFamily: 'Courier New',
+                                                      fontSize: 12.0,
+                                                      height: 1.5,
+                                                    ),
+                                                  ),
+                                                  TextSpan(
+                                                    text: '${line.content}\n',
+                                                    style: TextStyle(
+                                                      color:
+                                                          line.isSystemMessage
+                                                              ? Colors.yellow
+                                                              : line.getColor(true),
+                                                      fontFamily: 'Courier New',
+                                                      fontSize: 14.0,
+                                                      height: 1.5,
+                                                      fontWeight: _getLineWeight(line),
+                                                    ),
+                                                  ),
+                                                ],
+                                              );
+                                            }).toList(),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          Container(
-            margin: const EdgeInsets.only(top: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color:
-                          isDarkTheme
-                              ? Colors.grey.shade700
-                              : Colors.grey.shade300,
+              Container(
+                margin: const EdgeInsets.only(top: 8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color:
+                              isDarkTheme
+                                  ? Colors.grey.shade700
+                                  : Colors.grey.shade300,
+                        ),
+                      ),
+                      child: IconButton(
+                        onPressed: () {
+                          setState(() {
+                            _isAutoScrollEnabled = !_isAutoScrollEnabled;
+                          });
+                        },
+                        icon: Icon(
+                          _isAutoScrollEnabled
+                              ? Icons.vertical_align_bottom
+                              : Icons.vertical_align_center,
+                          color: _isAutoScrollEnabled ? Colors.blue : Colors.grey,
+                        ),
+                        tooltip:
+                            _isAutoScrollEnabled
+                                ? 'Auto-scroll enabled'
+                                : 'Auto-scroll disabled',
+                      ),
                     ),
-                  ),
-                  child: IconButton(
-                    onPressed: () {
-                      setState(() {
-                        _isAutoScrollEnabled = !_isAutoScrollEnabled;
-                      });
-                    },
-                    icon: Icon(
-                      _isAutoScrollEnabled
-                          ? Icons.vertical_align_bottom
-                          : Icons.vertical_align_center,
-                      color: _isAutoScrollEnabled ? Colors.blue : Colors.grey,
+                    const SizedBox(width: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color:
+                              isDarkTheme
+                                  ? Colors.grey.shade700
+                                  : Colors.grey.shade300,
+                        ),
+                      ),
+                      child: IconButton(
+                        onPressed: () {
+                          context.read<LoggingBloc>().add(ClearLogsEvent());
+                        },
+                        icon: const Icon(Icons.clear_all),
+                        tooltip: 'Clear console',
+                        color: isDarkTheme ? Colors.grey[400] : Colors.grey[600],
+                      ),
                     ),
-                    tooltip:
-                        _isAutoScrollEnabled
-                            ? 'Auto-scroll enabled'
-                            : 'Auto-scroll disabled',
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Container(
-                  decoration: BoxDecoration(
-                    color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color:
-                          isDarkTheme
-                              ? Colors.grey.shade700
-                              : Colors.grey.shade300,
-                    ),
-                  ),
-                  child: IconButton(
-                    onPressed: () {
-                      context.read<LoggingBloc>().add(ClearLogsEvent());
-                    },
-                    icon: const Icon(Icons.clear_all),
-                    tooltip: 'Clear console',
-                    color: isDarkTheme ? Colors.grey[400] : Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 

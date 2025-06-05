@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cli_util/cli_logging.dart';
 import 'package:get_it/get_it.dart';
+import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 import 'package:smart_net_firmware_loader/data/services/serial_monitor_service.dart';
@@ -286,40 +287,40 @@ class _SerialMonitorTerminalWidgetState
   Widget build(BuildContext context) {
     final isDarkTheme = Theme.of(context).brightness == Brightness.dark;
 
-    return SizedBox.expand(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(8.0),
-                border: Border.all(
-                  color:
-                      isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
-                  width: 1,
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: SingleChildScrollView(
-                  controller: _scrollController,
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: SelectableText.rich(
-                      TextSpan(
-                        children:
-                            _lines.map((line) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SizedBox(
+          height: constraints.maxHeight,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isDarkTheme ? Colors.black : AppColors.componentBackground,
+                    borderRadius: BorderRadius.circular(8.0),
+                    border: Border.all(
+                      color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
+                    ),
+                  ),
+                  child: Scrollbar(
+                    thumbVisibility: true,
+                    controller: _scrollController,
+                    child: SingleChildScrollView(
+                      controller: _scrollController,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: SelectableText.rich(
+                          TextSpan(
+                            children: _lines.map((line) {
                               return TextSpan(
                                 children: [
                                   TextSpan(
                                     text: '[${line.timestamp}] ',
                                     style: TextStyle(
-                                      color:
-                                          line.isSystemMessage
-                                              ? Colors.yellow.withOpacity(0.8)
-                                              : Colors.grey.withOpacity(0.7),
+                                      color: line.isSystemMessage
+                                          ? Colors.yellow.withOpacity(0.8)
+                                          : Colors.grey.withOpacity(0.7),
                                       fontFamily: 'Courier New',
                                       fontSize: 12.0,
                                       height: 1.5,
@@ -328,10 +329,11 @@ class _SerialMonitorTerminalWidgetState
                                   TextSpan(
                                     text: '${line.content}\n',
                                     style: TextStyle(
-                                      color:
-                                          line.isSystemMessage
-                                              ? Colors.yellow
-                                              : Colors.lightGreenAccent,
+                                      color: line.isSystemMessage
+                                          ? Colors.yellow
+                                          : isDarkTheme
+                                              ? Colors.lightGreenAccent
+                                              : const Color(0xFF2E7D32),
                                       fontFamily: 'Courier New',
                                       fontSize: 14.0,
                                       height: 1.5,
@@ -340,124 +342,126 @@ class _SerialMonitorTerminalWidgetState
                                 ],
                               );
                             }).toList(),
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
-          Container(
-            margin: const EdgeInsets.only(top: 8.0),
-            child: Row(
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color:
-                          isDarkTheme
-                              ? Colors.grey.shade700
-                              : Colors.grey.shade300,
-                    ),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: DropdownButton<int>(
-                    value: _selectedBaudRate,
-                    dropdownColor:
-                        isDarkTheme ? Colors.grey.shade800 : Colors.white,
-                    style: TextStyle(
-                      color: isDarkTheme ? Colors.white : Colors.black,
-                      fontSize: 14,
-                    ),
-                    underline: Container(),
-                    items:
-                        _baudRates.map((rate) {
-                          return DropdownMenuItem<int>(
-                            value: rate,
-                            child: Text('$rate'),
-                          );
-                        }).toList(),
-                    onChanged: (int? newValue) {
-                      if (newValue != null &&
-                          newValue != _selectedBaudRate &&
-                          mounted) {
-                        setState(() {
-                          _selectedBaudRate = newValue;
-                        });
-                        _restartMonitor();
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _inputController,
-                    style: TextStyle(
-                      fontFamily: 'Courier New',
-                      color: isDarkTheme ? Colors.white : Colors.black,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: 'Enter command...',
-                      border: OutlineInputBorder(
+              Container(
+                margin: const EdgeInsets.only(top: 8.0),
+                child: Row(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(
+                        border: Border.all(
                           color:
                               isDarkTheme
                                   ? Colors.grey.shade700
                                   : Colors.grey.shade300,
                         ),
                       ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(
-                          color:
-                              isDarkTheme
-                                  ? Colors.grey.shade700
-                                  : Colors.grey.shade300,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: DropdownButton<int>(
+                        value: _selectedBaudRate,
+                        dropdownColor:
+                            isDarkTheme ? Colors.grey.shade800 : Colors.white,
+                        style: TextStyle(
+                          color: isDarkTheme ? Colors.white : Colors.black,
+                          fontSize: 14,
+                        ),
+                        underline: Container(),
+                        items:
+                            _baudRates.map((rate) {
+                              return DropdownMenuItem<int>(
+                                value: rate,
+                                child: Text('$rate'),
+                              );
+                            }).toList(),
+                        onChanged: (int? newValue) {
+                          if (newValue != null &&
+                              newValue != _selectedBaudRate &&
+                              mounted) {
+                            setState(() {
+                              _selectedBaudRate = newValue;
+                            });
+                            _restartMonitor();
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _inputController,
+                        style: TextStyle(
+                          fontFamily: 'Courier New',
+                          color: isDarkTheme ? Colors.white : Colors.black,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Enter command...',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                              color:
+                                  isDarkTheme
+                                      ? Colors.grey.shade700
+                                      : Colors.grey.shade300,
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                              color:
+                                  isDarkTheme
+                                      ? Colors.grey.shade700
+                                      : Colors.grey.shade300,
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(
+                              color: Colors.blue,
+                              width: 2,
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          fillColor:
+                              isDarkTheme ? Colors.grey.shade800 : Colors.white,
+                          filled: true,
+                        ),
+                        onSubmitted: (_) => _sendCommand(),
+                      ),
+                    ),
+                    const SizedBox(width: 8.0),
+                    ElevatedButton(
+                      onPressed: _sendCommand,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(
-                          color: Colors.blue,
-                          width: 2,
-                        ),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      fillColor:
-                          isDarkTheme ? Colors.grey.shade800 : Colors.white,
-                      filled: true,
+                      child: const Text('Send'),
                     ),
-                    onSubmitted: (_) => _sendCommand(),
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 8.0),
-                ElevatedButton(
-                  onPressed: _sendCommand,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text('Send'),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

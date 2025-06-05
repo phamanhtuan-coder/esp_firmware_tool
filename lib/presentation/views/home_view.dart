@@ -269,7 +269,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       case 'select_local_file':
         return 'Cảnh báo: Sử dụng File Cục Bộ';
       case 'version_change':
-        return 'Cảnh báo: Thay đổi Phiên bản Firmware';
+        return 'Cảnh báo: Thay đổi Phi����n bản Firmware';
       case 'manual_serial':
         return 'Cảnh báo: Nhập Serial Thủ Công';
       default:
@@ -321,7 +321,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     return BlocBuilder<HomeBloc, HomeState>(
       builder: (context, state) {
         return Scaffold(
-          backgroundColor: _isDarkTheme ? AppColors.darkBackground : Colors.grey[100],
+          backgroundColor: _isDarkTheme ? AppColors.darkBackground : AppColors.background,
           appBar: AppHeader(
             isDarkTheme: _isDarkTheme,
             onThemeToggled: () => setState(() => _isDarkTheme = !_isDarkTheme),
@@ -330,122 +330,125 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
             child: Stack(
               children: [
                 Container(
-                  color: _isDarkTheme ? AppColors.darkBackground : Colors.grey[100],
+                  color: _isDarkTheme ? AppColors.darkBackground : AppColors.background,
                   child: Column(
                     children: [
                       Expanded(
                         child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Expanded(
-                              flex: 2,
+                            // Left panel - Batch selection and devices list
+                            SizedBox(
+                              width: 400, // Fixed width for left panel
                               child: Card(
                                 margin: const EdgeInsets.all(8.0),
                                 elevation: 4.0,
-                                color: _isDarkTheme ? AppColors.darkCardBackground : Colors.white,
-                                child: SingleChildScrollView(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      BatchSelectionPanel(
-                                        plannings: state.plannings,
-                                        batches: state.batches,
-                                        selectedPlanningId: state.selectedPlanningId,
-                                        selectedBatchId: state.selectedBatchId,
-                                        onPlanningSelected: (value) {
-                                          context.read<HomeBloc>().add(SelectPlanningEvent(value));
-                                        },
-                                        onBatchSelected: (value) {
-                                          context.read<HomeBloc>().add(SelectBatchEvent(value));
-                                        },
-                                        isDarkTheme: _isDarkTheme,
+                                color: _isDarkTheme ? AppColors.darkCardBackground : AppColors.cardBackground,
+                                child: Column(
+                                  children: [
+                                    BatchSelectionPanel(
+                                      plannings: state.plannings,
+                                      batches: state.batches,
+                                      selectedPlanningId: state.selectedPlanningId,
+                                      selectedBatchId: state.selectedBatchId,
+                                      onPlanningSelected: (value) {
+                                        context.read<HomeBloc>().add(SelectPlanningEvent(value));
+                                      },
+                                      onBatchSelected: (value) {
+                                        context.read<HomeBloc>().add(SelectBatchEvent(value));
+                                      },
+                                      isDarkTheme: _isDarkTheme,
+                                    ),
+                                    if (state.devices.isNotEmpty)
+                                      Expanded(
+                                        child: _buildBatchDevicesTable(state.devices),
                                       ),
-                                      if (state.devices.isNotEmpty)
-                                        _buildBatchDevicesTable(state.devices),
-                                    ],
-                                  ),
+                                  ],
                                 ),
                               ),
                             ),
+                            // Right panel - Controls and Console
                             Expanded(
-                              flex: 3,
                               child: Card(
                                 margin: const EdgeInsets.all(8.0),
                                 elevation: 4.0,
-                                color: _isDarkTheme ? AppColors.darkCardBackground : Colors.white,
+                                color: _isDarkTheme ? AppColors.darkCardBackground : AppColors.cardBackground,
                                 child: Column(
                                   children: [
-                                    FirmwareControlPanel(
-                                      isDarkTheme: _isDarkTheme,
-                                      selectedFirmwareVersion: state.selectedFirmwareId,
-                                      selectedPort: state.selectedPort,
-                                      serialController: _serialController,
-                                      isLocalFileMode: state.isLocalFileMode,
-                                      firmwares: state.firmwares,
-                                      availablePorts: state.availablePorts,
-                                      onFirmwareVersionSelected: (value) {
-                                        _selectedFirmwareVersion = value;
-                                        _handleWarningAction('version_change', value: value);
-                                      },
-                                      onUsbPortSelected: (value) {
-                                        setState(() => _selectedPort = value);
-                                        context.read<HomeBloc>().add(SelectPortEvent(value));
-                                      },
-                                      onLocalFileSearch: () => _handleWarningAction('select_local_file'),
-                                      onUsbPortRefresh: () => context.read<HomeBloc>().add(RefreshPortsEvent()),
-                                      onSerialSubmitted: (value) => _handleWarningAction('manual_serial'),
-                                      onQrCodeScan: () => context.read<HomeBloc>().add(StartQrScanEvent()),
-                                      onQrCodeAvailabilityChanged: (_) {},
-                                      onWarningRequested: (type, {value}) {
-                                        if (type == 'flash_firmware') {
-                                          if (_canFlash) {
-                                            _flashFirmware(
-                                              state.selectedDeviceId ?? '',
-                                              _serialController.text,
-                                              state.selectedDeviceType ?? '',
-                                              state.localFilePath,
-                                            );
+                                    // Firmware control panel with fixed height
+                                    Container(
+                                      height: 460, // Fixed height for control panel
+                                      child: FirmwareControlPanel(
+                                        isDarkTheme: _isDarkTheme,
+                                        selectedFirmwareVersion: state.selectedFirmwareId,
+                                        selectedPort: state.selectedPort,
+                                        serialController: _serialController,
+                                        isLocalFileMode: state.isLocalFileMode,
+                                        firmwares: state.firmwares,
+                                        availablePorts: state.availablePorts,
+                                        onFirmwareVersionSelected: (value) {
+                                          _selectedFirmwareVersion = value;
+                                          _handleWarningAction('version_change', value: value);
+                                        },
+                                        onUsbPortSelected: (value) {
+                                          setState(() => _selectedPort = value);
+                                          context.read<HomeBloc>().add(SelectPortEvent(value));
+                                        },
+                                        onLocalFileSearch: () => _handleWarningAction('select_local_file'),
+                                        onUsbPortRefresh: () => context.read<HomeBloc>().add(RefreshPortsEvent()),
+                                        onSerialSubmitted: (value) => _handleWarningAction('manual_serial'),
+                                        onQrCodeScan: () => context.read<HomeBloc>().add(StartQrScanEvent()),
+                                        onQrCodeAvailabilityChanged: (_) {},
+                                        onWarningRequested: (type, {value}) {
+                                          if (type == 'flash_firmware') {
+                                            if (_canFlash) {
+                                              _flashFirmware(
+                                                state.selectedDeviceId ?? '',
+                                                _serialController.text,
+                                                state.selectedDeviceType ?? '',
+                                                state.localFilePath,
+                                              );
+                                            }
+                                          } else {
+                                            _handleWarningAction(type, value: value);
                                           }
-                                        } else {
-                                          _handleWarningAction(type, value: value);
-                                        }
-                                      },
-                                      onFlashStatusChanged: _handleFlashStatusChanged,
+                                        },
+                                        onFlashStatusChanged: _handleFlashStatusChanged,
+                                      ),
                                     ),
-                                    const SizedBox(height: 16),
+                                    // Console section with remaining height in scrollview
                                     Expanded(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Container(
-                                            color: _isDarkTheme ? AppColors.darkTabBackground : Colors.grey[200],
-                                            child: TabBar(
-                                              controller: _tabController,
-                                              tabs: const [
-                                                Tab(text: 'Console Log'),
-                                                Tab(text: 'Serial Monitor'),
-                                              ],
-                                              labelColor: _isDarkTheme ? AppColors.accent : Colors.blue,
-                                              unselectedLabelColor: _isDarkTheme ? AppColors.darkTextSecondary : Colors.grey,
-                                              indicatorColor: _isDarkTheme ? AppColors.accent : Colors.blue,
+                                      child: SingleChildScrollView(
+                                        child: Column(
+                                          children: [
+                                            Container(
+                                              color: _isDarkTheme ? AppColors.darkTabBackground : AppColors.componentBackground,
+                                              child: TabBar(
+                                                controller: _tabController,
+                                                tabs: const [
+                                                  Tab(text: 'Console Log'),
+                                                  Tab(text: 'Serial Monitor'),
+                                                ],
+                                                labelColor: _isDarkTheme ? AppColors.accent : Colors.blue,
+                                                unselectedLabelColor: _isDarkTheme ? AppColors.darkTextSecondary : Colors.grey,
+                                                indicatorColor: _isDarkTheme ? AppColors.accent : Colors.blue,
+                                              ),
                                             ),
-                                          ),
-                                          Expanded(
-                                            child: TabBarView(
-                                              controller: _tabController,
-                                              children: [
-                                                Container(
-                                                  padding: const EdgeInsets.all(8.0),
-                                                  child: ConsoleTerminalWidget(
+                                            SizedBox(
+                                              height: 300, // Minimum height for console
+                                              child: TabBarView(
+                                                controller: _tabController,
+                                                children: [
+                                                  ConsoleTerminalWidget(
                                                     scrollController: _scrollController,
                                                     isActiveTab: _tabController.index == 0,
                                                   ),
-                                                ),
-                                                _buildSerialMonitorTab(state),
-                                              ],
+                                                  _buildSerialMonitorTab(state),
+                                                ],
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ],
