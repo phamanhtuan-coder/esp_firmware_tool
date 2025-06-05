@@ -304,7 +304,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       case 'manual_serial':
         return 'Bạn đang nhập serial thủ công thay vì quét QR code. Việc này có thể gây ra rủi ro nếu serial không chính xác. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       default:
-        return 'H������nh động này có thể gây ra rủi ro. Bạn có chắc muốn tiếp tục?';
+        return 'Hành động này có thể gây ra rủi ro. Bạn có chắc muốn tiếp tục?';
     }
   }
 
