@@ -7,7 +7,6 @@ class ActionButtons extends StatelessWidget {
   final bool isDarkTheme;
   final VoidCallback onClearLogs;
   final Function(String, String, String, String, String?) onInitiateFlash;
-  final bool isFlashing;
   final String? selectedPort;
   final String? selectedFirmwareVersion;
   final String? selectedDevice;
@@ -18,7 +17,6 @@ class ActionButtons extends StatelessWidget {
     required this.isDarkTheme,
     required this.onClearLogs,
     required this.onInitiateFlash,
-    required this.isFlashing,
     required this.selectedPort,
     required this.selectedFirmwareVersion,
     required this.selectedDevice,
@@ -27,78 +25,73 @@ class ActionButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final logState = context.watch<LogBloc>().state;
-    final hasLocalFile = logState.localFilePath != null;
-    final isFlashEnabled = !isFlashing && selectedPort != null && (hasLocalFile || selectedFirmwareVersion != null) && deviceSerial.isNotEmpty;
+    return BlocBuilder<LogBloc, LogState>(
+      buildWhen: (previous, current) =>
+        previous.isFlashing != current.isFlashing ||
+        previous.localFilePath != current.localFilePath,
+      builder: (context, state) {
+        final hasLocalFile = state.localFilePath != null;
 
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          TextButton.icon(
-            icon: const Icon(Icons.clear),
-            label: const Text('Clear Log'),
-            style: TextButton.styleFrom(
-              backgroundColor: isDarkTheme ? AppColors.idle : AppColors.dividerColor,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () {
-              onClearLogs();
-              context.read<LogBloc>().add(ClearLogsEvent());
-            },
+        // Calculate if the flash button should be enabled
+        final isFlashEnabled = !state.isFlashing &&
+                           selectedPort != null &&
+                           (hasLocalFile || selectedFirmwareVersion != null) &&
+                           deviceSerial.isNotEmpty;
+
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              TextButton.icon(
+                icon: const Icon(Icons.clear),
+                label: const Text('Clear Log'),
+                style: TextButton.styleFrom(
+                  backgroundColor: isDarkTheme ? AppColors.idle : AppColors.dividerColor,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () {
+                  onClearLogs();
+                  context.read<LogBloc>().add(ClearLogsEvent());
+                },
+              ),
+              ElevatedButton.icon(
+                icon: state.isFlashing
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(Colors.white),
+                        ),
+                      )
+                    : const Icon(Icons.upload),
+                label: Text(
+                  state.isFlashing ? 'Đang nạp firmware...' : 'Nạp Firmware',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isDarkTheme ? AppColors.success : AppColors.primary,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: isFlashEnabled
+                    ? () {
+                        if (selectedDevice != null) {
+                          onInitiateFlash(
+                            selectedDevice!,
+                            selectedFirmwareVersion ?? '',
+                            deviceSerial,
+                            selectedPort!,
+                            state.localFilePath,
+                          );
+                        }
+                      }
+                    : null,
+              ),
+            ],
           ),
-          ElevatedButton.icon(
-            icon: isFlashing
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation(Colors.white),
-                    ),
-                  )
-                : const Icon(Icons.flash_on, size: 16),
-            label: Text(isFlashing ? 'Đang nạp firmware...' : 'Nạp Firmware'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isFlashEnabled ? AppColors.done : AppColors.idle,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: isFlashing || !isFlashEnabled
-                ? null
-                : () {
-                    try {
-                      // Don't send firmware version if using local file
-                      final logState = context.read<LogBloc>().state;
-                      final localFilePath = logState.localFilePath;
-                      final firmwareVersion = localFilePath != null ? '' : selectedFirmwareVersion ?? '';
-
-                      // First notify the LogBloc about the flashing event
-                      context.read<LogBloc>().add(InitiateFlashEvent(
-                        deviceId: selectedDevice ?? '',
-                        firmwareVersion: firmwareVersion,
-                        deviceSerial: deviceSerial,
-                        deviceType: 'esp32',
-                        localFilePath: localFilePath,
-                      ));
-
-                      // Then call the onInitiateFlash callback
-                      onInitiateFlash(
-                        selectedDevice ?? '',
-                        firmwareVersion,
-                        deviceSerial,
-                        'esp32',
-                        localFilePath,
-                      );
-                    } catch (e) {
-                      // Make sure to reset flashing state on error
-                      context.read<LogBloc>().add(StopProcessEvent());
-                    }
-                  },
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

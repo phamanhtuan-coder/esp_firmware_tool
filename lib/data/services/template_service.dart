@@ -365,33 +365,20 @@ class TemplateService {
         String? expectedHash,
       }) async {
     try {
-      print('DEBUG: Saving firmware template');
-      print('DEBUG: Firmware version: $firmwareVersion');
-      print('DEBUG: Device type: $deviceType');
-
       if (_templatesDir == null) {
         await _initTemplatesDir();
       }
 
+      // Use device type for directory instead of COM port
       final deviceTemplateDir = path.join(_templatesDir!, '${deviceType}_template');
-      print('DEBUG: Device template directory: $deviceTemplateDir');
-
-      final directory = Directory(deviceTemplateDir);
-      if (!await directory.exists()) {
-        await directory.create(recursive: true);
-        print('DEBUG: Created device template directory');
-      }
-
       final firmwareFolderName = firmwareVersion.replaceAll('.', '_');
       final firmwareFolderPath = path.join(deviceTemplateDir, firmwareFolderName);
-      print('DEBUG: Firmware folder path: $firmwareFolderPath');
 
+      // Create directories if they don't exist
       await Directory(firmwareFolderPath).create(recursive: true);
 
       final fileName = '$firmwareFolderName.ino';
       final filePath = path.join(firmwareFolderPath, fileName);
-      print('DEBUG: Final file path: $filePath');
-
       final file = File(filePath);
 
       if (expectedHash != null) {
@@ -512,4 +499,3 @@ class TemplateService {
     return false;
   }
 }
-

@@ -104,13 +104,12 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
   @override
   void didUpdateWidget(ConsoleTerminalWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    // Handle tab activation/deactivation
+    if (widget.logs != oldWidget.logs) {
+      _processLogs();
+    }
     if (widget.isActiveTab != oldWidget.isActiveTab) {
       if (widget.isActiveTab) {
-        _startListening();
-      } else {
-        _stopListening();
+        _processLogs();
       }
     }
   }
@@ -140,7 +139,6 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
       });
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -336,17 +334,19 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
   }
 
   void _processLogs() {
-    _displayLines.clear();
-    for (var log in widget.logs) {
-      _displayLines.add(ConsoleLineDisplay(
-        log.formattedTimestamp,
-        log.message,
-        level: log.level,
-        origin: log.origin,
-        isSystemMessage: log.origin == 'system',
-      ));
-    }
-
+    if (!mounted) return;
+    setState(() {
+      _displayLines.clear();
+      for (var log in widget.logs) {
+        _displayLines.add(ConsoleLineDisplay(
+          log.formattedTimestamp,
+          log.message,
+          level: log.level,
+          origin: log.origin,
+          isSystemMessage: log.origin == 'system',
+        ));
+      }
+    });
     _scrollToBottom();
   }
 

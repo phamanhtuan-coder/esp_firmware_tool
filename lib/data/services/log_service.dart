@@ -24,9 +24,6 @@ class LogService {
   // Console log process
   Process? _consoleLogProcess;
 
-  // Whether console log is active
-  bool _consoleLogActive = false;
-
   // Device currently being monitored
   String? _currentDeviceId;
 
@@ -731,8 +728,6 @@ class LogService {
         workingDirectory: sketchDirectory,
       );
 
-      _consoleLogActive = true;
-
       addLog(
         message: 'Console log monitor started for sketch: ${path.basename(sketchPath)}',
         level: LogLevel.info,
@@ -777,7 +772,6 @@ class LogService {
 
       // Monitor the process exit
       _consoleLogProcess!.exitCode.then((exitCode) {
-        _consoleLogActive = false;
         _consoleLogProcess = null;
 
         addLog(
@@ -805,8 +799,6 @@ class LogService {
   // Stop console log monitoring
   Future<void> stopConsoleLog() async {
     if (_consoleLogProcess != null) {
-      _consoleLogActive = false;
-
       try {
         _consoleLogProcess!.kill();
         await _consoleLogProcess!.exitCode;

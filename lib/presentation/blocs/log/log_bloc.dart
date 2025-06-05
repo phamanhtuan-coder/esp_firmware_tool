@@ -462,12 +462,63 @@ class LogBloc extends Bloc<LogEvent, LogState> {
   }
 
   Future<void> _onInitiateFlash(InitiateFlashEvent event, Emitter<LogState> emit) async {
-    emit(state.copyWith(isFlashing: true));
-    // Actual flashing logic is handled in the UI
+    print('DEBUG: _onInitiateFlash called, current isFlashing=${state.isFlashing}');
+
+    // Always force isFlashing to true, creating a complete new state to ensure detection
+    final newState = LogState(
+      batches: state.batches,
+      devices: state.devices,
+      availablePorts: state.availablePorts,
+      filteredLogs: state.filteredLogs,
+      selectedPlanningId: state.selectedPlanningId,
+      selectedBatchId: state.selectedBatchId,
+      selectedDeviceId: state.selectedDeviceId,
+      serialNumber: state.serialNumber,
+      selectedPort: state.selectedPort,
+      isFlashing: true, // Force this to true
+      status: state.status,
+      error: state.error,
+      localFilePath: state.localFilePath,
+      serialBuffer: state.serialBuffer,
+      firmwares: state.firmwares,
+      selectedTemplateId: state.selectedTemplateId,
+      logs: state.logs,
+      selectedFirmwareVersion: state.selectedFirmwareVersion,
+      isLocalFileMode: state.isLocalFileMode,
+    );
+
+    print('DEBUG: Emitting new state with isFlashing=true');
+    emit(newState);
+
+    // Verify state update
+    print('DEBUG: After emit in _onInitiateFlash: isFlashing=${newState.isFlashing}');
+
+    // Add a log entry to track the process start
+    add(AddLogEvent(LogEntry(
+      message: 'Starting firmware flashing process',
+      timestamp: DateTime.now(),
+      level: LogLevel.info,
+      step: ProcessStep.flash,
+      origin: 'system',
+    )));
   }
 
   Future<void> _onStopProcess(StopProcessEvent event, Emitter<LogState> emit) async {
+    print('DEBUG: _onStopProcess called, current isFlashing=${state.isFlashing}');
+
+    // Ensure clean state by emitting immediately
     emit(state.copyWith(isFlashing: false));
+
+    // Add log entry for completion
+    add(AddLogEvent(LogEntry(
+      message: 'Firmware flashing process completed',
+      timestamp: DateTime.now(),
+      level: LogLevel.info,
+      step: ProcessStep.flash,
+      origin: 'system',
+    )));
+
+    print('DEBUG: After emit in _onStopProcess: isFlashing=false');
   }
 
   Future<void> _onClearLogs(ClearLogsEvent event, Emitter<LogState> emit) async {

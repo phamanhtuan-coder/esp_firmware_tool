@@ -261,4 +261,33 @@ class QrCodeService {
   void dispose() {
     _statusController.close();
   }
+
+  /// Initializes the QR code service, starting the Bluetooth server
+  /// to listen for incoming connections
+  Future<bool> initialize() async {
+    try {
+      await _bluetoothServer.start(
+        onSerialReceived: (serial) {
+          DebugLogger.d('Received serial from QR code: $serial',
+              className: 'QrCodeService', methodName: 'initialize');
+        },
+        port: 12345, // Default port for QR code scanning
+      );
+      _logService.addLog(
+        message: 'QR code service initialized',
+        level: LogLevel.info,
+        step: ProcessStep.systemStart,
+        origin: 'system',
+      );
+      return true;
+    } catch (e) {
+      _logService.addLog(
+        message: 'Failed to initialize QR code service: $e',
+        level: LogLevel.error,
+        step: ProcessStep.systemStart,
+        origin: 'system',
+      );
+      return false;
+    }
+  }
 }

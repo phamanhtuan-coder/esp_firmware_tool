@@ -44,10 +44,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   bool _isSearching = false;
   final TextEditingController _serialInputController = TextEditingController();
   final int _selectedBaudRate = 115200;
-  final List<int> _baudRates = [
-    300, 600, 1200, 2400, 4800, 9600, 19200,
-    38400, 57600, 115200, 230400, 460800, 921600
-  ];
+
   final LogService _logService = serviceLocator<LogService>();
   final UsbService _usbService = serviceLocator<UsbService>();
   final ArduinoCliService _arduinoCliService = serviceLocator<
@@ -66,6 +63,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     _tabController = TabController(length: 2, vsync: this);
     context.read<LogBloc>().add(LoadInitialDataEvent());
     _initializeServices();
+    _initializeQrAndBluetooth();
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >=
           _scrollController.position.maxScrollExtent - 50) {
@@ -109,6 +107,49 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         ),
       );
     });
+  }
+
+  Future<void> _initializeQrAndBluetooth() async {
+    try {
+      // Initialize QR code scanner
+      final isQrAvailable = await _qrCodeService.initialize();
+      setState(() {
+        _isQrEnabled = true;
+        _isQrCodeAvailable = isQrAvailable;
+      });
+
+      if (isQrAvailable) {
+        _logService.addLog(
+          message: 'QR scanner initialized successfully',
+          level: LogLevel.info,
+          step: ProcessStep.scanQrCode,
+          origin: 'system',
+        );
+      } else {
+        _logService.addLog(
+          message: 'QR scanner not available',
+          level: LogLevel.warning,
+          step: ProcessStep.scanQrCode,
+          origin: 'system',
+        );
+      }
+
+      // Initialize Arduino CLI service for firmware operations
+      await _arduinoCliService.initialize();
+      _logService.addLog(
+        message: 'Arduino CLI service initialized',
+        level: LogLevel.info,
+        step: ProcessStep.systemEvent,
+        origin: 'system',
+      );
+    } catch (e) {
+      _logService.addLog(
+        message: 'Error initializing services: $e',
+        level: LogLevel.error,
+        step: ProcessStep.systemEvent,
+        origin: 'system',
+      );
+    }
   }
 
   @override
@@ -242,6 +283,11 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
           step: ProcessStep.flash,
           origin: 'system',
         );
+        // Make sure to stop process if port is not selected
+        if (mounted) {
+          print('DEBUG: No port selected, stopping flash process');
+          context.read<LogBloc>().add(StopProcessEvent());
+        }
         return;
       }
 
@@ -263,9 +309,11 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         ),
       );
 
+      print('DEBUG: Flash result: $success');
+
       if (success) {
         // Add explicit debug log to confirm upload success
-        print('DEBUG: Upload result: $success');
+        print('DEBUG: Upload successful!');
         _logService.addLog(
           message: '✅ Upload firmware thành công',
           level: LogLevel.success,
@@ -274,13 +322,17 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
           deviceId: deviceSerial,
         );
 
-        // Make sure to explicitly stop the flashing process
-        if (mounted) {
-          print('DEBUG: Explicitly stopping flash process');
-          context.read<LogBloc>().add(StopProcessEvent());
-        }
-
         _startSerialMonitor(deviceSerial);
+      } else {
+        // Add explicit debug log for failure
+        print('DEBUG: Upload failed');
+        _logService.addLog(
+          message: '❌ Upload firmware thất bại',
+          level: LogLevel.error,
+          step: ProcessStep.flash,
+          origin: 'system',
+          deviceId: deviceSerial,
+        );
       }
     } catch (e) {
       print('DEBUG: Error during flash: $e');
@@ -295,6 +347,8 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       // Always reset flashing state when done, whether successful or not
       if (mounted) {
         print('DEBUG: Resetting flashing state in finally block');
+        // Explicitly wait a moment to ensure UI updates properly
+        await Future.delayed(const Duration(milliseconds: 200));
         context.read<LogBloc>().add(StopProcessEvent());
       }
     }
@@ -455,6 +509,112 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     }
   }
 
+  Future<void> _selectLocalFile() async {
+    try {
+      setState(() => _warningType = 'select_local_file');
+      final bool proceed = await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(_getWarningTitle()),
+          content: const Text('Bạn đang chọn file firmware từ máy tính. File này có thể gây ra lỗi hoặc hỏng thiết bị nếu không tương thích. Bạn có chắc chắn muốn tiếp tục?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Hủy'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Tiếp tục'),
+            ),
+          ],
+        ),
+      ) ?? false;
+
+      if (!proceed) {
+        _logService.addLog(
+          message: 'Đã hủy chọn file firmware',
+          level: LogLevel.info,
+          step: ProcessStep.selectFirmware,
+          origin: 'system',
+        );
+        return;
+      }
+
+      final FilePicker filePicker = FilePicker.platform;
+
+      final result = await filePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['ino', 'cpp'],
+        allowMultiple: false,
+        dialogTitle: 'Chọn file firmware',
+      );
+
+      if (!mounted) return;
+
+      if (result != null && result.files.single.path != null) {
+        final filePath = result.files.single.path!;
+
+        setState(() => _selectedFirmwareVersion = null);
+
+        context.read<LogBloc>().add(SelectLocalFileEvent(filePath));
+
+        _logService.addLog(
+          message: 'File firmware đã được chọn: ${result.files.single.name}',
+          level: LogLevel.info,
+          step: ProcessStep.selectFirmware,
+          origin: 'system',
+        );
+      }
+    } catch (e) {
+      _logService.addLog(
+        message: 'Lỗi khi chọn file: $e',
+        level: LogLevel.error,
+        step: ProcessStep.selectFirmware,
+        origin: 'system',
+      );
+    }
+  }
+
+  void _onFirmwareVersionChanged(String? newVersion) async {
+    if (newVersion != _selectedFirmwareVersion) {
+      setState(() => _warningType = 'version_change');
+      final bool proceed = await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(_getWarningTitle()),
+          content: Text('Bạn đang thay đổi phiên bản firmware từ "${_selectedFirmwareVersion ?? 'không có'}" sang "$newVersion". Điều này có thể ảnh hưởng đến hoạt động của thiết bị. Bạn có chắc chắn muốn tiếp tục?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Hủy'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Tiếp tục'),
+            ),
+          ],
+        ),
+      ) ?? false;
+
+      if (proceed) {
+        setState(() => _selectedFirmwareVersion = newVersion);
+        _logService.addLog(
+          message: 'Đã chọn phiên bản firmware: $newVersion',
+          level: LogLevel.info,
+          step: ProcessStep.selectFirmware,
+          origin: 'system',
+        );
+      } else {
+        _logService.addLog(
+          message: 'Đã hủy thay đổi phiên bản firmware',
+          level: LogLevel.info,
+          step: ProcessStep.selectFirmware,
+          origin: 'system',
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
@@ -604,11 +764,15 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                               },
                               onInitiateFlash: (deviceId, firmwareVersion,
                                   deviceSerial, deviceType, localFilePath) {
+                                // Store state before flashing for more detailed debug logs
+                                final currentIsFlashing = state.isFlashing;
+                                print('DEBUG: onInitiateFlash called, current state.isFlashing=$currentIsFlashing');
+
                                 _flashFirmware(
                                     deviceId, firmwareVersion, deviceSerial,
                                     deviceType, localFilePath);
                               },
-                              isFlashing: state.isFlashing,
+                              // Pass the state's isFlashing property for compatibility
                               selectedPort: _selectedPort,
                               selectedFirmwareVersion: _selectedFirmwareVersion,
                               selectedDevice: _selectedDevice,
@@ -709,14 +873,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       width: double.infinity,
       child: ElevatedButton.icon(
         onPressed: isFlashEnabled ? () {
-          context.read<LogBloc>().add(InitiateFlashEvent(
-            deviceId: _selectedDevice ?? '',
-            firmwareVersion: selectedFirmware,
-            deviceSerial: _serialController.text,
-            deviceType: 'esp32',
-            localFilePath: state.localFilePath,
-          ));
-
+          // NOTE: Do not dispatch InitiateFlashEvent here as it's already done in ActionButtons
           _flashFirmware(
             _selectedDevice ?? '',
             selectedFirmware,

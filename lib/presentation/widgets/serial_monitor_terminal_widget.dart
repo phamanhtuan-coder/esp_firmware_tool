@@ -44,7 +44,6 @@ class _SerialMonitorTerminalWidgetState
   final bool _isAutoScrollEnabled = true;
   StreamSubscription? _subscription;
   bool _isMonitorActive = false;
-  bool _wasActiveBefore = false; // Lưu trạng thái trước đó
 
   // Các tùy chọn baudrate phổ biến
   final List<int> _baudRates = [300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 74880, 115200, 230400, 250000, 500000, 921600, 1000000, 2000000];
@@ -54,7 +53,6 @@ class _SerialMonitorTerminalWidgetState
   void initState() {
     super.initState();
     _ansi = Ansi(Ansi.terminalSupportsAnsi);
-    _wasActiveBefore = widget.isActiveTab;
     _selectedBaudRate = widget.initialBaudRate;
 
     // Thêm welcome message
@@ -151,14 +149,12 @@ class _SerialMonitorTerminalWidgetState
     if (widget.isActiveTab != oldWidget.isActiveTab) {
       if (widget.isActiveTab) {
         // Tab vừa được kích hoạt
-        _wasActiveBefore = true;
         _addLine('Tab activated - initializing monitor...',
             isSystemMessage: true);
         // Đợi một khoảng thời gian để cổng COM được giải phóng hoàn toàn
         Future.delayed(const Duration(milliseconds: 500), _initializeMonitor);
       } else {
         // Tab vừa bị vô hiệu hóa
-        _wasActiveBefore = false;
         _addLine('Tab deactivated - stopping monitor...', isSystemMessage: true);
         _stopMonitor();
       }

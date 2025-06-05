@@ -213,6 +213,52 @@ class ArduinoCliService {
     }
   }
 
+  /// Initialize Arduino CLI by copying binary to temp directory and installing required cores
+  Future<bool> initialize() async {
+    try {
+      // Get the platform-specific Arduino CLI binary name
+      String binaryName = Platform.isWindows ? 'arduino-cli.exe' : 'arduino-cli';
+      String assetPath = Platform.isWindows ? 'arduino-cli/${binaryName}' :
+                        Platform.isMacOS ? 'arduino-cli-macos/${binaryName}' :
+                        'arduino-cli-linux/${binaryName}';
+
+      // Get temp directory for extracting Arduino CLI
+      final tempDir = await getTemporaryDirectory();
+      final cliPath = path.join(tempDir.path, binaryName);
+      _arduinoCliPath = cliPath;
+
+      // Copy Arduino CLI binary from assets if not already present
+      if (!await File(cliPath).exists()) {
+        final byteData = await rootBundle.load('assets/$assetPath');
+        final buffer = byteData.buffer;
+        await File(cliPath).writeAsBytes(
+          buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes)
+        );
+
+        // Make the binary executable on Unix systems
+        if (!Platform.isWindows) {
+          await Process.run('chmod', ['+x', cliPath]);
+        }
+      }
+
+      // Update index
+      await Process.run(cliPath, ['core', 'update-index']);
+
+      // Install required cores if not already installed
+      for (final type in _boardFqbns.keys) {
+        final core = _getCoreForDeviceType(type);
+        if (core != null) {
+          await Process.run(cliPath, ['core', 'install', core]);
+        }
+      }
+
+      return true;
+    } catch (e) {
+      print('Failed to initialize Arduino CLI: $e');
+      return false;
+    }
+  }
+
   // Use the Arduino CLI with the proper path
   Future<Process> startProcess(List<String> arguments) async {
     await init(); // Make sure the CLI is initialized

@@ -67,19 +67,120 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
   }
 
   void _handleFirmwareVersionChange(String? value) {
-    if (value != null && widget.selectedFirmwareVersion != value) {
+    if (value != widget.selectedFirmwareVersion) {
       widget.onWarningRequested('version_change', value: value);
     }
   }
 
   void _validateAndSubmitSerial(String value) {
-    // Bỏ kiểm tra QR_SCAN_ prefix
+    // Cập nhật controller với giá trị mới
+    final currentPosition = widget.serialController.selection;
+    widget.serialController.value = TextEditingValue(
+      text: value,
+      selection: currentPosition,
+    );
+
+    setState(() {
+      if (value.isEmpty) {
+        _serialErrorText = 'Số serial không được để trống';
+        _serialSuccessText = null;
+        _isSerialValid = false;
+      } else {
+        _serialErrorText = null;
+        _serialSuccessText = null;
+        _isSerialValid = true;
+      }
+    });
+
     _validateSerial(value);
-    if (_isSerialValid) {
-      widget.onSerialSubmitted(value);
-    }
   }
 
+  // void _validateSerial(String value) {
+  //   if (value.isEmpty) {
+  //     setState(() {
+  //       _serialErrorText = 'Số serial không được để trống';
+  //       _serialSuccessText = null;
+  //       _isSerialValid = false;
+  //     });
+  //     return;
+  //   }
+  //
+  //   final state = context.read<LogBloc>().state;
+  //   if (state.selectedBatchId == null) {
+  //     setState(() {
+  //       _serialErrorText = 'Cần chọn lô sản xuất để xác thực serial';
+  //       _serialSuccessText = null;
+  //       _isSerialValid = false;
+  //     });
+  //     return;
+  //   }
+  //
+  //   final matchingDevice = state.devices.firstWhere(
+  //     (device) => device.serial.trim().toLowerCase() == value.trim().toLowerCase(),
+  //     orElse: () => Device(id: '', batchId: '', serial: ''),
+  //   );
+  //
+  //   setState(() {
+  //     if (matchingDevice.id.isEmpty) {
+  //       _serialErrorText = 'Serial không tồn tại trong lô ${state.selectedBatchId}';
+  //       _serialSuccessText = null;
+  //       _isSerialValid = false;
+  //       return;
+  //     }
+  //
+  //     if (matchingDevice.status == 'firmware_uploading') {
+  //       _serialErrorText = null;
+  //       _serialSuccessText = '✅ Serial hợp lệ - Thiết bị sẵn sàng cho nạp firmware';
+  //       _isSerialValid = true;
+  //       widget.onSerialSubmitted(value);
+  //     } else {
+  //       _serialErrorText = 'Thiết bị không ở trạng thái cho phép nạp firmware';
+  //       _serialSuccessText = null;
+  //       _isSerialValid = false;
+  //     }
+  //   });
+  // }
+  void _validateSerial(String value) {
+    setState(() {
+      if (value.isEmpty) {
+        _serialErrorText = 'Số serial không được để trống';
+        _serialSuccessText = null;
+        _isSerialValid = false;
+        return;
+      }
+
+      final state = context.read<LogBloc>().state;
+      if (state.selectedBatchId == null) {
+        _serialErrorText = 'Cần chọn lô sản xuất để xác thực serial';
+        _serialSuccessText = null;
+        _isSerialValid = false;
+        return;
+      }
+
+      final matchingDevice = state.devices.firstWhere(
+            (device) => device.serial.trim().toLowerCase() == value.trim().toLowerCase(),
+        orElse: () => Device(id: '', batchId: '', serial: ''),
+      );
+
+      if (matchingDevice.id.isEmpty) {
+        _serialErrorText = 'Serial không tồn t��i trong lô ${state.selectedBatchId}';
+        _serialSuccessText = null;
+        _isSerialValid = false;
+        return;
+      }
+
+      if (matchingDevice.status == 'firmware_uploading') {
+        _serialErrorText = null;
+        _serialSuccessText = '✅ Serial hợp lệ - Thiết bị sẵn sàng cho nạp firmware';
+        _isSerialValid = true;
+        widget.onSerialSubmitted(value);
+      } else {
+        _serialErrorText = 'Thiết bị không ở trạng thái cho phép nạp firmware';
+        _serialSuccessText = null;
+        _isSerialValid = false;
+      }
+    });
+  }
 
   void _handleQrScan() {
     final state = context.read<LogBloc>().state;
@@ -214,122 +315,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     }
   }
 
-  void _validateSerial(String value) {
-    if (value.isEmpty) {
-      setState(() {
-        _serialErrorText = 'Số serial không được để trống';
-        _serialSuccessText = null;
-        _isSerialValid = false;
-      });
-      return;
-    }
-
-    final state = context.read<LogBloc>().state;
-
-    // Allow input even without batch selection, just show warning
-    if (state.selectedBatchId == null) {
-      setState(() {
-        _serialErrorText = 'Cần chọn lô sản xuất để xác thực serial';
-        _serialSuccessText = null;
-        _isSerialValid = false;
-      });
-      return;
-    }
-
-    final matchingDevice = state.devices.firstWhere(
-          (device) => device.serial.trim().toLowerCase() == value.trim().toLowerCase(),
-      orElse: () => Device(id: '', batchId: '', serial: ''),
-    );
-
-    if (matchingDevice.id.isEmpty) {
-      setState(() {
-        _serialErrorText = 'Serial $value không tồn tại trong lô ${state.selectedBatchId}';
-        _serialSuccessText = null;
-        _isSerialValid = false;
-      });
-
-      context.read<LogBloc>().add(
-        AddLogEvent(
-          LogEntry(
-            message: 'Serial $value không tồn tại trong lô ${state.selectedBatchId}',
-            timestamp: DateTime.now(),
-            level: LogLevel.warning,
-            step: ProcessStep.deviceSelection,
-            origin: 'system',
-          ),
-        ),
-      );
-      return;
-    }
-
-    switch (matchingDevice.status) {
-      case 'firmware_uploading':
-        setState(() {
-          _serialSuccessText = '✅ Serial hợp lệ - Thiết bị sẵn sàng cho nạp firmware và Serial Monitor';
-          _serialErrorText = null;
-          _isSerialValid = true;
-        });
-        context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id));
-        break;
-
-      case 'firmware_uploaded':
-        setState(() {
-          _serialSuccessText = '✅ Serial hợp lệ - Thiết bị đã hoàn thành nạp firmware';
-          _serialErrorText = null;
-          _isSerialValid = false;
-        });
-        context.read<LogBloc>().add(SelectDeviceEvent(matchingDevice.id));
-        break;
-
-      case 'firmware_upload':
-        setState(() {
-          _serialErrorText = '🔒 Serial chờ kích hoạt - Quét QR trên app mobile để kích hoạt';
-          _serialSuccessText = null;
-          _isSerialValid = false;
-        });
-        break;
-
-      case 'pending':
-        setState(() {
-          _serialErrorText = '⚠️ Serial chờ kích hoạt - Quét QR trên app mobile để kích hoạt';
-          _serialSuccessText = null;
-          _isSerialValid = false;
-        });
-        break;
-
-      case 'firmware_failed':
-        setState(() {
-          _serialErrorText = '❌ Thiết bị đã được đánh dấu lỗi firmware';
-          _serialSuccessText = null;
-          _isSerialValid = false;
-        });
-        break;
-
-      case 'defective':
-        setState(() {
-          _serialErrorText = '❌ Thiết bị đã được đánh dấu lỗi';
-          _serialSuccessText = null;
-          _isSerialValid = false;
-        });
-        break;
-
-      case 'in_progress':
-        setState(() {
-          _serialErrorText = '⚠️ Thiết bị còn trong giai đoạn lắp ráp';
-          _serialSuccessText = null;
-          _isSerialValid = false;
-        });
-        break;
-
-      default:
-        setState(() {
-          _serialErrorText = '⚠️ Trạng thái thiết bị không hợp lệ: ${matchingDevice.status}';
-          _serialSuccessText = null;
-          _isSerialValid = false;
-        });
-        break;
-    }
-  }
 
   void _handleRefreshPorts() async {
     setState(() {
@@ -386,10 +371,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
 
   void _handleLocalFileSearch() {
     widget.onWarningRequested('select_local_file');
-    // Force rebuild after file selection
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) setState(() {});
-    });
   }
 
   bool _canFlash() {
@@ -414,7 +395,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
         final isReadyToFlash = _canFlash();
 
         // Modify conditions to allow input before batch selection
-        final bool canUseSerial = true; // Always allow serial input
+        final bool _ = true; // Always allow serial input
         final bool canScanQR = state.selectedBatchId != null; // QR requires batch selection
 
         return Padding(
@@ -625,9 +606,9 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                             )
                                 : null,
                           ),
-                          onSubmitted: widget.onSerialSubmitted,
                           onChanged: _validateAndSubmitSerial,
-                          enabled: canUseSerial, // Allow input but validation will show warnings
+                          onSubmitted: (value) => _validateSerial(value),
+                          enabled: true,
                         ),
                         if (_serialSuccessText != null)
                           Padding(

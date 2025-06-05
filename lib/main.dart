@@ -52,7 +52,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider<LogBloc>(create: (context) => serviceLocator<LogBloc>()),
+        BlocProvider<LogBloc>(create: (context) => serviceLocator<LogBloc>()..add(LoadInitialDataEvent())),
       ],
       child: MaterialApp(
         title: 'SmartNet Firmware Loader',
@@ -67,4 +67,3 @@ class MyApp extends StatelessWidget {
     );
   }
 }
-
