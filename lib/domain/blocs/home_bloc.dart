@@ -75,6 +75,7 @@ class HomeState {
   final bool isFlashing;
   final String? selectedDeviceId;
   final String? selectedDeviceType;
+  final bool canFlash;
 
   HomeState({
     this.plannings = const [],
@@ -92,6 +93,7 @@ class HomeState {
     this.isFlashing = false,
     this.selectedDeviceId,
     this.selectedDeviceType,
+    this.canFlash = false,
   });
 
   HomeState copyWith({
@@ -110,6 +112,7 @@ class HomeState {
     bool? isFlashing,
     String? selectedDeviceId,
     String? selectedDeviceType,
+    bool? canFlash,
   }) {
     return HomeState(
       plannings: plannings ?? this.plannings,
@@ -127,6 +130,7 @@ class HomeState {
       isFlashing: isFlashing ?? this.isFlashing,
       selectedDeviceId: selectedDeviceId ?? this.selectedDeviceId,
       selectedDeviceType: selectedDeviceType ?? this.selectedDeviceType,
+      canFlash: canFlash ?? this.canFlash,
     );
   }
 }

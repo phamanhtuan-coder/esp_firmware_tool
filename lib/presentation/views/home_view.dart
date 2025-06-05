@@ -60,12 +60,20 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     _tabController.addListener(_handleTabChange);
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _isDarkTheme = Theme.of(context).brightness == Brightness.dark;
+  }
+
   void _handleTabChange() {
     if (!mounted) return;
     if (_tabController.index != 1) {
       _serialMonitorService.stopMonitor();
     }
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
     _logService.addLog(
       message: 'Switched to tab ${_tabController.index == 0 ? "Console Log" : "Serial Monitor"}',
       level: LogLevel.debug,
@@ -324,7 +332,18 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<HomeBloc, HomeState>(
+    return BlocConsumer<HomeBloc, HomeState>(
+      listenWhen: (previous, current) => previous != current,
+      listener: (context, state) {
+        // Handle state changes here instead of during build
+        if (mounted) {
+          setState(() {
+            _selectedFirmwareVersion = state.selectedFirmwareId;
+            _selectedPort = state.selectedPort;
+            _canFlash = state.canFlash;
+          });
+        }
+      },
       builder: (context, state) {
         return Scaffold(
           backgroundColor: _isDarkTheme ? AppColors.darkBackground : AppColors.background,
@@ -382,7 +401,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                 child: Column(
                                   children: [
                                     // Firmware control panel with fixed height
-                                    Container(
+                                    SizedBox(
                                       height: 460, // Fixed height for control panel
                                       child: FirmwareControlPanel(
                                         isDarkTheme: _isDarkTheme,

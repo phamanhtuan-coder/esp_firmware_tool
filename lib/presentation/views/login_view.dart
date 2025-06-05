@@ -125,6 +125,7 @@ class _LoginViewState extends State<LoginView> {
                     ],
                     TextField(
                       controller: _usernameController,
+                      onChanged: (_) => setState(() {}),
                       decoration: InputDecoration(
                         labelText: 'Tên đăng nhập',
                         hintText: 'Nhập tên đăng nhập của bạn',
@@ -153,13 +154,22 @@ class _LoginViewState extends State<LoginView> {
                           horizontal: 16,
                           vertical: 16,
                         ),
-                        labelStyle: TextStyle(color: Colors.grey.shade700),
-                        hintStyle: TextStyle(color: Colors.grey.shade500),
+                          labelStyle: TextStyle(
+                            color: _usernameController.text.isNotEmpty
+                                ? AppColors.primary
+                                : Colors.grey.shade700,
+                          ),
+                          hintStyle: TextStyle(
+                            color: _usernameController.text.isNotEmpty
+                                ? AppColors.primary.withOpacity(0.7)
+                                : Colors.grey.shade500,
+                          )
                       ),
                     ),
                     const SizedBox(height: 20),
                     TextField(
                       controller: _passwordController,
+                      onChanged: (_) => setState(() {}),
                       obscureText: !_showPassword,
                       decoration: InputDecoration(
                         labelText: 'Mật khẩu',
@@ -196,8 +206,16 @@ class _LoginViewState extends State<LoginView> {
                           horizontal: 16,
                           vertical: 16,
                         ),
-                        labelStyle: TextStyle(color: Colors.grey.shade700),
-                        hintStyle: TextStyle(color: Colors.grey.shade500),
+                        labelStyle: TextStyle(
+                          color: _passwordController.text.isNotEmpty
+                              ? AppColors.primary
+                              : Colors.grey.shade700,
+                        ),
+                        hintStyle: TextStyle(
+                          color: _passwordController.text.isNotEmpty
+                              ? AppColors.primary.withOpacity(0.7)
+                              : Colors.grey.shade500,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),
