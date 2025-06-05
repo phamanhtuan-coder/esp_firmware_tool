@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:smart_net_firmware_loader/utils/app_colors.dart';
-import 'package:smart_net_firmware_loader/utils/app_routes.dart';
-import 'package:smart_net_firmware_loader/presentation/blocs/log/log_bloc.dart';
+import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
+import 'package:smart_net_firmware_loader/core/config/app_routes.dart';
+import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
 
 class LoginView extends StatefulWidget {
   const LoginView({super.key});
@@ -27,12 +27,15 @@ class _LoginViewState extends State<LoginView> {
   void _login(BuildContext context) {
     if (_usernameController.text.isEmpty || _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng điền đầy đủ thông tin đăng nhập'), backgroundColor: AppColors.error),
+        const SnackBar(
+          content: Text('Vui lòng điền đầy đủ thông tin đăng nhập'),
+          backgroundColor: AppColors.error,
+        ),
       );
       return;
     }
     setState(() => _isLoading = true);
-    context.read<LogBloc>().add(LoadInitialDataEvent());
+    context.read<HomeBloc>().add(LoadInitialDataEvent());
     Navigator.pushReplacementNamed(context, AppRoutes.home);
     setState(() => _isLoading = false);
   }
@@ -78,10 +81,7 @@ class _LoginViewState extends State<LoginView> {
               const SizedBox(height: 8),
               const Text(
                 'Đăng nhập để tiếp tục',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: AppColors.textSecondary,
-                ),
+                style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
               ),
               const SizedBox(height: 32),
               Container(
@@ -89,7 +89,12 @@ class _LoginViewState extends State<LoginView> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [BoxShadow(color: AppColors.shadowColor.withOpacity(0.1), blurRadius: 20)],
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.shadowColor.withOpacity(0.1),
+                      blurRadius: 20,
+                    ),
+                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -104,7 +109,11 @@ class _LoginViewState extends State<LoginView> {
                         ),
                         child: const Row(
                           children: [
-                            Icon(Icons.error_outline, size: 20, color: AppColors.error),
+                            Icon(
+                              Icons.error_outline,
+                              size: 20,
+                              color: AppColors.error,
+                            ),
                             SizedBox(width: 12),
                             Text(
                               'Vui lòng điền đầy đủ thông tin đăng nhập',
@@ -119,13 +128,24 @@ class _LoginViewState extends State<LoginView> {
                       decoration: InputDecoration(
                         labelText: 'Tên đăng nhập',
                         hintText: 'Nhập tên đăng nhập của bạn',
-                        prefixIcon: const Icon(Icons.person_outline, color: AppColors.primary),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        prefixIcon: const Icon(
+                          Icons.person_outline,
+                          color: AppColors.primary,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                          borderSide: const BorderSide(
+                            color: AppColors.primary,
+                            width: 2,
+                          ),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -135,20 +155,36 @@ class _LoginViewState extends State<LoginView> {
                       decoration: InputDecoration(
                         labelText: 'Mật khẩu',
                         hintText: 'Nhập mật khẩu của bạn',
-                        prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
+                        prefixIcon: const Icon(
+                          Icons.lock_outline,
+                          color: AppColors.primary,
+                        ),
                         suffixIcon: IconButton(
                           icon: Icon(
-                            _showPassword ? Icons.visibility_off : Icons.visibility,
+                            _showPassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
                             color: AppColors.primary,
                           ),
-                          onPressed: () => setState(() => _showPassword = !_showPassword),
+                          onPressed:
+                              () => setState(
+                                () => _showPassword = !_showPassword,
+                              ),
                         ),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                          borderSide: const BorderSide(
+                            color: AppColors.primary,
+                            width: 2,
+                          ),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -160,25 +196,28 @@ class _LoginViewState extends State<LoginView> {
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           elevation: 2,
                         ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
+                        child:
+                            _isLoading
+                                ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                                : const Text(
+                                  'Đăng nhập',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              )
-                            : const Text(
-                                'Đăng nhập',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
                       ),
                     ),
                   ],
@@ -187,10 +226,7 @@ class _LoginViewState extends State<LoginView> {
               const SizedBox(height: 24),
               const Text(
                 'Phiên bản 1.0.0',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                ),
+                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
               ),
             ],
           ),
@@ -199,4 +235,3 @@ class _LoginViewState extends State<LoginView> {
     );
   }
 }
-

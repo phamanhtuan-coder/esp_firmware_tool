@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:smart_net_firmware_loader/utils/app_colors.dart';
 
 class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   final bool isDarkTheme;
@@ -12,8 +12,8 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
     super.key,
     required this.isDarkTheme,
     required this.onThemeToggled,
-    this.username = 'Guest',
-    this.userRole = 'Viewer',
+    this.username = 'Lãng tữ lang thang',
+    this.userRole = 'Chủ tịch',
   });
 
   @override
@@ -64,7 +64,10 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
 
               // User Welcome Message
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(20),
@@ -74,7 +77,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Welcome, $username',
+                      'Chào mừng, $username',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w500,
@@ -97,7 +100,7 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
               // Action buttons
               IconButton(
                 icon: const Icon(Icons.fullscreen_rounded, color: Colors.white),
-                tooltip: 'Toggle Fullscreen',
+                tooltip: 'Toàn màn hình',
                 onPressed: () async {
                   final isFullScreen = await windowManager.isFullScreen();
                   await windowManager.setFullScreen(!isFullScreen);
@@ -112,10 +115,15 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
               const SizedBox(width: 8),
               IconButton(
                 icon: Icon(
-                  isDarkTheme ? Icons.wb_sunny_rounded : Icons.nights_stay_rounded,
-                  color: AppColors.warning
+                  isDarkTheme
+                      ? Icons.wb_sunny_rounded
+                      : Icons.nights_stay_rounded,
+                  color: AppColors.warning,
                 ),
-                tooltip: isDarkTheme ? 'Switch to Light Theme' : 'Switch to Dark Theme',
+                tooltip:
+                    isDarkTheme
+                        ? 'Đổi sang Light Theme'
+                        : 'Đổi sang Dark Theme',
                 onPressed: onThemeToggled,
                 style: IconButton.styleFrom(
                   backgroundColor: Colors.white.withOpacity(0.15),
@@ -134,4 +142,3 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   @override
   Size get preferredSize => const Size.fromHeight(72);
 }
-

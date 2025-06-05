@@ -2,8 +2,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cli_util/cli_logging.dart';
 import 'package:get_it/get_it.dart';
+import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
-import '../../data/services/serial_monitor_service.dart';
+import 'package:smart_net_firmware_loader/data/services/serial_monitor_service.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:smart_net_firmware_loader/domain/blocs/logging_bloc.dart';
 
 class LineDisplay {
   final String timestamp;
@@ -28,20 +31,40 @@ class SerialMonitorTerminalWidget extends StatefulWidget {
   });
 
   @override
-  State<SerialMonitorTerminalWidget> createState() => _SerialMonitorTerminalWidgetState();
+  State<SerialMonitorTerminalWidget> createState() =>
+      _SerialMonitorTerminalWidgetState();
 }
 
-class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidget> {
-  final SerialMonitorService _monitorService = GetIt.instance<SerialMonitorService>();
+class _SerialMonitorTerminalWidgetState
+    extends State<SerialMonitorTerminalWidget> {
+  final SerialMonitorService _monitorService =
+      GetIt.instance<SerialMonitorService>();
   final List<LineDisplay> _lines = [];
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   late final Ansi _ansi;
-  bool _isAutoScrollEnabled = true; // Make mutable to allow toggling
+  bool _isAutoScrollEnabled = true;
   StreamSubscription? _subscription;
   bool _isMonitorActive = false;
 
-  final List<int> _baudRates = [300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 74880, 115200, 230400, 250000, 500000, 921600, 1000000, 2000000];
+  final List<int> _baudRates = [
+    300,
+    1200,
+    2400,
+    4800,
+    9600,
+    19200,
+    38400,
+    57600,
+    74880,
+    115200,
+    230400,
+    250000,
+    500000,
+    921600,
+    1000000,
+    2000000,
+  ];
   int _selectedBaudRate = 115200;
 
   @override
@@ -51,15 +74,53 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
     _selectedBaudRate = widget.initialBaudRate;
 
     final timestamp = DateTime.now().toString().split('.').first;
-    _lines.add(LineDisplay(timestamp, 'Welcome to Serial Monitor', isSystemMessage: true));
-    _lines.add(LineDisplay(timestamp, 'Select COM port and baud rate to start monitoring', isSystemMessage: true));
+    _lines.add(
+      LineDisplay(
+        timestamp,
+        'Welcome to Serial Monitor',
+        isSystemMessage: true,
+      ),
+    );
+    _lines.add(
+      LineDisplay(
+        timestamp,
+        'Select COM port and baud rate to start monitoring',
+        isSystemMessage: true,
+      ),
+    );
 
     _subscription = _monitorService.outputStream.listen(
-          (data) {
-        if (mounted) _addLine(data);
+      (data) {
+        if (mounted) {
+          _addLine(data);
+          context.read<LoggingBloc>().add(
+            AddLogEvent(
+              LogEntry(
+                message: data,
+                timestamp: DateTime.now(),
+                level: LogLevel.serialOutput,
+                step: ProcessStep.serialMonitor,
+                origin: 'serial-monitor',
+              ),
+            ),
+          );
+        }
       },
       onError: (error) {
-        if (mounted) _addLine('Error: $error', isSystemMessage: true);
+        if (mounted) {
+          _addLine('Error: $error', isSystemMessage: true);
+          context.read<LoggingBloc>().add(
+            AddLogEvent(
+              LogEntry(
+                message: 'Error: $error',
+                timestamp: DateTime.now(),
+                level: LogLevel.error,
+                step: ProcessStep.serialMonitor,
+                origin: 'serial-monitor',
+              ),
+            ),
+          );
+        }
       },
     );
 
@@ -76,13 +137,18 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
       return;
     }
 
-    if (widget.initialPort != null && widget.initialPort!.isNotEmpty && _selectedBaudRate > 0) {
+    if (widget.initialPort != null &&
+        widget.initialPort!.isNotEmpty &&
+        _selectedBaudRate > 0) {
       _stopMonitor();
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted && widget.isActiveTab) {
           _monitorService.startMonitor(widget.initialPort!, _selectedBaudRate);
           _isMonitorActive = true;
-          _addLine('Starting monitor on ${widget.initialPort} at $_selectedBaudRate baud...', isSystemMessage: true);
+          _addLine(
+            'Starting monitor on ${widget.initialPort} at $_selectedBaudRate baud...',
+            isSystemMessage: true,
+          );
         }
       });
     }
@@ -97,32 +163,20 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
   }
 
   void _restartMonitor() {
-    if (widget.initialPort != null && widget.initialPort!.isNotEmpty && mounted) {
+    if (widget.initialPort != null &&
+        widget.initialPort!.isNotEmpty &&
+        mounted) {
       _stopMonitor();
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted && widget.isActiveTab) {
           _monitorService.startMonitor(widget.initialPort!, _selectedBaudRate);
           _isMonitorActive = true;
-          _addLine('Restarting monitor on ${widget.initialPort} at $_selectedBaudRate baud...', isSystemMessage: true);
+          _addLine(
+            'Restarting monitor on ${widget.initialPort} at $_selectedBaudRate baud...',
+            isSystemMessage: true,
+          );
         }
       });
-    }
-  }
-
-  @override
-  void didUpdateWidget(SerialMonitorTerminalWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.isActiveTab != oldWidget.isActiveTab && mounted) {
-      if (widget.isActiveTab) {
-        _addLine('Tab activated - initializing monitor...', isSystemMessage: true);
-        Future.delayed(const Duration(milliseconds: 500), _initializeMonitor);
-      } else {
-        _addLine('Tab deactivated - stopping monitor...', isSystemMessage: true);
-        _stopMonitorAndCleanup();
-      }
-    } else if (widget.isActiveTab && oldWidget.initialPort != widget.initialPort && mounted) {
-      _addLine('Port changed - restarting monitor...', isSystemMessage: true);
-      _initializeMonitor();
     }
   }
 
@@ -132,7 +186,9 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
     setState(() {
       final timestamp = DateTime.now().toString().split('.').first;
       final processedLine = _processAnsiCodes(line);
-      _lines.add(LineDisplay(timestamp, processedLine, isSystemMessage: isSystemMessage));
+      _lines.add(
+        LineDisplay(timestamp, processedLine, isSystemMessage: isSystemMessage),
+      );
       while (_lines.length > 1000) {
         _lines.removeAt(0);
       }
@@ -169,6 +225,17 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
     if (command.isNotEmpty && mounted) {
       _monitorService.sendCommand(command);
       _inputController.clear();
+      context.read<LoggingBloc>().add(
+        AddLogEvent(
+          LogEntry(
+            message: 'Sent command: $command',
+            timestamp: DateTime.now(),
+            level: LogLevel.input,
+            step: ProcessStep.serialMonitor,
+            origin: 'user-input',
+          ),
+        ),
+      );
     }
   }
 
@@ -177,6 +244,31 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
       final logService = GetIt.instance<LogService>();
       logService.stopSerialMonitor();
       _stopMonitor();
+    }
+  }
+
+  @override
+  void didUpdateWidget(SerialMonitorTerminalWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActiveTab != oldWidget.isActiveTab && mounted) {
+      if (widget.isActiveTab) {
+        _addLine(
+          'Tab activated - initializing monitor...',
+          isSystemMessage: true,
+        );
+        Future.delayed(const Duration(milliseconds: 500), _initializeMonitor);
+      } else {
+        _addLine(
+          'Tab deactivated - stopping monitor...',
+          isSystemMessage: true,
+        );
+        _stopMonitorAndCleanup();
+      }
+    } else if (widget.isActiveTab &&
+        oldWidget.initialPort != widget.initialPort &&
+        mounted) {
+      _addLine('Port changed - restarting monitor...', isSystemMessage: true);
+      _initializeMonitor();
     }
   }
 
@@ -204,7 +296,8 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
                 color: Colors.black,
                 borderRadius: BorderRadius.circular(8.0),
                 border: Border.all(
-                  color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
+                  color:
+                      isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
                   width: 1,
                 ),
               ),
@@ -216,30 +309,37 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
                     width: double.infinity,
                     child: SelectableText.rich(
                       TextSpan(
-                        children: _lines.map((line) {
-                          return TextSpan(
-                            children: [
-                              TextSpan(
-                                text: '[${line.timestamp}] ',
-                                style: TextStyle(
-                                  color: line.isSystemMessage ? Colors.yellow.withOpacity(0.8) : Colors.grey.withOpacity(0.7),
-                                  fontFamily: 'Courier New',
-                                  fontSize: 12.0,
-                                  height: 1.5,
-                                ),
-                              ),
-                              TextSpan(
-                                text: '${line.content}\n',
-                                style: TextStyle(
-                                  color: line.isSystemMessage ? Colors.yellow : Colors.lightGreenAccent,
-                                  fontFamily: 'Courier New',
-                                  fontSize: 14.0,
-                                  height: 1.5,
-                                ),
-                              ),
-                            ],
-                          );
-                        }).toList(),
+                        children:
+                            _lines.map((line) {
+                              return TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: '[${line.timestamp}] ',
+                                    style: TextStyle(
+                                      color:
+                                          line.isSystemMessage
+                                              ? Colors.yellow.withOpacity(0.8)
+                                              : Colors.grey.withOpacity(0.7),
+                                      fontFamily: 'Courier New',
+                                      fontSize: 12.0,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: '${line.content}\n',
+                                    style: TextStyle(
+                                      color:
+                                          line.isSystemMessage
+                                              ? Colors.yellow
+                                              : Colors.lightGreenAccent,
+                                      fontFamily: 'Courier New',
+                                      fontSize: 14.0,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }).toList(),
                       ),
                     ),
                   ),
@@ -256,20 +356,33 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
                     color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
+                      color:
+                          isDarkTheme
+                              ? Colors.grey.shade700
+                              : Colors.grey.shade300,
                     ),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: DropdownButton<int>(
                     value: _selectedBaudRate,
-                    dropdownColor: isDarkTheme ? Colors.grey.shade800 : Colors.white,
-                    style: TextStyle(color: isDarkTheme ? Colors.white : Colors.black, fontSize: 14),
+                    dropdownColor:
+                        isDarkTheme ? Colors.grey.shade800 : Colors.white,
+                    style: TextStyle(
+                      color: isDarkTheme ? Colors.white : Colors.black,
+                      fontSize: 14,
+                    ),
                     underline: Container(),
-                    items: _baudRates.map((rate) {
-                      return DropdownMenuItem<int>(value: rate, child: Text('$rate'));
-                    }).toList(),
+                    items:
+                        _baudRates.map((rate) {
+                          return DropdownMenuItem<int>(
+                            value: rate,
+                            child: Text('$rate'),
+                          );
+                        }).toList(),
                     onChanged: (int? newValue) {
-                      if (newValue != null && newValue != _selectedBaudRate && mounted) {
+                      if (newValue != null &&
+                          newValue != _selectedBaudRate &&
+                          mounted) {
                         setState(() {
                           _selectedBaudRate = newValue;
                         });
@@ -282,23 +395,43 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
                 Expanded(
                   child: TextField(
                     controller: _inputController,
-                    style: TextStyle(fontFamily: 'Courier New', color: isDarkTheme ? Colors.white : Colors.black),
+                    style: TextStyle(
+                      fontFamily: 'Courier New',
+                      color: isDarkTheme ? Colors.white : Colors.black,
+                    ),
                     decoration: InputDecoration(
                       hintText: 'Enter command...',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300),
+                        borderSide: BorderSide(
+                          color:
+                              isDarkTheme
+                                  ? Colors.grey.shade700
+                                  : Colors.grey.shade300,
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300),
+                        borderSide: BorderSide(
+                          color:
+                              isDarkTheme
+                                  ? Colors.grey.shade700
+                                  : Colors.grey.shade300,
+                        ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Colors.blue, width: 2),
+                        borderSide: const BorderSide(
+                          color: Colors.blue,
+                          width: 2,
+                        ),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      fillColor: isDarkTheme ? Colors.grey.shade800 : Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      fillColor:
+                          isDarkTheme ? Colors.grey.shade800 : Colors.white,
                       filled: true,
                     ),
                     onSubmitted: (_) => _sendCommand(),
@@ -310,8 +443,13 @@ class _SerialMonitorTerminalWidgetState extends State<SerialMonitorTerminalWidge
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   child: const Text('Send'),
                 ),

@@ -3,12 +3,13 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
+import 'package:smart_net_firmware_loader/core/config/app_config.dart';
 import 'package:smart_net_firmware_loader/data/models/device.dart';
 import 'package:smart_net_firmware_loader/data/models/firmware.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
-import 'package:smart_net_firmware_loader/presentation/blocs/log/log_bloc.dart';
-import 'package:smart_net_firmware_loader/utils/app_colors.dart';
-import 'package:smart_net_firmware_loader/utils/app_config.dart';
+import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
+import 'package:smart_net_firmware_loader/domain/blocs/logging_bloc.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/rounded_button.dart';
 
 class FirmwareControlPanel extends StatefulWidget {
@@ -26,7 +27,7 @@ class FirmwareControlPanel extends StatefulWidget {
   final Function(String?) onUsbPortSelected;
   final Function(String, {String? value}) onWarningRequested;
   final bool isLocalFileMode;
-  final Function(bool) onQrCodeAvailabilityChanged;  // Add new callback
+  final Function(bool) onQrCodeAvailabilityChanged;
 
   const FirmwareControlPanel({
     super.key,
@@ -44,7 +45,7 @@ class FirmwareControlPanel extends StatefulWidget {
     required this.onUsbPortSelected,
     required this.onWarningRequested,
     required this.isLocalFileMode,
-    required this.onQrCodeAvailabilityChanged,  // Add to constructor
+    required this.onQrCodeAvailabilityChanged,
   });
 
   @override
@@ -52,8 +53,7 @@ class FirmwareControlPanel extends StatefulWidget {
 }
 
 class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
-  final bool _isFileButtonLoading = false;
-  bool _isVersionButtonLoading = false;
+  bool _isFileButtonLoading = false;
   bool _isQrCodeButtonLoading = false;
   bool _isRefreshButtonLoading = false;
   String? _serialErrorText;
@@ -62,7 +62,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
 
   void _handleModeToggle() {
     widget.onWarningRequested(
-      widget.isLocalFileMode ? 'switch_to_version' : 'switch_to_local'
+      widget.isLocalFileMode ? 'switch_to_version' : 'switch_to_local',
     );
   }
 
@@ -73,7 +73,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
   }
 
   void _validateAndSubmitSerial(String value) {
-    // Cập nhật controller với giá trị mới
     final currentPosition = widget.serialController.selection;
     widget.serialController.value = TextEditingValue(
       text: value,
@@ -104,7 +103,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
         return;
       }
 
-      final state = context.read<LogBloc>().state;
+      final state = context.read<HomeBloc>().state;
       if (state.selectedBatchId == null) {
         _serialErrorText = 'Cần chọn lô sản xuất để xác thực serial';
         _serialSuccessText = null;
@@ -113,12 +112,14 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
       }
 
       final matchingDevice = state.devices.firstWhere(
-            (device) => device.serial.trim().toLowerCase() == value.trim().toLowerCase(),
+        (device) =>
+            device.serial.trim().toLowerCase() == value.trim().toLowerCase(),
         orElse: () => Device(id: '', batchId: '', serial: ''),
       );
 
       if (matchingDevice.id.isEmpty) {
-        _serialErrorText = 'Serial không tồn tại trong lô ${state.selectedBatchId}';
+        _serialErrorText =
+            'Serial không tồn tại trong lô ${state.selectedBatchId}';
         _serialSuccessText = null;
         _isSerialValid = false;
         return;
@@ -126,7 +127,8 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
 
       if (matchingDevice.status == 'firmware_uploading') {
         _serialErrorText = null;
-        _serialSuccessText = '✅ Serial hợp lệ - Thiết bị sẵn sàng cho nạp firmware';
+        _serialSuccessText =
+            '✅ Serial hợp lệ - Thiết bị sẵn sàng cho nạp firmware';
         _isSerialValid = true;
         widget.onSerialSubmitted(value);
       } else {
@@ -138,7 +140,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
   }
 
   void _handleQrScan() {
-    final state = context.read<LogBloc>().state;
+    final state = context.read<HomeBloc>().state;
     if (state.selectedBatchId == null) {
       setState(() {
         _serialErrorText = 'Vui lòng chọn lô sản xuất trước khi quét QR';
@@ -146,7 +148,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
         _isSerialValid = false;
       });
 
-      context.read<LogBloc>().add(
+      context.read<LoggingBloc>().add(
         AddLogEvent(
           LogEntry(
             message: 'Vui lòng chọn lô sản xuất trước khi quét QR code',
@@ -157,11 +159,10 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
           ),
         ),
       );
-      widget.onQrCodeAvailabilityChanged(false);  // Notify QR not available
+      widget.onQrCodeAvailabilityChanged(false);
       return;
     }
 
-    // Enable QR scanning
     widget.onQrCodeAvailabilityChanged(true);
 
     setState(() {
@@ -212,7 +213,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
       if (newValue != previousValue && newValue.isNotEmpty) {
         timer.cancel();
 
-        context.read<LogBloc>().add(
+        context.read<LoggingBloc>().add(
           AddLogEvent(
             LogEntry(
               message: 'Đang làm mới dữ liệu thiết bị từ server...',
@@ -225,7 +226,9 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
         );
 
         if (state.selectedBatchId != null) {
-          context.read<LogBloc>().add(RefreshBatchDevicesEvent(state.selectedBatchId!));
+          context.read<HomeBloc>().add(
+            RefreshBatchDevicesEvent(state.selectedBatchId!),
+          );
 
           Future.delayed(const Duration(milliseconds: 800), () {
             if (!mounted) return;
@@ -260,16 +263,13 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
 
   void _validateReceivedSerial(String value) {
     if (!mounted) return;
-
     _validateSerial(value);
-
     if (_isQrCodeButtonLoading) {
       setState(() {
         _isQrCodeButtonLoading = false;
       });
     }
   }
-
 
   void _handleRefreshPorts() async {
     setState(() {
@@ -320,38 +320,35 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
   void didUpdateWidget(FirmwareControlPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.isLocalFileMode != widget.isLocalFileMode) {
-      setState(() {});  // Trigger rebuild on mode change
+      setState(() {});
     }
-  }
-
-  void _handleLocalFileSearch() {
-    widget.onWarningRequested('select_local_file');
   }
 
   bool _canFlash() {
     if (widget.isLocalFileMode) {
-      final state = context.read<LogBloc>().state;
-      return state.localFilePath != null && widget.selectedPort != null && _isSerialValid;
+      final state = context.read<HomeBloc>().state;
+      return state.localFilePath != null &&
+          widget.selectedPort != null &&
+          _isSerialValid;
     } else {
-      return widget.selectedFirmwareVersion != null && widget.selectedPort != null && _isSerialValid;
+      return widget.selectedFirmwareVersion != null &&
+          widget.selectedPort != null &&
+          _isSerialValid;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<LogBloc, LogState>(
+    return BlocBuilder<HomeBloc, HomeState>(
       builder: (context, state) {
         final hasLocalFile = state.localFilePath != null;
-        final fileName = hasLocalFile
-            ? state.localFilePath!.split(Platform.pathSeparator).last
-            : 'Chưa chọn file';
+        final fileName =
+            hasLocalFile
+                ? state.localFilePath!.split(Platform.pathSeparator).last
+                : 'Chưa chọn file';
 
-        // Add rebuild trigger when mode changes
-        final isReadyToFlash = _canFlash();
-
-        // Modify conditions to allow input before batch selection
-        final bool _ = true; // Always allow serial input
-        final bool canScanQR = state.selectedBatchId != null; // QR requires batch selection
+        final _ = _canFlash();
+        final bool canScanQR = state.selectedBatchId != null;
 
         return Padding(
           padding: const EdgeInsets.all(AppConfig.defaultPadding),
@@ -377,121 +374,110 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                           value: widget.selectedFirmwareVersion,
                           decoration: InputDecoration(
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(AppConfig.cardBorderRadius),
+                              borderRadius: BorderRadius.circular(
+                                AppConfig.cardBorderRadius,
+                              ),
                             ),
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 12,
                               vertical: 14,
                             ),
-                            fillColor: widget.isDarkTheme
-                                ? widget.isLocalFileMode
-                                    ? AppColors.darkCardBackground.withAlpha(128)
-                                    : AppColors.darkCardBackground
-                                : widget.isLocalFileMode
+                            fillColor:
+                                widget.isDarkTheme
+                                    ? widget.isLocalFileMode
+                                        ? AppColors.darkCardBackground
+                                            .withAlpha(128)
+                                        : AppColors.darkCardBackground
+                                    : widget.isLocalFileMode
                                     ? AppColors.cardBackground.withAlpha(128)
                                     : AppColors.cardBackground,
                             filled: true,
                             enabled: !widget.isLocalFileMode,
                           ),
-                          items: widget.firmwares.map((firmware) {
-                            return DropdownMenuItem(
-                              value: firmware.firmwareId.toString(),
-                              child: Text(
-                                '${firmware.name} (${firmware.version})${firmware.isMandatory ? " - Bắt buộc" : ""}',
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: widget.isLocalFileMode ? null : _handleFirmwareVersionChange,
-                          hint: Text(
-                            widget.isLocalFileMode
-                                ? 'Không khả dụng trong chế độ file local'
-                                : widget.firmwares.isEmpty
-                                ? 'Không có firmware khả dụng'
-                                : '-- Chọn phiên bản --',
-                          ),
+                          items:
+                              widget.firmwares.map((firmware) {
+                                return DropdownMenuItem(
+                                  value: firmware.firmwareId.toString(),
+                                  child: Text(firmware.version),
+                                );
+                              }).toList(),
+                          onChanged:
+                              widget.isLocalFileMode
+                                  ? null
+                                  : _handleFirmwareVersionChange,
+                          hint: const Text('Chọn phiên bản'),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildLoadingButton(
+                          isLoading: _isFileButtonLoading,
+                          onPressed: widget.onLocalFileSearch,
+                          text: hasLocalFile ? fileName : 'Chọn file cục bộ',
+                          icon: Icons.folder_open,
+                          backgroundColor: AppColors.primary,
+                          enabled: widget.isLocalFileMode,
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 24),
-                      _buildLoadingButton(
-                        isLoading: _isVersionButtonLoading,
-                        onPressed: _handleModeToggle,
-                        text: widget.isLocalFileMode ? 'Chọn Version' : 'Upload File',
-                        icon: widget.isLocalFileMode ? Icons.cloud_download : Icons.upload_file,
-                        backgroundColor: widget.isLocalFileMode ? AppColors.selectVersion : AppColors.findFile,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
+                  const SizedBox(width: 16),
                   Expanded(
-                    flex: 3,
+                    flex: 2,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'File Firmware Cục Bộ',
+                          'Cổng USB',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                         const SizedBox(height: 4),
-                        TextField(
-                          readOnly: true,
-                          controller: TextEditingController(
-                            text: hasLocalFile ? fileName : 'Chưa chọn file',
-                          ),
+                        DropdownButtonFormField<String>(
+                          value: widget.selectedPort,
                           decoration: InputDecoration(
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(AppConfig.cardBorderRadius),
+                              borderRadius: BorderRadius.circular(
+                                AppConfig.cardBorderRadius,
+                              ),
                             ),
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 12,
                               vertical: 14,
                             ),
-                            fillColor: widget.isDarkTheme
-                                ? widget.isLocalFileMode
+                            fillColor:
+                                widget.isDarkTheme
                                     ? AppColors.darkCardBackground
-                                    : AppColors.darkCardBackground.withAlpha(128)
-                                : widget.isLocalFileMode
-                                    ? AppColors.cardBackground
-                                    : AppColors.cardBackground.withAlpha(128),
+                                    : AppColors.cardBackground,
                             filled: true,
                           ),
+                          items:
+                              widget.availablePorts.map((port) {
+                                return DropdownMenuItem(
+                                  value: port,
+                                  child: Text(port),
+                                );
+                              }).toList(),
+                          onChanged: widget.onUsbPortSelected,
+                          hint: const Text('Chọn cổng COM'),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildLoadingButton(
+                          isLoading: _isRefreshButtonLoading,
+                          onPressed: _handleRefreshPorts,
+                          text: 'Làm mới cổng',
+                          icon: Icons.refresh,
+                          backgroundColor: AppColors.secondary,
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 24),
-                    child: _buildLoadingButton(
-                      isLoading: _isFileButtonLoading,
-                      onPressed: _handleLocalFileSearch,
-                      text: 'Tìm File',
-                      icon: Icons.search,
-                      backgroundColor: AppColors.findFile,
-                      enabled: widget.isLocalFileMode && !hasLocalFile,
-                    ),
-                  ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    flex: 3,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -506,68 +492,34 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                         TextField(
                           controller: widget.serialController,
                           decoration: InputDecoration(
-                            hintText: 'Nhập hoặc quét mã serial',
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(AppConfig.cardBorderRadius),
-                              borderSide: BorderSide(
-                                color: _serialErrorText != null
-                                    ? AppColors.error
-                                    : _serialSuccessText != null
-                                    ? AppColors.success
-                                    : widget.isDarkTheme
-                                    ? AppColors.darkDivider
-                                    : AppColors.dividerColor,
-                                width: 1.0,
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(AppConfig.cardBorderRadius),
-                              borderSide: BorderSide(
-                                color: _serialErrorText != null
-                                    ? AppColors.error
-                                    : _serialSuccessText != null
-                                    ? AppColors.success
-                                    : widget.isDarkTheme
-                                    ? AppColors.darkDivider
-                                    : AppColors.dividerColor,
-                                width: 1.0,
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(AppConfig.cardBorderRadius),
-                              borderSide: BorderSide(
-                                color: _serialErrorText != null
-                                    ? AppColors.error
-                                    : _serialSuccessText != null
-                                    ? AppColors.success
-                                    : AppColors.primary,
-                                width: 2.0,
+                              borderRadius: BorderRadius.circular(
+                                AppConfig.cardBorderRadius,
                               ),
                             ),
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 12,
                               vertical: 14,
                             ),
-                            fillColor: widget.isDarkTheme
-                                ? AppColors.darkCardBackground
-                                : AppColors.cardBackground,
+                            fillColor:
+                                widget.isDarkTheme
+                                    ? AppColors.darkCardBackground
+                                    : AppColors.cardBackground,
                             filled: true,
                             errorText: _serialErrorText,
-                            errorStyle: const TextStyle(color: AppColors.error),
-                            suffixIcon: _serialSuccessText != null
-                                ? const Icon(
-                              Icons.check_circle,
-                              color: AppColors.success,
-                            )
-                                : null,
+                            suffixIcon:
+                                _serialSuccessText != null
+                                    ? const Icon(
+                                      Icons.check_circle,
+                                      color: AppColors.success,
+                                    )
+                                    : null,
                           ),
                           onChanged: _validateAndSubmitSerial,
-                          onSubmitted: (value) => _validateSerial(value),
-                          enabled: true,
                         ),
                         if (_serialSuccessText != null)
                           Padding(
-                            padding: const EdgeInsets.only(top: 4),
+                            padding: const EdgeInsets.only(top: 8),
                             child: Text(
                               _serialSuccessText!,
                               style: const TextStyle(
@@ -579,98 +531,35 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 18),
-                      _buildLoadingButton(
-                        isLoading: _isQrCodeButtonLoading,
-                        onPressed: _handleQrScan,
-                        text: 'Quét QR',
-                        icon: Icons.qr_code,
-                        backgroundColor: AppColors.scanQr,
-                        enabled: canScanQR, // QR scan still requires batch selection
-                      ),
-                    ],
+                  const SizedBox(width: 16),
+                  _buildLoadingButton(
+                    isLoading: _isQrCodeButtonLoading,
+                    onPressed: _handleQrScan,
+                    text: 'Quét QR Code',
+                    icon: Icons.qr_code_scanner,
+                    backgroundColor: AppColors.scanQr,
+                    enabled: canScanQR,
                   ),
                 ],
               ),
               const SizedBox(height: 16),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Cổng COM (USB)',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        DropdownButtonFormField<String>(
-                          value: widget.selectedPort,
-                          decoration: InputDecoration(
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(AppConfig.cardBorderRadius),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 14,
-                            ),
-                            fillColor: widget.isDarkTheme
-                                ? AppColors.darkCardBackground
-                                : AppColors.cardBackground,
-                            filled: true,
-                            errorText: widget.availablePorts.isEmpty
-                                ? 'Không tìm thấy cổng COM nào'
-                                : widget.selectedPort == null
-                                ? 'Cần chọn cổng COM để nạp firmware'
-                                : null,
-                            errorStyle: const TextStyle(color: AppColors.error),
-                          ),
-                          items: widget.availablePorts
-                              .map(
-                                (port) => DropdownMenuItem(
-                              value: port,
-                              child: Text(port),
-                            ),
-                          )
-                              .toList(),
-                          onChanged: (value) {
-                            widget.onUsbPortSelected(value);
-                            if (value != null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Đã chọn cổng COM: $value'),
-                                  backgroundColor: AppColors.success,
-                                  duration: const Duration(seconds: 2),
-                                ),
-                              );
-                            }
-                          },
-                          hint: const Text('-- Chọn cổng --'),
-                        ),
-                      ],
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: _handleModeToggle,
+                  child: Text(
+                    widget.isLocalFileMode
+                        ? 'Chuyển sang chọn phiên bản'
+                        : 'Chuyển sang upload file cục bộ',
+                    style: TextStyle(
+                      color:
+                          widget.isDarkTheme
+                              ? AppColors.accent
+                              : AppColors.primary,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 24),
-                    child: _buildLoadingButton(
-                      isLoading: _isRefreshButtonLoading,
-                      onPressed: _handleRefreshPorts,
-                      text: 'Làm Mới',
-                      icon: Icons.refresh,
-                      backgroundColor: AppColors.refresh,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ],
           ),
@@ -679,4 +568,3 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     );
   }
 }
-

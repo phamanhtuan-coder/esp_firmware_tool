@@ -44,10 +44,16 @@ class Firmware {
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
       isDeleted: json['is_deleted'] == 1,
-      testedAt: json['tested_at'] != null ? DateTime.parse(json['tested_at'] as String) : null,
+      testedAt:
+          json['tested_at'] != null
+              ? DateTime.parse(json['tested_at'] as String)
+              : null,
       isApproved: json['is_approved'] == 1,
       note: json['note'] as String?,
-      logs: (json['logs'] as List<dynamic>).map((e) => FirmwareLog.fromJson(e)).toList(),
+      logs:
+          (json['logs'] as List<dynamic>)
+              .map((e) => FirmwareLog.fromJson(e))
+              .toList(),
       templateName: json['template_name'] as String,
       templateIsDeleted: json['template_is_deleted'] == 1,
     );

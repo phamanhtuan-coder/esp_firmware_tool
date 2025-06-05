@@ -13,46 +13,36 @@ enum LogLevel {
 
 enum ProcessStep {
   // Các bước khởi động và hệ thống
-  systemStart,    // Khởi động ứng dụng
-  systemEvent,    // Các sự kiện hệ thống (USB connect/disconnect...)
-
+  systemStart, // Khởi động ứng dụng
+  systemEvent, // Các sự kiện hệ thống (USB connect/disconnect...)
   // Các bước quản lý sản phẩm
-  productBatch,   // Quản lý lô sản phẩm
+  productBatch, // Quản lý lô sản phẩm
   batchSelection, // Chọn lô sản xuất
-  deviceSelection,// Chọn thiết bị trong lô
-  deviceStatus,   // Trạng thái thiết bị (defective, ready...)
-  deviceRefresh,  // Refresh danh sách thiết bị từ server
-
+  deviceSelection, // Chọn thiết bị trong lô
+  deviceStatus, // Trạng thái thiết bị (defective, ready...)
+  deviceRefresh, // Refresh danh sách thiết bị từ server
   // Các bước quản lý firmware
-  firmwareDownload,    // Tải firmware từ server
-  selectFirmware,      // Chọn phiên bản firmware
+  firmwareDownload, // Tải firmware từ server
+  selectFirmware, // Chọn phiên bản firmware
   templatePreparation, // Chu��n bị template với serial number
-
   // Các bước nạp firmware
-  firmwareCompile,     // Biên dịch firmware
-  firmwareUpload,      // Nạp firmware vào thiết bị
-  usbCheck,           // Kiểm tra kết nối USB
-  flash,              // Quá trình flash
-
+  firmwareCompile, // Biên dịch firmware
+  firmwareUpload, // Nạp firmware vào thiết bị
+  usbCheck, // Kiểm tra kết nối USB
+  flash, // Quá trình flash
   // Các bước theo dõi và tương tác
-  scanQrCode,         // Quét mã QR
-  serialMonitor,      // Theo dõi cổng serial
-  consoleLog,         // Log console
-
+  scanQrCode, // Quét mã QR
+  serialMonitor, // Theo dõi cổng serial
+  consoleLog, // Log console
   // Các bước quản lý thư viện
-  installCore,        // Cài đặt core
-  installLibrary,     // Cài đặt thư viện
-
+  installCore, // Cài đặt core
+  installLibrary, // Cài đặt thư viện
   // Khác
-  error,              // Xử lý lỗi
-  other,              // Các bước khác
+  error, // Xử lý lỗi
+  other, // Các bước khác
 }
 
-enum DataDisplayMode {
-  ascii,
-  hex,
-  mixed,
-}
+enum DataDisplayMode { ascii, hex, mixed }
 
 class LogEntry {
   final String message;
@@ -61,8 +51,10 @@ class LogEntry {
   final ProcessStep step;
   final String deviceId;
   final bool requiresInput;
-  final String? origin; // 'arduino-cli', 'system', 'user-input', 'serial-monitor'
-  final String? rawOutput; // Store raw output from Arduino CLI for parsing/display
+  final String?
+  origin; // 'arduino-cli', 'system', 'user-input', 'serial-monitor'
+  final String?
+  rawOutput; // Store raw output from Arduino CLI for parsing/display
   final DataDisplayMode displayMode;
 
   LogEntry({
@@ -166,11 +158,10 @@ class InputRequestLogEntry extends LogEntry {
     required super.step,
     super.deviceId,
   }) : super(
-          message: prompt,
-          timestamp: DateTime.now(),
-          level: LogLevel.info,
-          requiresInput: true,
-          origin: 'system',
-        );
+         message: prompt,
+         timestamp: DateTime.now(),
+         level: LogLevel.info,
+         requiresInput: true,
+         origin: 'system',
+       );
 }
-

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:smart_net_firmware_loader/presentation/blocs/log/log_bloc.dart';
-import 'package:smart_net_firmware_loader/utils/app_colors.dart';
+import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
+import 'package:smart_net_firmware_loader/domain/blocs/logging_bloc.dart';
 
 class SearchBar extends StatelessWidget {
   final TextEditingController controller;
@@ -27,18 +27,23 @@ class SearchBar extends StatelessWidget {
               controller: controller,
               decoration: InputDecoration(
                 hintText: 'Find in logs...',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                fillColor: isDarkTheme ? AppColors.idle : AppColors.dividerColor,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                fillColor:
+                    isDarkTheme ? AppColors.idle : AppColors.dividerColor,
                 filled: true,
               ),
-              onChanged: (value) => context.read<LogBloc>().add(const FilterLogEvent()),
+              onChanged:
+                  (value) =>
+                      context.read<LoggingBloc>().add(FilterLogEvent(value)),
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: onClose,
-          ),
+          IconButton(icon: const Icon(Icons.close), onPressed: onClose),
         ],
       ),
     );

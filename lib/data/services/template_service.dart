@@ -223,7 +223,7 @@ class TemplateService {
       final directDefinePattern = RegExp(r'#define\s+(\w+)\s+"?([^"\n\r]+)"?');
       content = content.replaceAllMapped(directDefinePattern, (match) {
         final defineName = match.group(1);
-        final currentValue = match.group(2);
+        final _ = match.group(2);
 
         // Only replace if it matches certain keywords we want to handle specially
         if (defineName == 'SERIAL_NUMBER' || defineName == 'DEVICE_ID' || defineName == 'DEVICE_UUID') {

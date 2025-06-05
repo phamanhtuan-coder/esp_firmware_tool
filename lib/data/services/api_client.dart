@@ -1,164 +1,285 @@
 import 'dart:convert';
-import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
+import 'package:smart_net_firmware_loader/data/models/batch.dart';
+import 'package:smart_net_firmware_loader/data/models/device.dart';
+import 'package:smart_net_firmware_loader/data/models/firmware.dart';
+import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
+import 'package:smart_net_firmware_loader/data/models/planning.dart';
+import 'package:smart_net_firmware_loader/data/services/log_service.dart';
+import 'package:smart_net_firmware_loader/domain/repositories/api_repository.dart';
+import 'package:get_it/get_it.dart';
 
-class ApiClient {
-  final String baseUrl;
-  final http.Client _httpClient;
+class ApiService implements ApiRepository {
+  final String baseUrl =
+      'https://iothomeconnectapiv2-production.up.railway.app/api';
+  final http.Client _httpClient = http.Client();
+  final LogService _logService = GetIt.instance<LogService>();
 
-  ApiClient({
-    // this.baseUrl = 'http://localhost:3000/api',
-    this.baseUrl = 'https://iothomeconnectapiv2-production.up.railway.app/api',
-
-    http.Client? httpClient,
-  }) : _httpClient = httpClient ?? http.Client();
-
-  /// Generic method to make API calls with logging
-  Future<Map<String, dynamic>> _request({
-    required String method,
-    required String endpoint,
-    Map<String, dynamic>? body,
-    Map<String, String>? headers,
-  }) async {
-    final url = Uri.parse('$baseUrl$endpoint');
-    http.Response response;
-
-    // Create default headers
-    final requestHeaders = {
-      'Content-Type': 'application/json',
-      ...?headers,
-    };
-
+  @override
+  Future<List<Planning>> fetchPlannings() async {
     try {
-      // Log request details
-      developer.log('API Request: $method $url', name: 'ApiClient');
-      if (body != null) {
-        developer.log('Request body: ${jsonEncode(body)}', name: 'ApiClient');
-      }
-
-      // Make the appropriate request based on the method
-      switch (method.toUpperCase()) {
-        case 'GET':
-          response = await _httpClient.get(url, headers: requestHeaders);
-          break;
-        case 'POST':
-          response = await _httpClient.post(
-            url,
-            headers: requestHeaders,
-            body: body != null ? jsonEncode(body) : null,
-          );
-          break;
-        case 'PATCH':
-          response = await _httpClient.patch(
-            url,
-            headers: requestHeaders,
-            body: body != null ? jsonEncode(body) : null,
-          );
-          break;
-        case 'PUT':
-          response = await _httpClient.put(
-            url,
-            headers: requestHeaders,
-            body: body != null ? jsonEncode(body) : null,
-          );
-          break;
-        case 'DELETE':
-          response = await _httpClient.delete(url, headers: requestHeaders);
-          break;
-        default:
-          throw Exception('Unsupported HTTP method: $method');
-      }
-
-      // Log response details
-      developer.log(
-        'API Response [${response.statusCode}]: ${response.body}',
-        name: 'ApiClient',
+      _logService.addLog(
+        message: 'Fetching plannings...',
+        level: LogLevel.info,
+        step: ProcessStep.other,
+        origin: 'system',
       );
-
-      // Parse and return the response
+      final response = await _httpClient.get(Uri.parse('$baseUrl/plannings'));
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        if (response.body.isEmpty) {
-          return {'success': true};
-        }
-        return jsonDecode(response.body);
-      } else {
-        developer.log(
-          'API Error [${response.statusCode}]: ${response.body}',
-          name: 'ApiClient',
-          error: response.body,
+        final List<dynamic> data = jsonDecode(response.body)['data'];
+        final plannings = data.map((json) => Planning.fromJson(json)).toList();
+        _logService.addLog(
+          message: 'Fetched ${plannings.length} plannings',
+          level: LogLevel.success,
+          step: ProcessStep.other,
+          origin: 'system',
         );
-
-        Map<String, dynamic> errorResponse;
-        try {
-          errorResponse = jsonDecode(response.body);
-        } catch (e) {
-          errorResponse = {
-            'success': false,
-            'errorCode': response.statusCode.toString(),
-            'message': response.body,
-          };
-        }
-
-        return errorResponse;
+        return plannings;
+      } else {
+        _logService.addLog(
+          message: 'Error fetching plannings: ${response.body}',
+          level: LogLevel.error,
+          step: ProcessStep.other,
+          origin: 'system',
+        );
+        return [];
       }
-    } catch (e, stackTrace) {
-      developer.log(
-        'API Exception: $e',
-        name: 'ApiClient',
-        error: e,
-        stackTrace: stackTrace,
+    } catch (e) {
+      _logService.addLog(
+        message: 'Exception fetching plannings: $e',
+        level: LogLevel.error,
+        step: ProcessStep.other,
+        origin: 'system',
       );
-
-      return {
-        'success': false,
-        'errorCode': 'network_error',
-        'message': e.toString(),
-      };
+      return [];
     }
   }
 
-  // Convenience methods for different HTTP verbs
-  Future<Map<String, dynamic>> get(String endpoint, {Map<String, String>? headers}) async {
-    return _request(method: 'GET', endpoint: endpoint, headers: headers);
+  @override
+  Future<List<Batch>> fetchBatches() async {
+    try {
+      _logService.addLog(
+        message: 'Fetching batches...',
+        level: LogLevel.info,
+        step: ProcessStep.productBatch,
+        origin: 'system',
+      );
+      final response = await _httpClient.get(Uri.parse('$baseUrl/batches'));
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final List<dynamic> data = jsonDecode(response.body)['data'];
+        final batches = data.map((json) => Batch.fromJson(json)).toList();
+        _logService.addLog(
+          message: 'Fetched ${batches.length} batches',
+          level: LogLevel.success,
+          step: ProcessStep.productBatch,
+          origin: 'system',
+        );
+        return batches;
+      } else {
+        _logService.addLog(
+          message: 'Error fetching batches: ${response.body}',
+          level: LogLevel.error,
+          step: ProcessStep.productBatch,
+          origin: 'system',
+        );
+        return [];
+      }
+    } catch (e) {
+      _logService.addLog(
+        message: 'Exception fetching batches: $e',
+        level: LogLevel.error,
+        step: ProcessStep.productBatch,
+        origin: 'system',
+      );
+      return [];
+    }
   }
 
-  Future<Map<String, dynamic>> post(
-    String endpoint, {
-    Map<String, dynamic>? body,
-    Map<String, String>? headers,
+  @override
+  Future<List<Device>> fetchDevices(String batchId) async {
+    try {
+      _logService.addLog(
+        message: 'Fetching devices for batch $batchId...',
+        level: LogLevel.info,
+        step: ProcessStep.deviceRefresh,
+        origin: 'system',
+      );
+      final response = await _httpClient.get(
+        Uri.parse(
+          '$baseUrl/production-tracking/info-need-upload-firmware/tracking/null/$batchId',
+        ),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final List<dynamic> data = jsonDecode(response.body)['data'];
+        final devices = data.map((json) => Device.fromJson(json)).toList();
+        final uniqueDevices = <String, Device>{};
+        for (var device in devices) {
+          uniqueDevices[device.serial] = device;
+        }
+        _logService.addLog(
+          message: 'Fetched ${uniqueDevices.length} devices for batch $batchId',
+          level: LogLevel.success,
+          step: ProcessStep.deviceRefresh,
+          origin: 'system',
+        );
+        return uniqueDevices.values.toList();
+      } else {
+        _logService.addLog(
+          message: 'Error fetching devices: ${response.body}',
+          level: LogLevel.error,
+          step: ProcessStep.deviceRefresh,
+          origin: 'system',
+        );
+        return [];
+      }
+    } catch (e) {
+      _logService.addLog(
+        message: 'Exception fetching devices: $e',
+        level: LogLevel.error,
+        step: ProcessStep.deviceRefresh,
+        origin: 'system',
+      );
+      return [];
+    }
+  }
+
+  @override
+  Future<List<Firmware>> fetchFirmwares(int templateId) async {
+    try {
+      _logService.addLog(
+        message: 'Fetching firmwares for template $templateId...',
+        level: LogLevel.info,
+        step: ProcessStep.firmwareDownload,
+        origin: 'system',
+      );
+      final response = await _httpClient.get(
+        Uri.parse('$baseUrl/firmware/by-template/$templateId'),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final List<dynamic> data = jsonDecode(response.body)['data'];
+        final firmwares = data.map((json) => Firmware.fromJson(json)).toList();
+        _logService.addLog(
+          message:
+              'Fetched ${firmwares.length} firmwares for template $templateId',
+          level: LogLevel.success,
+          step: ProcessStep.firmwareDownload,
+          origin: 'system',
+        );
+        return firmwares;
+      } else {
+        _logService.addLog(
+          message: 'Error fetching firmwares: ${response.body}',
+          level: LogLevel.error,
+          step: ProcessStep.firmwareDownload,
+          origin: 'system',
+        );
+        return [];
+      }
+    } catch (e) {
+      _logService.addLog(
+        message: 'Exception fetching firmwares: $e',
+        level: LogLevel.error,
+        step: ProcessStep.firmwareDownload,
+        origin: 'system',
+      );
+      return [];
+    }
+  }
+
+  @override
+  Future<String?> fetchFirmwareFile(String firmwareId) async {
+    try {
+      _logService.addLog(
+        message: 'Fetching firmware file for ID $firmwareId...',
+        level: LogLevel.info,
+        step: ProcessStep.firmwareDownload,
+        origin: 'system',
+      );
+      final response = await _httpClient.get(
+        Uri.parse('$baseUrl/firmware/detail/$firmwareId'),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body)['data'];
+        final sourceCode = data['file_path'] as String?;
+        if (sourceCode == null || sourceCode.isEmpty) {
+          _logService.addLog(
+            message: 'Error: Firmware file path is empty',
+            level: LogLevel.error,
+            step: ProcessStep.firmwareDownload,
+            origin: 'system',
+          );
+          return null;
+        }
+        _logService.addLog(
+          message: 'Fetched firmware file for ID $firmwareId',
+          level: LogLevel.success,
+          step: ProcessStep.firmwareDownload,
+          origin: 'system',
+        );
+        return sourceCode;
+      } else {
+        _logService.addLog(
+          message: 'Error fetching firmware file: ${response.body}',
+          level: LogLevel.error,
+          step: ProcessStep.firmwareDownload,
+          origin: 'system',
+        );
+        return null;
+      }
+    } catch (e) {
+      _logService.addLog(
+        message: 'Exception fetching firmware file: $e',
+        level: LogLevel.error,
+        step: ProcessStep.firmwareDownload,
+        origin: 'system',
+      );
+      return null;
+    }
+  }
+
+  @override
+  Future<void> updateDeviceStatus(
+    String deviceId,
+    String status, {
+    String? reason,
   }) async {
-    return _request(method: 'POST', endpoint: endpoint, body: body, headers: headers);
+    try {
+      _logService.addLog(
+        message: 'Updating device $deviceId status to $status...',
+        level: LogLevel.info,
+        step: ProcessStep.deviceStatus,
+        origin: 'system',
+      );
+      final response = await _httpClient.patch(
+        Uri.parse('$baseUrl/devices/$deviceId'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'status': status, 'reason': reason}),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        _logService.addLog(
+          message: 'Updated device $deviceId status to $status',
+          level: LogLevel.success,
+          step: ProcessStep.deviceStatus,
+          origin: 'system',
+        );
+      } else {
+        _logService.addLog(
+          message: 'Error updating device status: ${response.body}',
+          level: LogLevel.error,
+          step: ProcessStep.deviceStatus,
+          origin: 'system',
+        );
+      }
+    } catch (e) {
+      _logService.addLog(
+        message: 'Exception updating device status: $e',
+        level: LogLevel.error,
+        step: ProcessStep.deviceStatus,
+        origin: 'system',
+      );
+    }
   }
 
-  Future<Map<String, dynamic>> patch(
-    String endpoint, {
-    Map<String, dynamic>? body,
-    Map<String, String>? headers,
-  }) async {
-    return _request(method: 'PATCH', endpoint: endpoint, body: body, headers: headers);
-  }
-
-  Future<Map<String, dynamic>> put(
-    String endpoint, {
-    Map<String, dynamic>? body,
-    Map<String, String>? headers,
-  }) async {
-    return _request(method: 'PUT', endpoint: endpoint, body: body, headers: headers);
-  }
-
-  Future<Map<String, dynamic>> delete(
-    String endpoint, {
-    Map<String, String>? headers,
-  }) async {
-    return _request(method: 'DELETE', endpoint: endpoint, headers: headers);
-  }
-
-  /// Fetch firmware list by template ID
-  Future<Map<String, dynamic>> fetchFirmwareByTemplate(int templateId) async {
-    return get('/firmware/by-template/$templateId');
-  }
-
-  // Close the HTTP client when done
   void dispose() {
     _httpClient.close();
   }

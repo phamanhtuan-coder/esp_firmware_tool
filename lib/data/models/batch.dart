@@ -42,4 +42,3 @@ class Batch {
   @override
   int get hashCode => id.hashCode;
 }
-

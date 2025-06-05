@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:smart_net_firmware_loader/utils/app_colors.dart';
-import 'package:smart_net_firmware_loader/utils/app_routes.dart';
+import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
+import 'package:smart_net_firmware_loader/core/config/app_routes.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -10,7 +10,8 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
@@ -39,10 +40,12 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.2),
       end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: const Interval(0.4, 1.0, curve: Curves.easeOutCubic),
-    ));
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.4, 1.0, curve: Curves.easeOutCubic),
+      ),
+    );
 
     _controller.forward();
 
@@ -68,10 +71,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              AppColors.primary.withOpacity(0.1),
-              AppColors.background,
-            ],
+            colors: [AppColors.primary.withOpacity(0.1), AppColors.background],
           ),
         ),
         child: Center(
@@ -98,6 +98,14 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   child: Image.asset(
                     'assets/app_icon.png',
                     fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      debugPrint('Error loading app icon: $error');
+                      return const Icon(
+                        Icons.error_outline,
+                        size: 60,
+                        color: AppColors.primary,
+                      );
+                    },
                   ),
                 ),
               ),
@@ -122,7 +130,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 child: FadeTransition(
                   opacity: _fadeAnimation,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.primary.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(15),
@@ -145,7 +156,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   width: 40,
                   height: 40,
                   child: CircularProgressIndicator(
-                    valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      AppColors.primary,
+                    ),
                     strokeWidth: 3,
                     backgroundColor: AppColors.primary.withOpacity(0.1),
                   ),

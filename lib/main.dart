@@ -1,47 +1,49 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:smart_net_firmware_loader/di/service_locator.dart';
-import 'package:smart_net_firmware_loader/data/services/arduino_cli_service.dart';
-import 'package:smart_net_firmware_loader/presentation/blocs/log/log_bloc.dart';
-import 'package:smart_net_firmware_loader/presentation/views/home_view.dart';
-import 'package:smart_net_firmware_loader/utils/app_routes.dart';
-import 'package:smart_net_firmware_loader/utils/app_theme.dart';
-import 'presentation/views/login_view.dart';
-import 'presentation/views/splash_screen.dart';
+import 'package:smart_net_firmware_loader/core/config/app_routes.dart';
+import 'package:smart_net_firmware_loader/core/config/app_theme.dart';
+import 'package:smart_net_firmware_loader/data/services/api_client.dart';
+import 'package:smart_net_firmware_loader/data/services/arduino_service.dart';
+import 'package:smart_net_firmware_loader/data/services/bluetooth_service.dart';
+import 'package:smart_net_firmware_loader/data/services/log_service.dart';
+import 'package:smart_net_firmware_loader/data/services/serial_monitor_service.dart';
+import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
+import 'package:smart_net_firmware_loader/domain/blocs/logging_bloc.dart';
+import 'package:get_it/get_it.dart';
 import 'package:window_manager/window_manager.dart';
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+void setupServiceLocator() {
+  final getIt = GetIt.instance;
+  getIt.registerSingleton<LogService>(LogService());
+  getIt.registerSingleton<ApiService>(ApiService());
+  getIt.registerSingleton<ArduinoService>(ArduinoService());
+  getIt.registerSingleton<BluetoothService>(BluetoothService());
+  getIt.registerSingleton<SerialMonitorService>(SerialMonitorService());
+  getIt.registerFactory<HomeBloc>(() => HomeBloc());
+  getIt.registerFactory<LoggingBloc>(() => LoggingBloc());
+}
 
-  // Khởi tạo service locator
-  setupServiceLocator();
-
-  // Khởi tạo Arduino CLI trước để đảm bảo hoạt động khi cần
-  print('Initializing Arduino CLI during app startup');
-  try {
-    final arduinoCliService = serviceLocator<ArduinoCliService>();
-    await arduinoCliService.init();
-    print('Arduino CLI initialized successfully');
-  } catch (e) {
-    print('Error initializing Arduino CLI: $e');
-    // Vẫn tiếp tục chạy ứng dụng, sẽ thử lại khi cần
-  }
-
-  // Khởi tạo window manager
+Future<void> setupWindow() async {
   await windowManager.ensureInitialized();
-  WindowOptions windowOptions = const WindowOptions(
-    title: 'Firmware Deployment Tool',
-    titleBarStyle: TitleBarStyle.normal, // Preserve standard window controls
-    size: Size(1600, 900), // Initial size, will be maximized later
-    center: true, // Make sure window is centered on screen
+  const windowOptions = WindowOptions(
+    size: Size(1280, 720), // Default window size
+    minimumSize: Size(800, 600), // Minimum window size
+    center: true, // Center window on screen
+    title: 'SmartNet Firmware Loader',
+    titleBarStyle: TitleBarStyle.normal,
   );
   await windowManager.waitUntilReadyToShow(windowOptions, () async {
-    await windowManager.maximize(); // Start in maximized mode
     await windowManager.show();
     await windowManager.focus();
-    await windowManager.setAlignment(Alignment.center);
   });
+}
 
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await setupWindow(); // Initialize window settings
+  setupServiceLocator();
+  final arduinoService = GetIt.instance<ArduinoService>();
+  await arduinoService.initialize();
   runApp(const MyApp());
 }
 
@@ -52,17 +54,18 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider<LogBloc>(create: (context) => serviceLocator<LogBloc>()..add(LoadInitialDataEvent())),
+        BlocProvider(
+          create: (_) => GetIt.instance<HomeBloc>()..add(LoadInitialDataEvent()),
+        ),
+        BlocProvider(create: (_) => GetIt.instance<LoggingBloc>()),
       ],
       child: MaterialApp(
         title: 'SmartNet Firmware Loader',
         theme: AppTheme.lightTheme,
-        home: const SplashScreen(),
-        routes: {
-          AppRoutes.login: (context) => const LoginView(),
-          AppRoutes.home: (context) => const HomeView(),
-        },
-        debugShowCheckedModeBanner: false,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: ThemeMode.system,
+        initialRoute: AppRoutes.splash,
+        routes: AppRoutes.routes,
       ),
     );
   }

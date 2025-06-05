@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:smart_net_firmware_loader/utils/app_colors.dart';
+import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
 
 enum DeviceStatus {
   connected,

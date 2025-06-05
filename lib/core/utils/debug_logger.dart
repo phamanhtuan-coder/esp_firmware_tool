@@ -15,7 +15,8 @@ class DebugLogger {
   static void d(String message, {String? className, String? methodName}) {
     if (_debugMode) {
       final now = DateTime.now();
-      final timeStr = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}.${now.millisecond.toString().padLeft(3, '0')}";
+      final timeStr =
+          "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}.${now.millisecond.toString().padLeft(3, '0')}";
 
       String location = '';
       if (className != null) {
@@ -57,7 +58,12 @@ class DebugLogger {
   }
 
   /// Print network request details
-  static void http(String method, String url, {dynamic body, dynamic response}) {
+  static void http(
+    String method,
+    String url, {
+    dynamic body,
+    dynamic response,
+  }) {
     if (_debugMode) {
       debugPrint('📡 HTTP $method: $url');
       if (body != null) {

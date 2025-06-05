@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 class AppColors {
   // Primary colors
   static const Color primary = Color(0xFF1976D2);
+  static const Color secondary = Color(0xFF26C6DA);
   static const Color accent = Color(0xFF42A5F5);
   static const Color background = Color(0xFFF5F5F5);
   static const Color text = Color(0xFF212121);
@@ -36,11 +37,17 @@ class AppColors {
   static const Color scanQr = Color(0xFF9C27B0); // Purple
 
   // Dark theme colors
-  static const Color darkBackground = Color(0xFF121212); // Material dark background
+  static const Color darkBackground = Color(
+    0xFF121212,
+  ); // Material dark background
   static const Color darkSurface = Color(0xFF1E1E1E); // Dark surface color
-  static const Color darkCardBackground = Color(0xFF2D2D2D); // Slightly lighter than surface
+  static const Color darkCardBackground = Color(
+    0xFF2D2D2D,
+  ); // Slightly lighter than surface
   static const Color darkDivider = Color(0xFF3D3D3D);
-  static const Color darkHeaderBackground = Color(0xFF0D47A1); // Deeper blue for headers in dark mode
+  static const Color darkHeaderBackground = Color(
+    0xFF0D47A1,
+  ); // Deeper blue for headers in dark mode
   static const Color darkTabBackground = Color(0xFF333333);
   static const Color darkPanelBackground = Color(0xFF252525);
   static const Color darkTextPrimary = Color(0xFFE0E0E0);

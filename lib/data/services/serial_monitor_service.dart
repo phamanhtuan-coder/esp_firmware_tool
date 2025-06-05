@@ -1,163 +1,143 @@
 import 'dart:async';
-import 'dart:io' as io;
-import 'package:cli_util/cli_logging.dart';
-import 'package:process_run/shell.dart';
+import 'dart:convert';
+import 'package:flutter_libserialport/flutter_libserialport.dart';
+import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
+import 'package:smart_net_firmware_loader/data/services/log_service.dart';
+import 'package:get_it/get_it.dart';
 
 class SerialMonitorService {
-  final _controller = StreamController<String>.broadcast();
-  io.Process? _process;
-  bool _isRunning = false;
-  Logger? _logger;
-  String? _currentPort;
+  final LogService _logService = GetIt.instance<LogService>();
+  SerialPort? _serialPort;
+  StreamController<String>? _outputController;
+  StreamSubscription<List<int>>? _serialSubscription;
 
-  Stream<String> get outputStream => _controller.stream;
-  bool get isRunning => _isRunning;
+  Stream<String> get outputStream =>
+      _outputController?.stream ?? Stream.empty();
 
-  SerialMonitorService() {
-    _logger = Logger.standard();
-  }
-
-  Future<void> startMonitor(String port, int baudRate) async {
-    // Check if already running on the same port with same baud rate
-    if (_isRunning && _currentPort == port) {
-      _logger?.trace('Monitor already running on port $port');
-      return;
-    }
-
-    // Stop any existing monitor before starting new one
-    await stopMonitor();
-
-    _isRunning = true;
-    String buffer = '';
-    _currentPort = port;
-
+  Future<bool> startMonitor(String port, int baudRate) async {
     try {
-      final shell = Shell();
-      final command = 'arduino-cli monitor --port $port --config baudrate=$baudRate';
+      stopMonitor();
 
-      _logger?.trace('Starting monitor on $port at $baudRate baud...');
-
-      // Use a flag to prevent multiple process starts
-      bool processStarted = false;
-
-      shell.run(command, onProcess: (process) {
-        if (processStarted) {
-          _logger?.stderr('Process already started for port $port');
-          return;
-        }
-        processStarted = true;
-        _process = process;
-
-        // Handle stdout with improved line buffering
-        process.stdout.listen((data) {
-          final output = String.fromCharCodes(data);
-
-          if (output.contains('\n')) {
-            // Process complete lines
-            final lines = (buffer + output).split('\n');
-            // Last element might be incomplete
-            buffer = lines.removeLast();
-
-            // Send complete lines
-            for (final line in lines) {
-              if (line.trim().isNotEmpty) {
-                _controller.add(line.trim());
-                _logger?.stdout(line.trim());
-              }
-            }
-          } else {
-            // Add to buffer for incomplete lines
-            buffer += output;
-
-            // If buffer contains a complete message but no newline
-            if (buffer.length > 80 || buffer.contains('.') || buffer.endsWith('}')) {
-              _controller.add(buffer.trim());
-              _logger?.stdout(buffer.trim());
-              buffer = '';
-            }
-          }
-        });
-
-        // Handle stderr
-        process.stderr.listen((data) {
-          final error = String.fromCharCodes(data).trim();
-          if (error.isNotEmpty) {
-            _controller.add('Error: $error');
-            _logger?.stderr(error);
-          }
-        });
-      }).then((_) {
-        _isRunning = false;
-        _process = null;
-        _currentPort = null;
-        _controller.add('Monitor stopped');
-        _logger?.trace('Monitor stopped');
-      }).catchError((e) {
-        _controller.add('Error: $e');
-        _logger?.stderr('Error: $e');
-        _isRunning = false;
-        _process = null;
-        _currentPort = null;
-      });
-
-      _logger?.trace('Started serial monitor on port $port at $baudRate baud');
-    } catch (e) {
-      _controller.add('Failed to start monitor: $e');
-      _logger?.stderr('Error starting serial monitor: $e');
-      _isRunning = false;
-      _process = null;
-      _currentPort = null;
-    }
-  }
-
-  Future<void> stopMonitor() async {
-    if (!_isRunning) return;
-
-    _isRunning = false;
-    try {
-      if (_process != null) {
-        _process!.kill(io.ProcessSignal.sigterm);
-        await _process!.exitCode.timeout(Duration(seconds: 3), onTimeout: () {
-          _process!.kill(io.ProcessSignal.sigkill);
-          return -1;
-        });
+      // Verify port exists
+      if (!SerialPort.availablePorts.contains(port)) {
+        _logService.addLog(
+          message: 'Port $port not found',
+          level: LogLevel.error,
+          step: ProcessStep.serialMonitor,
+          origin: 'serial-monitor',
+        );
+        return false;
       }
 
-      if (io.Platform.isWindows && _currentPort != null) {
-        try {
-          final shell = Shell();
-          await shell.run('mode $_currentPort BAUD=9600 PARITY=n DATA=8 STOP=1');
-          await shell.run('taskkill /F /IM arduino-cli.exe');
-        } catch (e) {
-          _logger?.stderr('Error resetting port: $e');
-        }
+      _outputController = StreamController<String>.broadcast();
+      _serialPort = SerialPort(port);
+
+      // Configure port
+      final config =
+          SerialPortConfig()
+            ..baudRate = baudRate
+            ..bits = 8
+            ..parity = SerialPortParity.none
+            ..stopBits = 1
+            ..rts = 0
+            ..cts = 0
+            ..dsr = 0
+            ..dtr = 0;
+
+      _serialPort!.config = config;
+
+      // Open port
+      if (!_serialPort!.openReadWrite()) {
+        _logService.addLog(
+          message: 'Failed to open port $port',
+          level: LogLevel.error,
+          step: ProcessStep.serialMonitor,
+          origin: 'serial-monitor',
+        );
+        return false;
       }
 
-      _logger?.trace('Stopped serial monitor');
+      // Listen to incoming data using SerialPort reader
+      final reader = SerialPortReader(_serialPort!);
+      _serialSubscription = reader.stream.listen(
+        (data) {
+          final message = utf8.decode(data, allowMalformed: true).trim();
+          if (message.isNotEmpty) {
+            _outputController?.add(message);
+            _logService.addLog(
+              message: message,
+              level: LogLevel.serialOutput,
+              step: ProcessStep.serialMonitor,
+              origin: 'serial-monitor',
+            );
+          }
+        },
+        onError: (e) {
+          _logService.addLog(
+            message: 'Serial port error: $e',
+            level: LogLevel.error,
+            step: ProcessStep.serialMonitor,
+            origin: 'serial-monitor',
+          );
+          _outputController?.addError(e);
+        },
+      );
+
+      _logService.addLog(
+        message: 'Started serial monitor on $port at $baudRate baud',
+        level: LogLevel.success,
+        step: ProcessStep.serialMonitor,
+        origin: 'serial-monitor',
+      );
+      return true;
     } catch (e) {
-      _logger?.stderr('Error stopping serial monitor: $e');
-    } finally {
-      _process = null;
-      _currentPort = null;
+      _logService.addLog(
+        message: 'Failed to start serial monitor: $e',
+        level: LogLevel.error,
+        step: ProcessStep.serialMonitor,
+        origin: 'serial-monitor',
+      );
+      return false;
     }
   }
-  Future<void> sendCommand(String command) async {
-    if (!_isRunning || _process == null) {
-      _controller.add('Cannot send command: monitor not running');
-      return;
-    }
 
-    try {
-      _process?.stdin.writeln(command);
-      _logger?.trace('Sent command: $command');
-    } catch (e) {
-      _controller.add('Failed to send command: $e');
-      _logger?.stderr('Error sending command: $e');
+  void sendCommand(String command) {
+    if (_serialPort != null && _serialPort!.isOpen) {
+      _serialPort!.write(utf8.encode('$command\r\n'));
+      _logService.addLog(
+        message: 'Sent command: $command',
+        level: LogLevel.input,
+        step: ProcessStep.serialMonitor,
+        origin: 'user-input',
+      );
+    } else {
+      _logService.addLog(
+        message: 'Cannot send command: Serial port not open',
+        level: LogLevel.error,
+        step: ProcessStep.serialMonitor,
+        origin: 'serial-monitor',
+      );
     }
   }
 
-  Future<void> dispose() async {
-    await stopMonitor();
-    await _controller.close();
+  void stopMonitor() {
+    _serialSubscription?.cancel();
+    if (_serialPort != null && _serialPort!.isOpen) {
+      _serialPort!.close();
+    }
+    _outputController?.close();
+    _serialPort = null;
+    _outputController = null;
+    _serialSubscription = null;
+    _logService.addLog(
+      message: 'Serial monitor stopped',
+      level: LogLevel.info,
+      step: ProcessStep.serialMonitor,
+      origin: 'serial-monitor',
+    );
+  }
+
+  void dispose() {
+    stopMonitor();
   }
 }

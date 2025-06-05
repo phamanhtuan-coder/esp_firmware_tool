@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:smart_net_firmware_loader/utils/app_colors.dart';
+import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
 
 class WarningDialog extends StatelessWidget {
   final bool isDarkTheme;
@@ -52,10 +52,7 @@ class WarningDialog extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    TextButton(
-                      onPressed: onCancel,
-                      child: const Text('Hủy'),
-                    ),
+                    TextButton(onPressed: onCancel, child: const Text('Hủy')),
                     ElevatedButton(
                       onPressed: onContinue,
                       style: ElevatedButton.styleFrom(

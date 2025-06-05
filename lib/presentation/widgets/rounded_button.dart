@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:smart_net_firmware_loader/utils/app_colors.dart';
+import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
 
 class RoundedButton extends StatelessWidget {
   final String label;
@@ -25,30 +25,36 @@ class RoundedButton extends StatelessWidget {
       onPressed: enabled ? onPressed : null,
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
       ),
-      child: isLoading
-        ? const SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(
-              color: AppColors.background,
-              strokeWidth: 2,
-            ),
-          )
-        : Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (icon != null) ...[
-                Icon(icon, color: AppColors.background, size: 20),
-                const SizedBox(width: 8),
-              ],
-              Text(label, style: const TextStyle(fontSize: 16, color: AppColors.background, fontWeight: FontWeight.bold)),
-            ],
-          ),
+      child:
+          isLoading
+              ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  color: AppColors.background,
+                  strokeWidth: 2,
+                ),
+              )
+              : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, color: AppColors.background, size: 20),
+                    const SizedBox(width: 8),
+                  ],
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: AppColors.background,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
     );
   }
 }
