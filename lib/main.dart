@@ -12,6 +12,8 @@ import 'package:smart_net_firmware_loader/domain/blocs/logging_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:window_manager/window_manager.dart';
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void setupServiceLocator() {
   final getIt = GetIt.instance;
   getIt.registerSingleton<LogService>(LogService());
@@ -51,6 +53,9 @@ void main() async {
   await windowManager.setSkipTaskbar(false);
   await windowManager.setTitle('SmartNet Firmware Loader');
 
+  // Add close handler
+  windowManager.addListener(CloseWindowListener());
+
   // Register dependencies
   setupServiceLocator();
 
@@ -58,11 +63,44 @@ void main() async {
   runApp(const MyApp());
 }
 
+Future<bool> showCloseConfirmationDialog() async {
+  return await showDialog(
+    context: navigatorKey.currentContext!,
+    builder: (context) => AlertDialog(
+      title: const Text('Thoát ứng dụng?'),
+      content: const Text('Bạn có muốn thoát ứng dụng?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Hủy'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Thoát'),
+        ),
+      ],
+    ),
+  ) ?? false;
+}
+
+class CloseWindowListener extends WindowListener {
+  @override
+  void onWindowClose() async {
+    bool isPreventClose = await windowManager.isPreventClose();
+    if (isPreventClose) {
+      bool shouldClose = await showCloseConfirmationDialog();
+      if (shouldClose) {
+        await windowManager.destroy();
+      }
+    }
+  }
+}
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
+
     return MultiBlocProvider(
       providers: [
         BlocProvider<HomeBloc>(
@@ -73,6 +111,7 @@ class MyApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
+        navigatorKey: navigatorKey,
         debugShowCheckedModeBanner: false,
         title: 'SmartNet Firmware Loader',
         theme: AppTheme.lightTheme,
@@ -81,5 +120,14 @@ class MyApp extends StatelessWidget {
         onGenerateRoute: AppRoutes.onGenerateRoute,
       ),
     );
+
+
   }
+
+
 }
+
+
+
+
+

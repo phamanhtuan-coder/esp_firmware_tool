@@ -567,25 +567,162 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                 const SizedBox(height: 16),
 
                 // Row 3: Serial input and QR scan
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Số Serial',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color:
+                    widget.isDarkTheme
+                        ? AppColors.darkPanelBackground
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              TextField(
-                                controller: widget.serialController,
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'Số Serial',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  TextField(
+                                    controller: widget.serialController,
+                                    decoration: InputDecoration(
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: const BorderSide(
+                                          color: AppColors.borderColor,
+                                        ),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: const BorderSide(
+                                          color: AppColors.borderColor,
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: const BorderSide(
+                                          color: AppColors.primary,
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 12,
+                                      ),
+                                      fillColor: AppColors.componentBackground,
+                                      filled: true,
+                                      errorText: _serialErrorText,
+                                      suffixIcon:
+                                          _serialSuccessText != null
+                                              ? const Icon(
+                                                Icons.check_circle,
+                                                color: AppColors.success,
+                                              )
+                                              : null,
+                                      hintText: 'Nhập số serial...',
+                                      hintStyle: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                    ),
+                                    style: const TextStyle(
+                                      color: Colors.black87,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    onChanged: _validateSerial,
+                                  ),
+                                  if (_serialSuccessText != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 8),
+                                      child: Text(
+                                        _serialSuccessText!,
+                                        style: const TextStyle(
+                                          color: AppColors.success,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton.icon(
+                              onPressed: _handleQrScan,
+                              icon: const Icon(Icons.qr_code_scanner),
+                              label: const Text('Quét QR Code'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.scanQr,
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Row 4: USB port selection and refresh
+                Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color:
+                    widget.isDarkTheme
+                        ? AppColors.darkPanelBackground
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'Cổng USB',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: widget.selectedPort,
                                 decoration: InputDecoration(
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(8),
@@ -612,145 +749,52 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                                   ),
                                   fillColor: AppColors.componentBackground,
                                   filled: true,
-                                  errorText: _serialErrorText,
-                                  suffixIcon:
-                                      _serialSuccessText != null
-                                          ? const Icon(
-                                            Icons.check_circle,
-                                            color: AppColors.success,
-                                          )
-                                          : null,
-                                  hintText: 'Nhập số serial...',
-                                  hintStyle: TextStyle(
+                                ),
+                                icon: const Icon(
+                                  Icons.arrow_drop_down,
+                                  color: Colors.black87,
+                                ),
+                                dropdownColor: AppColors.componentBackground,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.black87,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                items:
+                                    widget.availablePorts.map((port) {
+                                      return DropdownMenuItem(
+                                        value: port,
+                                        child: Text(port),
+                                      );
+                                    }).toList(),
+                                onChanged: widget.onUsbPortSelected,
+                                hint: Text(
+                                  'Chọn cổng COM',
+                                  style: TextStyle(
                                     color: Colors.grey[600],
                                     fontWeight: FontWeight.w400,
                                   ),
                                 ),
-                                style: const TextStyle(
-                                  color: Colors.black87,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                onChanged: _validateSerial,
                               ),
-                              if (_serialSuccessText != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Text(
-                                    _serialSuccessText!,
-                                    style: const TextStyle(
-                                      color: AppColors.success,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton.icon(
+                              onPressed: widget.onUsbPortRefresh,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Làm mới cổng'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor:
+                                    widget.isDarkTheme
+                                        ? AppColors.accent
+                                        : AppColors.secondary,
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        ElevatedButton.icon(
-                          onPressed: _handleQrScan,
-                          icon: const Icon(Icons.qr_code_scanner),
-                          label: const Text('Quét QR Code'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.scanQr,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-
-                // Row 4: USB port selection and refresh
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Cổng USB',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: widget.selectedPort,
-                            decoration: InputDecoration(
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: const BorderSide(
-                                  color: AppColors.borderColor,
-                                ),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: const BorderSide(
-                                  color: AppColors.borderColor,
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: const BorderSide(
-                                  color: AppColors.primary,
-                                  width: 1.5,
-                                ),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
-                              ),
-                              fillColor: AppColors.componentBackground,
-                              filled: true,
-                            ),
-                            icon: const Icon(
-                              Icons.arrow_drop_down,
-                              color: Colors.black87,
-                            ),
-                            dropdownColor: AppColors.componentBackground,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.black87,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            items:
-                                widget.availablePorts.map((port) {
-                                  return DropdownMenuItem(
-                                    value: port,
-                                    child: Text(port),
-                                  );
-                                }).toList(),
-                            onChanged: widget.onUsbPortSelected,
-                            hint: Text(
-                              'Chọn cổng COM',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton.icon(
-                          onPressed: widget.onUsbPortRefresh,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Làm mới cổng'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                widget.isDarkTheme
-                                    ? AppColors.accent
-                                    : AppColors.secondary,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
 
                 const SizedBox(height: 16),
