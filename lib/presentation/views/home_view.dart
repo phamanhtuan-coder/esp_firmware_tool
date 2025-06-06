@@ -383,6 +383,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                         context.read<HomeBloc>().add(SelectBatchEvent(value));
                                       },
                                       isDarkTheme: _isDarkTheme,
+                                      isLoading: state.isLoading,
                                     ),
                                     if (state.devices.isNotEmpty)
                                       Expanded(

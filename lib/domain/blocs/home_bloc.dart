@@ -76,6 +76,7 @@ class HomeState {
   final String? selectedDeviceId;
   final String? selectedDeviceType;
   final bool canFlash;
+  final bool isLoading;
 
   HomeState({
     this.plannings = const [],
@@ -94,6 +95,7 @@ class HomeState {
     this.selectedDeviceId,
     this.selectedDeviceType,
     this.canFlash = false,
+    this.isLoading = false,
   });
 
   HomeState copyWith({
@@ -113,6 +115,7 @@ class HomeState {
     String? selectedDeviceId,
     String? selectedDeviceType,
     bool? canFlash,
+    bool? isLoading,
   }) {
     return HomeState(
       plannings: plannings ?? this.plannings,
@@ -131,6 +134,7 @@ class HomeState {
       selectedDeviceId: selectedDeviceId ?? this.selectedDeviceId,
       selectedDeviceType: selectedDeviceType ?? this.selectedDeviceType,
       canFlash: canFlash ?? this.canFlash,
+      isLoading: isLoading ?? this.isLoading,
     );
   }
 }
@@ -159,27 +163,76 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     LoadInitialDataEvent event,
     Emitter<HomeState> emit,
   ) async {
-    final plannings = await _apiService.fetchPlannings();
-    final ports = await _arduinoService.getAvailablePorts();
-    emit(state.copyWith(plannings: plannings, availablePorts: ports));
+    try {
+      emit(state.copyWith(isLoading: true));
+
+      print('Fetching initial plannings...');
+      final plannings = await _apiService.fetchPlannings();
+      print('Fetched ${plannings.length} plannings');
+
+      final ports = await _arduinoService.getAvailablePorts();
+      print('Fetched ${ports.length} available ports');
+
+      emit(state.copyWith(
+        plannings: plannings,
+        availablePorts: ports,
+        isLoading: false,
+      ));
+    } catch (e) {
+      print('Error loading initial data: $e');
+      emit(state.copyWith(
+        plannings: [],
+        availablePorts: [],
+        isLoading: false,
+      ));
+    }
   }
 
   Future<void> _onSelectPlanning(
     SelectPlanningEvent event,
     Emitter<HomeState> emit,
   ) async {
-    emit(state.copyWith(
-      selectedPlanningId: event.planningId,
-      selectedBatchId: null,
-      devices: [],
-      firmwares: [],
-    ));
+    try {
+      print('Planning selected: ${event.planningId}');
+      emit(state.copyWith(isLoading: true));
 
-    if (event.planningId != null) {
-      final batches = await _apiService.fetchBatches();
-      // Filter batches for the selected planning
-      final planningBatches = batches.where((b) => b.planningId == event.planningId).toList();
-      emit(state.copyWith(batches: planningBatches));
+      // Reset batch-related state
+      emit(state.copyWith(
+        selectedPlanningId: event.planningId,
+        selectedBatchId: null,
+        batches: [], // Clear existing batches
+        devices: [],
+        firmwares: [],
+      ));
+
+      if (event.planningId != null) {
+        // Fetch all batches from API
+        print('Fetching batches for planning ${event.planningId}...');
+        final allBatches = await _apiService.fetchBatches();
+        print('Fetched ${allBatches.length} total batches');
+
+        // Filter batches for selected planning
+        final planningBatches = allBatches
+            .where((b) => b.planningId == event.planningId)
+            .toList();
+        print('Filtered ${planningBatches.length} batches for planning ${event.planningId}');
+
+        emit(state.copyWith(
+          batches: planningBatches,
+          isLoading: false
+        ));
+      } else {
+        emit(state.copyWith(isLoading: false));
+      }
+    } catch (e) {
+      print('Error selecting planning: $e');
+      emit(state.copyWith(
+        batches: [],
+        selectedBatchId: null,
+        devices: [],
+        firmwares: [],
+        isLoading: false,
+      ));
     }
   }
 
@@ -187,20 +240,50 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     SelectBatchEvent event,
     Emitter<HomeState> emit,
   ) async {
-    emit(state.copyWith(selectedBatchId: event.batchId));
-    if (event.batchId != null) {
-      final batch = state.batches.firstWhere((b) => b.id == event.batchId);
-      final devices = await _apiService.fetchDevices(event.batchId!);
-      final firmwares = await _apiService.fetchFirmwares(
-        int.parse(batch.templateId),
-      );
-      emit(
-        state.copyWith(
+    try {
+      print('Batch selected: ${event.batchId}');
+      emit(state.copyWith(isLoading: true));
+
+      // Reset device and firmware state
+      emit(state.copyWith(
+        selectedBatchId: event.batchId,
+        devices: [],
+        firmwares: [],
+      ));
+
+      if (event.batchId != null) {
+        final batch = state.batches.firstWhere((b) => b.id == event.batchId);
+        print('Selected batch template ID: ${batch.templateId}');
+
+        // Fetch devices and firmwares in parallel
+        print('Fetching devices and firmwares...');
+        final devicesAndFirmwaresFuture = Future.wait([
+          _apiService.fetchDevices(event.batchId as String),
+          _apiService.fetchFirmwares(int.parse(batch.templateId)),
+        ]);
+
+        final results = await devicesAndFirmwaresFuture;
+        final devices = results[0] as List<Device>;
+        final firmwares = results[1] as List<Firmware>;
+
+        print('Fetched ${devices.length} devices and ${firmwares.length} firmwares');
+
+        emit(state.copyWith(
           devices: devices,
           firmwares: firmwares,
           selectedFirmwareId: batch.firmwareId?.toString(),
-        ),
-      );
+          isLoading: false,
+        ));
+      } else {
+        emit(state.copyWith(isLoading: false));
+      }
+    } catch (e) {
+      print('Error selecting batch: $e');
+      emit(state.copyWith(
+        devices: [],
+        firmwares: [],
+        isLoading: false,
+      ));
     }
   }
 
@@ -208,9 +291,14 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     RefreshBatchDevicesEvent event,
     Emitter<HomeState> emit,
   ) async {
-    if (event.batchId.isNotEmpty) {
-      final devices = await _apiService.fetchDevices(event.batchId);
-      emit(state.copyWith(devices: devices));
+    try {
+      if (event.batchId.isNotEmpty) {
+        // Fetch updated devices list
+        final devices = await _apiService.fetchDevices(event.batchId);
+        emit(state.copyWith(devices: devices));
+      }
+    } catch (e) {
+      print('Error refreshing devices: $e');
     }
   }
 
@@ -266,10 +354,17 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     UpdateDeviceStatusEvent event,
     Emitter<HomeState> emit,
   ) async {
-    await _apiService.updateDeviceStatus(event.deviceId, event.status);
-    if (state.selectedBatchId != null) {
-      final devices = await _apiService.fetchDevices(state.selectedBatchId!);
-      emit(state.copyWith(devices: devices));
+    try {
+      // Update device status via API
+      await _apiService.updateDeviceStatus(event.deviceId, event.status);
+
+      if (state.selectedBatchId != null) {
+        // Refresh devices list after status update
+        final devices = await _apiService.fetchDevices(state.selectedBatchId!);
+        emit(state.copyWith(devices: devices));
+      }
+    } catch (e) {
+      print('Error updating device status: $e');
     }
   }
 
