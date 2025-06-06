@@ -70,12 +70,10 @@ class ConsoleLineDisplay {
 }
 
 class ConsoleTerminalWidget extends StatefulWidget {
-  final ScrollController scrollController;
   final bool isActiveTab;
 
   const ConsoleTerminalWidget({
     super.key,
-    required this.scrollController,
     this.isActiveTab = true,
   });
 
@@ -86,19 +84,41 @@ class ConsoleTerminalWidget extends StatefulWidget {
 class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
   final List<ConsoleLineDisplay> _displayLines = [];
   bool _isAutoScrollEnabled = true;
+  final ScrollController _scrollController = ScrollController();
 
   void _scrollToBottom() {
-    if (_isAutoScrollEnabled && widget.scrollController.hasClients) {
+    if (_isAutoScrollEnabled && _scrollController.hasClients) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          widget.scrollController.animateTo(
-            widget.scrollController.position.maxScrollExtent,
+        if (mounted && _scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut,
           );
         }
       });
     }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen for scroll events
+    _scrollController.addListener(() {
+      if (_scrollController.hasClients) {
+        final maxScroll = _scrollController.position.maxScrollExtent;
+        final currentScroll = _scrollController.position.pixels;
+        setState(() {
+          _isAutoScrollEnabled = (maxScroll - currentScroll) <= 50;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -124,9 +144,9 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
                   ),
                   child: Scrollbar(
                     thumbVisibility: true,
-                    controller: widget.scrollController,
+                    controller: _scrollController,
                     child: SingleChildScrollView(
-                      controller: widget.scrollController,
+                      controller: _scrollController,
                       child: Padding(
                         padding: const EdgeInsets.all(8.0),
                         child: BlocBuilder<LoggingBloc, LoggingState>(
@@ -185,69 +205,60 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
                                     ],
                                   ),
                                 )
-                                : SingleChildScrollView(
-                                  controller: widget.scrollController,
-                                  child: SizedBox(
-                                    width: double.infinity,
-                                    child: SelectableText.rich(
-                                      TextSpan(
-                                        children:
-                                            _displayLines.map((line) {
-                                              final icon = line.getIcon();
-                                              return TextSpan(
-                                                children: [
-                                                  if (icon != null)
-                                                    WidgetSpan(
-                                                      alignment:
-                                                          PlaceholderAlignment.middle,
-                                                      child: Padding(
-                                                        padding: const EdgeInsets.only(
-                                                          right: 8,
-                                                        ),
-                                                        child: Icon(
-                                                          icon,
-                                                          size: 14,
-                                                          color: line.getColor(
-                                                            isDarkTheme,
-                                                          ),
+                                : SelectableText.rich(
+                                    TextSpan(
+                                      children:
+                                          _displayLines.map((line) {
+                                            final icon = line.getIcon();
+                                            return TextSpan(
+                                              children: [
+                                                if (icon != null)
+                                                  WidgetSpan(
+                                                    alignment:
+                                                        PlaceholderAlignment.middle,
+                                                    child: Padding(
+                                                      padding: const EdgeInsets.only(
+                                                        right: 8,
+                                                      ),
+                                                      child: Icon(
+                                                        icon,
+                                                        size: 14,
+                                                        color: line.getColor(
+                                                          isDarkTheme,
                                                         ),
                                                       ),
                                                     ),
-                                                  TextSpan(
-                                                    text: '[${line.timestamp}] ',
-                                                    style: TextStyle(
-                                                      color:
-                                                          line.isSystemMessage
-                                                              ? Colors.yellow
-                                                                  .withOpacity(0.8)
-                                                              : Colors.grey.withOpacity(
-                                                            0.7,
-                                                          ),
-                                                      fontFamily: 'Courier New',
-                                                      fontSize: 12.0,
-                                                      height: 1.5,
-                                                    ),
                                                   ),
-                                                  TextSpan(
-                                                    text: '${line.content}\n',
-                                                    style: TextStyle(
-                                                      color:
-                                                          line.isSystemMessage
-                                                              ? Colors.yellow
-                                                              : line.getColor(true),
-                                                      fontFamily: 'Courier New',
-                                                      fontSize: 14.0,
-                                                      height: 1.5,
-                                                      fontWeight: _getLineWeight(line),
-                                                    ),
+                                                TextSpan(
+                                                  text: '[${line.timestamp}] ',
+                                                  style: TextStyle(
+                                                    color:
+                                                        line.isSystemMessage
+                                                            ? Colors.yellow.withValues(alpha: 0.8)
+                                                            : Colors.grey.withValues(alpha: 0.7),
+                                                    fontFamily: 'Courier New',
+                                                    fontSize: 12.0,
+                                                    height: 1.5,
                                                   ),
-                                                ],
-                                              );
-                                            }).toList(),
-                                      ),
+                                                ),
+                                                TextSpan(
+                                                  text: '${line.content}\n',
+                                                  style: TextStyle(
+                                                    color:
+                                                        line.isSystemMessage
+                                                            ? Colors.yellow
+                                                            : line.getColor(true),
+                                                    fontFamily: 'Courier New',
+                                                    fontSize: 14.0,
+                                                    height: 1.5,
+                                                    fontWeight: _getLineWeight(line),
+                                                  ),
+                                                ),
+                                              ],
+                                            );
+                                          }).toList(),
                                     ),
-                                  ),
-                                );
+                                  );
                           },
                         ),
                       ),
@@ -275,6 +286,9 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
                         onPressed: () {
                           setState(() {
                             _isAutoScrollEnabled = !_isAutoScrollEnabled;
+                            if (_isAutoScrollEnabled) {
+                              _scrollToBottom();
+                            }
                           });
                         },
                         icon: Icon(
@@ -331,10 +345,5 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
       return FontWeight.w600;
     }
     return FontWeight.normal;
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
   }
 }

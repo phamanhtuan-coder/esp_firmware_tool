@@ -13,7 +13,6 @@ import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 import 'package:smart_net_firmware_loader/data/services/serial_monitor_service.dart';
 import 'package:smart_net_firmware_loader/data/services/template_service.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
-import 'package:smart_net_firmware_loader/domain/blocs/logging_bloc.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/app_header.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/batch_selection_panel.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/console_terminal_widget.dart';
@@ -33,7 +32,6 @@ class HomeView extends StatefulWidget {
 
 class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin {
   final TextEditingController _serialController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
   late TabController _tabController;
   String? _selectedFirmwareVersion;
   String? _selectedPort;
@@ -59,11 +57,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     _tabController = TabController(length: 2, vsync: this);
     context.read<HomeBloc>().add(LoadInitialDataEvent());
     _initializeServices();
-    _scrollController.addListener(() {
-      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 50) {
-        context.read<LoggingBloc>().add(AutoScrollEvent());
-      }
-    });
     _tabController.addListener(_handleTabChange);
   }
 
@@ -109,7 +102,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   void dispose() {
     _bluetoothService.stop();
     _serialController.dispose();
-    _scrollController.dispose();
     _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
     _serialMonitorService.dispose();
@@ -199,16 +191,56 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
 
     try {
       String? sketchPath;
+      String boardType = deviceType.toLowerCase(); // Default to provided device type
+
+      _logService.addLog(
+        message: 'Starting firmware flash process for device $deviceSerial',
+        level: LogLevel.info,
+        step: ProcessStep.flash,
+        deviceId: deviceSerial,
+        origin: 'system',
+      );
 
       if (!localFilePath.isNullOrEmpty) {
-        // Nếu là local file, sử dụng trực tiếp
-        sketchPath = localFilePath!;
+        // Log template source
+        final templateContent = await File(localFilePath!).readAsString();
+        _logService.addLog(
+          message: 'Processing local template file:\n$templateContent',
+          level: LogLevel.info,
+          step: ProcessStep.templatePreparation,
+          deviceId: deviceSerial,
+          origin: 'system',
+        );
+
+        // Xử lý template cho local file
+        sketchPath = await _templateService.prepareFirmwareTemplate(
+          localFilePath,
+          deviceSerial,
+          deviceId,
+          useQuotesForDefines: true
+        );
+
+        if (sketchPath == null) throw Exception('Failed to prepare firmware template');
+
+        // Read processed template to detect board type
+        final processedContent = await File(sketchPath).readAsString();
+        boardType = _templateService.extractBoardType(processedContent);
       } else {
         // Lấy firmware source code và xử lý template
         final firmware = context.read<HomeBloc>().state.firmwares.firstWhere(
-          (f) => f.firmwareId.toString() == context.read<HomeBloc>().state.selectedFirmwareId);
+          (f) => f.firmwareId.toString() == context.read<HomeBloc>().state.selectedFirmwareId,
+          orElse: () => throw Exception('Selected firmware not found'),
+        );
 
-        // Sử dụng TemplateService để xử lý template
+        _logService.addLog(
+          message: 'Selected firmware: ${firmware.firmwareId}',
+          level: LogLevel.info,
+          step: ProcessStep.templatePreparation,
+          deviceId: deviceSerial,
+          origin: 'system',
+        );
+
+        // Xử lý template
         sketchPath = await _templateService.prepareFirmwareTemplate(
           firmware.filePath,
           deviceSerial,
@@ -217,14 +249,23 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         );
 
         if (sketchPath == null) throw Exception('Failed to prepare firmware template');
+
+        // Read processed template to detect board type
+        final processedContent = await File(sketchPath).readAsString();
+        boardType = _templateService.extractBoardType(processedContent);
       }
 
-      // Detect board type from template
-      final boardType = _templateService.extractBoardType(await File(sketchPath).readAsString());
+      _logService.addLog(
+        message: 'Template prepared successfully, detected board type: $boardType',
+        level: LogLevel.success,
+        step: ProcessStep.templatePreparation,
+        deviceId: deviceSerial,
+        origin: 'system',
+      );
 
-      // Sử dụng ArduinoService để compile và flash
+      // Proceed with compile and flash
       final success = await _arduinoService.compileAndFlash(
-        sketchPath: sketchPath,
+        sketchPath: sketchPath!,
         port: _selectedPort!,
         deviceId: deviceSerial,
         deviceType: boardType,
@@ -250,6 +291,14 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         throw Exception('Flashing failed');
       }
     } catch (e) {
+      _logService.addLog(
+        message: 'Error during firmware flash: $e',
+        level: LogLevel.error,
+        step: ProcessStep.flash,
+        deviceId: deviceSerial,
+        origin: 'system',
+      );
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Lỗi nạp firmware: ${e.toString()}'),
@@ -336,13 +385,13 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   String _getWarningMessage() {
     switch (_warningType) {
       case 'switch_to_local':
-        return 'Bạn đang chuyển sang chế độ upload file firmware cục bộ. Việc này có thể gây ra rủi ro nếu file không được kiểm tra. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
+        return 'Bạn đang chuyển sang chế độ upload file firmware cục b��. Việc này có thể gây ra rủi ro nếu file không được kiểm tra. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       case 'switch_to_version':
         return 'Bạn đang chuyển sang chế độ chọn version từ server. Mọi file firmware cục bộ sẽ được xóa bỏ. Tiếp tục?';
       case 'select_local_file':
         return 'Bạn đang sử d���ng file firmware cục bộ. Việc này có thể gây ra rủi ro nếu file không được kiểm tra. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       case 'version_change':
-        return 'Bạn đang thay đổi phiên bản firmware so với mặc định. Việc này có thể gây ra rủi ro nếu phiên bản không tương thích. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
+        return 'Bạn đang thay đổi phiên b��n firmware so với mặc định. Việc này có thể gây ra rủi ro nếu phiên bản không tương thích. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       case 'manual_serial':
         return 'Bạn đang nhập serial thủ công thay vì quét QR code. Việc này có thể gây ra rủi ro nếu serial không chính xác. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       default:
@@ -375,6 +424,44 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         });
       }
     });
+  }
+
+  Widget _buildConsoleSection() {
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          Container(
+            color: _isDarkTheme ? AppColors.darkTabBackground : AppColors.componentBackground,
+            child: TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(text: 'Console Log'),
+                Tab(text: 'Serial Monitor'),
+              ],
+              labelColor: _isDarkTheme ? AppColors.accent : Colors.blue,
+              unselectedLabelColor: _isDarkTheme ? AppColors.darkTextSecondary : Colors.grey,
+              indicatorColor: _isDarkTheme ? AppColors.accent : Colors.blue,
+            ),
+          ),
+          SizedBox(
+            height: 300,
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                ConsoleTerminalWidget(
+                  isActiveTab: _tabController.index == 0,
+                ),
+                BlocBuilder<HomeBloc, HomeState>(
+                  builder: (context, state) {
+                    return _buildSerialMonitorTab(state);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -511,38 +598,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                       ),
                                       // Console section with remaining height in scrollview
                                       Expanded(
-                                        child: SingleChildScrollView(
-                                          child: Column(
-                                            children: [
-                                              Container(
-                                                color: _isDarkTheme ? AppColors.darkTabBackground : AppColors.componentBackground,
-                                                child: TabBar(
-                                                  controller: _tabController,
-                                                  tabs: const [
-                                                    Tab(text: 'Console Log'),
-                                                    Tab(text: 'Serial Monitor'),
-                                                  ],
-                                                  labelColor: _isDarkTheme ? AppColors.accent : Colors.blue,
-                                                  unselectedLabelColor: _isDarkTheme ? AppColors.darkTextSecondary : Colors.grey,
-                                                  indicatorColor: _isDarkTheme ? AppColors.accent : Colors.blue,
-                                                ),
-                                              ),
-                                              SizedBox(
-                                                height: 300, // Minimum height for console
-                                                child: TabBarView(
-                                                  controller: _tabController,
-                                                  children: [
-                                                    ConsoleTerminalWidget(
-                                                      scrollController: _scrollController,
-                                                      isActiveTab: _tabController.index == 0,
-                                                    ),
-                                                    _buildSerialMonitorTab(state),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
+                                        child: _buildConsoleSection(),
                                       ),
                                     ],
                                   ),
