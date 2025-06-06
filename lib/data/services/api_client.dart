@@ -475,6 +475,69 @@ class ApiService implements ApiRepository {
     }
   }
 
+  @override
+  Future<Map<String, dynamic>> updateDeviceStatusWithResult({
+    required String deviceSerial,
+    required bool isSuccessful,
+  }) async {
+    final String status = isSuccessful ? 'firmware_uploading' : 'firmware_failed';
+    final String logMessage = isSuccessful
+        ? 'Marking device $deviceSerial as successful'
+        : 'Marking device $deviceSerial as failed';
+
+    _logService.addLog(
+      message: logMessage,
+      level: LogLevel.info,
+      step: ProcessStep.deviceStatus,
+      origin: 'system',
+      deviceId: deviceSerial,
+    );
+
+    try {
+      final Map<String, dynamic> body = {
+        'device_serial': deviceSerial,
+        'stage': 'assembly',
+        'status': status,
+      };
+
+      final response = await _httpClient.patch(
+        Uri.parse('$baseUrl/production-tracking/update-serial'),
+        headers: _headers,
+        body: json.encode(body),
+      );
+
+      final responseData = json.decode(response.body);
+      final bool isSuccess = responseData['success'] == true;
+      final String resultMessage = responseData['message'] ??
+        (isSuccess ? 'Device status updated successfully' : 'Failed to update device status');
+
+      _logService.addLog(
+        message: resultMessage,
+        level: isSuccess ? LogLevel.success : LogLevel.error,
+        step: ProcessStep.deviceStatus,
+        origin: 'system',
+        deviceId: deviceSerial,
+      );
+
+      return responseData;
+    } catch (e) {
+      final errorMessage = 'Error updating device status: $e';
+      _logService.addLog(
+        message: errorMessage,
+        level: LogLevel.error,
+        step: ProcessStep.deviceStatus,
+        origin: 'system',
+        deviceId: deviceSerial,
+      );
+
+      return {
+        'success': false,
+        'message': errorMessage,
+        'errorCode': 'exception',
+      };
+    }
+  }
+
   void dispose() {
     _httpClient.close();
   }

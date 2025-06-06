@@ -14,5 +14,9 @@ abstract class ApiRepository {
     String status, {
     String? reason,
   });
+  Future<Map<String, dynamic>> updateDeviceStatusWithResult({
+    required String deviceSerial,
+    required bool isSuccessful,
+  });
   Future<Firmware?> getDefaultFirmware(int templateId, int? batchFirmwareId);
 }

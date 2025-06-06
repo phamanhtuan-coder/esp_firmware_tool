@@ -338,19 +338,34 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<HomeBloc, HomeState>(
-      listenWhen: (previous, current) => previous != current,
+      listenWhen: (previous, current) =>
+        previous.showStatusDialog != current.showStatusDialog ||
+        previous.statusDialogType != current.statusDialogType ||
+        previous.statusDialogMessage != current.statusDialogMessage,
       listener: (context, state) {
-        // Handle state changes here instead of during build
-        if (!mounted) return;
-        Future.microtask(() {
-          if (mounted) {
-            setState(() {
-              _selectedFirmwareVersion = state.selectedFirmwareId;
-              _selectedPort = state.selectedPort;
-              _canFlash = state.canFlash;
-            });
-          }
-        });
+        if (state.showStatusDialog) {
+          showDialog(
+            context: context,
+            builder: (context) => WarningDialog(
+              isDarkTheme: _isDarkTheme,
+              onCancel: () {
+                Navigator.of(context).pop();
+                context.read<HomeBloc>().add(
+                  CloseStatusDialogEvent(),
+                );
+              },
+              onContinue: () {
+                Navigator.of(context).pop();
+                context.read<HomeBloc>().add(
+                  CloseStatusDialogEvent(),
+                );
+              },
+              title: state.statusDialogType == 'success' ? 'Thành công' : 'Lỗi',
+              message: state.statusDialogMessage,
+              type: state.statusDialogType,
+            ),
+          );
+        }
       },
       builder: (context, state) {
         return Scaffold(

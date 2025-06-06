@@ -61,6 +61,14 @@ class FlashFirmwareEvent extends HomeEvent {}
 
 class FetchBatchesEvent extends HomeEvent {}
 
+class StatusUpdateEvent extends HomeEvent {
+  final String deviceSerial;
+  final bool isSuccessful;
+  StatusUpdateEvent(this.deviceSerial, this.isSuccessful);
+}
+
+class CloseStatusDialogEvent extends HomeEvent {}
+
 class HomeState {
   final List<Planning> plannings;
   final String? selectedPlanningId;
@@ -79,6 +87,9 @@ class HomeState {
   final String? selectedDeviceType;
   final bool canFlash;
   final bool isLoading;
+  final bool showStatusDialog;
+  final String statusDialogType;
+  final String statusDialogMessage;
 
   HomeState({
     this.plannings = const [],
@@ -98,6 +109,9 @@ class HomeState {
     this.selectedDeviceType,
     this.canFlash = false,
     this.isLoading = false,
+    this.showStatusDialog = false,
+    this.statusDialogType = '',
+    this.statusDialogMessage = '',
   });
 
   HomeState copyWith({
@@ -118,6 +132,9 @@ class HomeState {
     String? selectedDeviceType,
     bool? canFlash,
     bool? isLoading,
+    bool? showStatusDialog,
+    String? statusDialogType,
+    String? statusDialogMessage,
   }) {
     return HomeState(
       plannings: plannings ?? this.plannings,
@@ -137,6 +154,9 @@ class HomeState {
       selectedDeviceType: selectedDeviceType ?? this.selectedDeviceType,
       canFlash: canFlash ?? this.canFlash,
       isLoading: isLoading ?? this.isLoading,
+      showStatusDialog: showStatusDialog ?? this.showStatusDialog,
+      statusDialogType: statusDialogType ?? this.statusDialogType,
+      statusDialogMessage: statusDialogMessage ?? this.statusDialogMessage,
     );
   }
 }
@@ -160,6 +180,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<UpdateDeviceStatusEvent>(_onUpdateDeviceStatus);
     on<FlashFirmwareEvent>(_onFlashFirmware);
     on<FetchBatchesEvent>(_onFetchBatches); // Thêm handler mới
+    on<StatusUpdateEvent>(_onStatusUpdate);
+    on<CloseStatusDialogEvent>(_onCloseStatusDialog);
   }
 
   Future<void> _onFetchBatches(
@@ -388,7 +410,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   ) async {
     try {
       // Update device status via API
-      await _apiService.updateDeviceStatus(event.deviceId, event.status);
+      await _apiService.updateDeviceStatusWithResult(
+        deviceSerial: event.deviceId,
+        isSuccessful: event.status == 'success',
+      );
 
       if (state.selectedBatchId != null) {
         // Refresh devices list after status update
@@ -428,5 +453,53 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         );
       }
     }
+  }
+
+  Future<void> _onStatusUpdate(
+    StatusUpdateEvent event,
+    Emitter<HomeState> emit,
+  ) async {
+    try {
+      final result = await _apiService.updateDeviceStatusWithResult(
+        deviceSerial: event.deviceSerial,
+        isSuccessful: event.isSuccessful,
+      );
+
+      if (result['success'] == true) {
+        // Refresh devices list after successful status update
+        if (state.selectedBatchId != null) {
+          final devices = await _apiService.fetchDevices(state.selectedBatchId!);
+          emit(state.copyWith(
+            devices: devices,
+            showStatusDialog: true,
+            statusDialogType: 'success',
+            statusDialogMessage: result['message'] ?? 'Cập nhật trạng thái thành công',
+          ));
+        }
+      } else {
+        emit(state.copyWith(
+          showStatusDialog: true,
+          statusDialogType: 'error',
+          statusDialogMessage: result['message'] ?? 'Lỗi cập nhật trạng thái',
+        ));
+      }
+    } catch (e) {
+      emit(state.copyWith(
+        showStatusDialog: true,
+        statusDialogType: 'error',
+        statusDialogMessage: 'Lỗi cập nhật trạng thái: $e',
+      ));
+    }
+  }
+
+  void _onCloseStatusDialog(
+    CloseStatusDialogEvent event,
+    Emitter<HomeState> emit,
+  ) {
+    emit(state.copyWith(
+      showStatusDialog: false,
+      statusDialogType: '',
+      statusDialogMessage: '',
+    ));
   }
 }

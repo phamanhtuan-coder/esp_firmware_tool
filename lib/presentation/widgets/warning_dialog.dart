@@ -7,6 +7,7 @@ class WarningDialog extends StatelessWidget {
   final VoidCallback onContinue;
   final String title;
   final String message;
+  final String type; // Add type property
 
   const WarningDialog({
     super.key,
@@ -15,10 +16,33 @@ class WarningDialog extends StatelessWidget {
     required this.onContinue,
     required this.title,
     required this.message,
+    this.type = 'warning', // Default to warning type
   });
 
   @override
   Widget build(BuildContext context) {
+    Color getIconColor() {
+      switch (type) {
+        case 'success':
+          return AppColors.success;
+        case 'error':
+          return AppColors.error;
+        default:
+          return AppColors.warning;
+      }
+    }
+
+    IconData getIcon() {
+      switch (type) {
+        case 'success':
+          return Icons.check_circle;
+        case 'error':
+          return Icons.error;
+        default:
+          return Icons.warning;
+      }
+    }
+
     return Stack(
       children: [
         Positioned.fill(
@@ -38,29 +62,51 @@ class WarningDialog extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                Icon(
+                  getIcon(),
+                  color: getIconColor(),
+                  size: 48,
+                ),
+                const SizedBox(height: 16),
                 Text(
                   title,
                   style: TextStyle(
-                    color: isDarkTheme ? AppColors.warning : AppColors.warning,
+                    color: getIconColor(),
                     fontSize: 18,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(message),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                ),
                 const SizedBox(height: 16),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    TextButton(onPressed: onCancel, child: const Text('Hủy')),
-                    ElevatedButton(
-                      onPressed: onContinue,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.warning,
-                        foregroundColor: Colors.white,
+                    if (type == 'warning') ...[
+                      TextButton(
+                        onPressed: onCancel,
+                        child: const Text('Hủy'),
                       ),
-                      child: const Text('Tiếp tục'),
-                    ),
+                      ElevatedButton(
+                        onPressed: onContinue,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: getIconColor(),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Tiếp tục'),
+                      ),
+                    ] else
+                      ElevatedButton(
+                        onPressed: onContinue,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: getIconColor(),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Đóng'),
+                      ),
                   ],
                 ),
               ],
