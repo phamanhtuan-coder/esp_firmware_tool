@@ -384,7 +384,16 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     Emitter<HomeState> emit,
   ) async {
     final ports = await _arduinoService.getAvailablePorts();
-    emit(state.copyWith(availablePorts: ports));
+
+    // Nếu port đang chọn không còn trong danh sách available, reset selected port
+    if (state.selectedPort != null && !ports.contains(state.selectedPort)) {
+      emit(state.copyWith(
+        availablePorts: ports,
+        selectedPort: null,
+      ));
+    } else {
+      emit(state.copyWith(availablePorts: ports));
+    }
   }
 
   void _onSelectPort(SelectPortEvent event, Emitter<HomeState> emit) {
@@ -409,14 +418,11 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     Emitter<HomeState> emit,
   ) async {
     try {
-      String newStatus;
       bool isSuccessful;
 
       if (event.status == 'completed') {
-        newStatus = 'firmware_uploaded';
         isSuccessful = true;
       } else if (event.status == 'error') {
-        newStatus = 'firmware_failed';
         isSuccessful = false;
       } else {
         return;

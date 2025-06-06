@@ -2,11 +2,14 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_libserialport/flutter_libserialport.dart';
+import 'package:get_it/get_it.dart';
 import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
 import 'package:smart_net_firmware_loader/core/config/app_config.dart';
 import 'package:smart_net_firmware_loader/data/models/device.dart';
 import 'package:smart_net_firmware_loader/data/models/firmware.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
+import 'package:smart_net_firmware_loader/data/services/serial_monitor_service.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/logging_bloc.dart';
 
@@ -59,6 +62,11 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
 
   final List<bool> _selections = [true, false]; // [Version mode, File mode]
 
+  final SerialMonitorService _serialMonitorService = GetIt.instance<SerialMonitorService>();
+
+  Timer? _portCheckTimer;
+  final Set<String> _previousPorts = {};
+
   void _handleModeToggle(int index) {
     setState(() {
       for (int i = 0; i < _selections.length; i++) {
@@ -92,7 +100,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
 
       final state = context.read<HomeBloc>().state;
       if (state.selectedBatchId == null) {
-        _serialErrorText = 'Cần chọn lô sản xuất để xác thực serial';
+        _serialErrorText = 'Cần chọn lô sản xuất để xác th��c serial';
         _serialSuccessText = null;
         _isSerialValid = false;
         return;
@@ -167,7 +175,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
           const SizedBox(width: 16),
           Expanded(
             child: Text(
-              'Đã bật chế độ nhận thông tin. Hãy dùng app mobile và quét mã sản phẩm muốn nạp firmware trong lô ${state.selectedBatchId}',
+              'Đ���� bật chế độ nhận thông tin. Hãy dùng app mobile và quét mã sản phẩm muốn nạp firmware trong lô ${state.selectedBatchId}',
               style: const TextStyle(color: Colors.white),
             ),
           ),
@@ -269,6 +277,137 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
       widget.onFlashStatusChanged(canFlash);
       return canFlash;
     }
+  }
+
+  void _handlePortSelection(String? port) {
+    if (port != null) {
+      // Chỉ kiểm tra xem cổng COM có tồn tại và truy cập được không
+      _validateAndSelectPort(port);
+    }
+    widget.onUsbPortSelected(port);
+  }
+
+  void _validateAndSelectPort(String port) {
+    try {
+      // Kiểm tra cổng bằng flutter_libserialport
+      if (!SerialPort.availablePorts.contains(port)) {
+        context.read<LoggingBloc>().add(
+          AddLogEvent(
+            LogEntry(
+              message: 'Port $port not found',
+              timestamp: DateTime.now(),
+              level: LogLevel.error,
+              step: ProcessStep.usbCheck,
+              origin: 'system',
+            ),
+          ),
+        );
+        return;
+      }
+
+      // Thử mở cổng để kiểm tra quyền truy cập
+      final testPort = SerialPort(port);
+      if (!testPort.openReadWrite()) {
+        context.read<LoggingBloc>().add(
+          AddLogEvent(
+            LogEntry(
+              message: 'Cannot access port $port. Port may be in use.',
+              timestamp: DateTime.now(),
+              level: LogLevel.error,
+              step: ProcessStep.usbCheck,
+              origin: 'system',
+            ),
+          ),
+        );
+        return;
+      }
+      testPort.close();
+
+      // Cổng hợp lệ, cập nhật selection
+      widget.onUsbPortSelected(port);
+
+      context.read<LoggingBloc>().add(
+        AddLogEvent(
+          LogEntry(
+            message: 'Selected port $port',
+            timestamp: DateTime.now(),
+            level: LogLevel.success,
+            step: ProcessStep.usbCheck,
+            origin: 'system',
+          ),
+        ),
+      );
+
+    } catch (e) {
+      context.read<LoggingBloc>().add(
+        AddLogEvent(
+          LogEntry(
+            message: 'Error accessing port $port: $e',
+            timestamp: DateTime.now(),
+            level: LogLevel.error,
+            step: ProcessStep.usbCheck,
+            origin: 'system',
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _startPortChecking();
+    _previousPorts.addAll(widget.availablePorts);
+  }
+
+  void _startPortChecking() {
+    _portCheckTimer?.cancel();
+    _portCheckTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+
+      // Kiểm tra port có bị ngắt kết nối không
+      final currentPorts = Set<String>.from(widget.availablePorts);
+      final disconnectedPorts = _previousPorts.difference(currentPorts);
+      final newPorts = currentPorts.difference(_previousPorts);
+
+      if (disconnectedPorts.isNotEmpty) {
+        // Có port bị ngắt kết nối
+        for (final port in disconnectedPorts) {
+          if (port == widget.selectedPort) {
+            // Port đang chọn bị ngắt kết nối
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Cổng $port đã bị ngắt kết nối'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+            // Cập nhật UI
+            widget.onUsbPortSelected(null);
+          }
+        }
+      }
+
+      if (newPorts.isNotEmpty) {
+        // Có port mới được kết nối
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Đã phát hiện cổng mới: ${newPorts.join(", ")}'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+
+      _previousPorts.clear();
+      _previousPorts.addAll(currentPorts);
+    });
+  }
+
+  @override
+  void dispose() {
+    _portCheckTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -721,61 +860,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                         child: Row(
                           children: [
                             Expanded(
-                              child: DropdownButtonFormField<String>(
-                                value: widget.selectedPort,
-                                decoration: InputDecoration(
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: const BorderSide(
-                                      color: AppColors.borderColor,
-                                    ),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: const BorderSide(
-                                      color: AppColors.borderColor,
-                                    ),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: const BorderSide(
-                                      color: AppColors.primary,
-                                      width: 1.5,
-                                    ),
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 12,
-                                  ),
-                                  fillColor: AppColors.componentBackground,
-                                  filled: true,
-                                ),
-                                icon: const Icon(
-                                  Icons.arrow_drop_down,
-                                  color: Colors.black87,
-                                ),
-                                dropdownColor: AppColors.componentBackground,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.black87,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                items:
-                                    widget.availablePorts.map((port) {
-                                      return DropdownMenuItem(
-                                        value: port,
-                                        child: Text(port),
-                                      );
-                                    }).toList(),
-                                onChanged: widget.onUsbPortSelected,
-                                hint: Text(
-                                  'Chọn cổng COM',
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontWeight: FontWeight.w400,
-                                  ),
-                                ),
-                              ),
+                              child: _buildPortDropdown(context),
                             ),
                             const SizedBox(width: 8),
                             ElevatedButton.icon(
@@ -844,6 +929,82 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
           );
         },
       ),
+    );
+  }
+
+  Widget _buildPortDropdown(BuildContext context) {
+    final hasAvailablePorts = widget.availablePorts.isNotEmpty;
+
+    final defaultItem = DropdownMenuItem<String>(
+      value: null,
+      child: Text(
+        hasAvailablePorts ? 'Chọn cổng COM' : 'Không tìm thấy cổng COM',
+        style: TextStyle(
+          color: Colors.grey[600],
+          fontWeight: FontWeight.w400,
+        ),
+      ),
+    );
+
+    final items = [
+      defaultItem,
+      if (hasAvailablePorts)
+        ...widget.availablePorts.map((port) {
+          return DropdownMenuItem<String>(
+            value: port,
+            child: Text(port),
+          );
+        }).toList(),
+    ];
+
+    return DropdownButtonFormField<String>(
+      value: widget.availablePorts.contains(widget.selectedPort) ? widget.selectedPort : null,
+      decoration: InputDecoration(
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(
+            color: AppColors.borderColor,
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(
+            color: AppColors.borderColor,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(
+            color: AppColors.primary,
+            width: 1.5,
+          ),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
+        fillColor: AppColors.componentBackground,
+        filled: true,
+        hintText: hasAvailablePorts ? 'Chọn cổng COM' : 'Không tìm thấy cổng COM',
+      ),
+      icon: const Icon(
+        Icons.arrow_drop_down,
+        color: Colors.black87,
+      ),
+      dropdownColor: AppColors.componentBackground,
+      style: const TextStyle(
+        fontSize: 14,
+        color: Colors.black87,
+        fontWeight: FontWeight.w500,
+      ),
+      items: items,
+      onChanged: (value) {
+        if (mounted) {
+          setState(() {
+            _handlePortSelection(value);
+          });
+        }
+      },
     );
   }
 }

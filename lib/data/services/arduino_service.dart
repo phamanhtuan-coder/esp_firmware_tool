@@ -8,6 +8,7 @@ import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 import 'package:smart_net_firmware_loader/domain/repositories/arduino_repository.dart';
 import 'package:get_it/get_it.dart';
+import 'package:flutter_libserialport/flutter_libserialport.dart';
 
 class ArduinoService implements ArduinoRepository {
   final LogService _logService = GetIt.instance<LogService>();
@@ -309,100 +310,212 @@ class ArduinoService implements ArduinoRepository {
     Map<String, String>? placeholders,
   }) async {
     try {
-      final fqbn =
-          _boardFqbns[deviceType.toLowerCase()] ?? _boardFqbns['esp32']!;
-      String finalSketchPath = sketchPath;
-
-      // Handle placeholder replacement for .ino files
-      if (sketchPath.endsWith('.ino') &&
-          placeholders != null &&
-          placeholders.isNotEmpty) {
-        finalSketchPath = await _replacePlaceholders(sketchPath, placeholders);
-      }
-
-      final compileSuccess = await compileSketch(finalSketchPath, fqbn);
-      if (!compileSuccess) {
-        _logService.addLog(
-          message: 'Firmware compilation failed for device $deviceId',
-          level: LogLevel.error,
-          step: ProcessStep.firmwareCompile,
-          origin: 'arduino-cli',
-          deviceId: deviceId,
-        );
-        return false;
-      }
-
-      final uploadSuccess = await uploadSketch(finalSketchPath, port, fqbn);
-      if (uploadSuccess) {
-        _logService.addLog(
-          message: 'Firmware flashed successfully for device $deviceId',
-          level: LogLevel.success,
-          step: ProcessStep.flash,
-          origin: 'arduino-cli',
-          deviceId: deviceId,
-        );
-        return true;
-      } else {
-        _logService.addLog(
-          message: 'Firmware upload failed for device $deviceId',
-          level: LogLevel.error,
-          step: ProcessStep.flash,
-          origin: 'arduino-cli',
-          deviceId: deviceId,
-        );
-        return false;
-      }
-    } catch (e) {
       _logService.addLog(
-        message: 'Error during compile and flash: $e',
+        message: 'Starting firmware flash process for device $deviceId',
+        level: LogLevel.info,
+        step: ProcessStep.flash,
+        deviceId: deviceId,
+        origin: 'system',
+      );
+
+      // Get board FQBN for device type
+      final fqbn = _boardFqbns[deviceType.toLowerCase()] ?? _boardFqbns['esp32']!;
+
+      // Validate port access before proceeding
+      if (!await _validatePortAccess(port)) {
+        throw Exception('Cannot access port $port. Please check connections and permissions.');
+      }
+
+      // First compile the sketch
+      _logService.addLog(
+        message: 'Compiling firmware for device $deviceId',
+        level: LogLevel.info,
+        step: ProcessStep.firmwareCompile,
+        deviceId: deviceId,
+        origin: 'system',
+      );
+
+      final compileSuccess = await compileSketch(sketchPath, fqbn);
+      if (!compileSuccess) {
+        throw Exception('Firmware compilation failed');
+      }
+
+      _logService.addLog(
+        message: 'Compilation successful, starting upload...',
+        level: LogLevel.success,
+        step: ProcessStep.firmwareCompile,
+        deviceId: deviceId,
+        origin: 'system',
+      );
+
+      // Then upload to device
+      _logService.addLog(
+        message: 'Uploading firmware to device $deviceId on port $port',
+        level: LogLevel.info,
+        step: ProcessStep.flash,
+        deviceId: deviceId,
+        origin: 'system',
+      );
+
+      final uploadSuccess = await uploadSketch(sketchPath, port, fqbn);
+      if (!uploadSuccess) {
+        throw Exception('Firmware upload failed');
+      }
+
+      _logService.addLog(
+        message: '✅ Firmware successfully flashed to device $deviceId',
+        level: LogLevel.success,
+        step: ProcessStep.flash,
+        deviceId: deviceId,
+        origin: 'system',
+      );
+
+      return true;
+    } catch (e, stackTrace) {
+      _logService.addLog(
+        message: 'Error during firmware flash: $e\n$stackTrace',
         level: LogLevel.error,
         step: ProcessStep.flash,
-        origin: 'arduino-cli',
         deviceId: deviceId,
+        origin: 'system',
       );
       return false;
+    } finally {
+      await _killActiveProcess();
     }
+  }
+
+  Future<String?> prepareFirmwareTemplate(
+    String sourcePath,
+    String serialNumber,
+    String deviceId, {
+    Map<String, String>? placeholders,
+  }) async {
+    try {
+      if (!await File(sourcePath).exists()) {
+        throw Exception('Source file not found: $sourcePath');
+      }
+
+      _logService.addLog(
+        message: 'Preparing firmware template for device $deviceId',
+        level: LogLevel.info,
+        step: ProcessStep.templatePreparation,
+        deviceId: deviceId,
+        origin: 'system',
+      );
+
+      // Create temp directory
+      final tempDir = await getTemporaryDirectory();
+      final sketchName = 'firmware_${serialNumber}_${DateTime.now().millisecondsSinceEpoch}';
+      final sketchDir = Directory(path.join(tempDir.path, sketchName));
+      await sketchDir.create(recursive: true);
+
+      // Copy source to temp location
+      final tempPath = path.join(sketchDir.path, '$sketchName.ino');
+      String content = await File(sourcePath).readAsString();
+
+      // Replace placeholders
+      if (placeholders != null) {
+        for (final entry in placeholders.entries) {
+          content = content.replaceAll('{{${entry.key}}}', entry.value);
+        }
+      }
+
+      // Handle special defines for SERIAL_NUMBER and DEVICE_ID
+      content = _processDefines(content, serialNumber, deviceId);
+
+      // Write processed content
+      await File(tempPath).writeAsString(content);
+
+      _logService.addLog(
+        message: 'Template prepared successfully',
+        level: LogLevel.success,
+        step: ProcessStep.templatePreparation,
+        deviceId: deviceId,
+        origin: 'system',
+      );
+
+      return tempPath;
+    } catch (e, stackTrace) {
+      _logService.addLog(
+        message: 'Error preparing template: $e\n$stackTrace',
+        level: LogLevel.error,
+        step: ProcessStep.templatePreparation,
+        deviceId: deviceId,
+        origin: 'system',
+      );
+      return null;
+    }
+  }
+
+  String _processDefines(String content, String serialNumber, String deviceId) {
+    // Handle #define SERIAL_NUMBER and DEVICE_ID
+    final definePattern = RegExp(r'#define\s+(SERIAL_NUMBER|DEVICE_ID)\s+"?([^"\n\r]+)"?');
+    return content.replaceAllMapped(definePattern, (match) {
+      final defineName = match.group(1);
+      final value = defineName == 'SERIAL_NUMBER' ? serialNumber : deviceId;
+      return '#define $defineName "$value"';
+    });
   }
 
   @override
   Future<List<String>> getAvailablePorts() async {
     try {
-      final process = await Process.start(_arduinoCliPath!, [
-        'board',
-        'list',
-        '--format',
-        'json',
-      ]);
-      final stdout = StringBuffer();
-      process.stdout.transform(utf8.decoder).listen(stdout.write);
-      final exitCode = await process.exitCode;
-      if (exitCode != 0) {
+      List<String> ports = [];
+
+      // Sử dụng libserialport để lấy danh sách cổng
+      final availablePorts = SerialPort.availablePorts;
+      if (availablePorts.isNotEmpty) {
+        ports.addAll(availablePorts);
         _logService.addLog(
-          message: 'Error listing ports',
-          level: LogLevel.error,
+          message: 'Found ${ports.length} ports via libserialport: ${ports.join(", ")}',
+          level: LogLevel.success,
           step: ProcessStep.usbCheck,
-          origin: 'arduino-cli',
+          origin: 'system',
         );
-        return [];
+        return ports;
       }
-      final data = jsonDecode(stdout.toString());
-      final ports =
-          (data as List)
-              .map((board) => board['port']['address'] as String)
-              .toList();
+
+      // Backup method: Manual COM port check on Windows
+      if (Platform.isWindows) {
+        for (int i = 1; i <= 20; i++) {
+          final port = 'COM$i';
+          try {
+            final serialPort = SerialPort(port);
+            if (serialPort.openReadWrite()) {
+              ports.add(port);
+              serialPort.close();
+            }
+          } catch (e) {
+            // Skip if port cannot be accessed
+          }
+        }
+
+        if (ports.isNotEmpty) {
+          _logService.addLog(
+            message: 'Found ${ports.length} available COM ports: ${ports.join(", ")}',
+            level: LogLevel.success,
+            step: ProcessStep.usbCheck,
+            origin: 'system',
+          );
+          return ports;
+        }
+      }
+
       _logService.addLog(
-        message: 'Found ${ports.length} available ports',
-        level: LogLevel.success,
+        message: 'No ports found',
+        level: LogLevel.warning,
         step: ProcessStep.usbCheck,
-        origin: 'arduino-cli',
+        origin: 'system',
       );
-      return ports;
+      return [];
+
     } catch (e) {
       _logService.addLog(
-        message: 'Error listing ports: $e',
+        message: 'Error detecting ports: $e',
         level: LogLevel.error,
         step: ProcessStep.usbCheck,
-        origin: 'arduino-cli',
+        origin: 'system',
       );
       return [];
     }
@@ -535,6 +648,58 @@ class ArduinoService implements ArduinoRepository {
     }
   }
 
+  Timer? _portScanTimer;
+  final _portChangeController = StreamController<List<String>>.broadcast();
+  Stream<List<String>> get portChanges => _portChangeController.stream;
+  List<String> _lastPorts = [];
+
+  // Start continuous port scanning
+  void startPortScanning() {
+    _portScanTimer?.cancel();
+    _portScanTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
+      try {
+        final ports = await getAvailablePorts();
+        if (!_portsEqual(ports, _lastPorts)) {
+          _lastPorts = ports;
+          _portChangeController.add(ports);
+
+          _logService.addLog(
+            message: 'Detected port changes: ${ports.join(", ")}',
+            level: LogLevel.info,
+            step: ProcessStep.usbCheck,
+            origin: 'arduino-cli',
+          );
+        }
+      } catch (e) {
+        _logService.addLog(
+          message: 'Port scanning error: $e',
+          level: LogLevel.error,
+          step: ProcessStep.usbCheck,
+          origin: 'arduino-cli',
+        );
+      }
+    });
+  }
+
+  bool _portsEqual(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  void stopPortScanning() {
+    _portScanTimer?.cancel();
+    _portScanTimer = null;
+  }
+
+  void dispose() {
+    stopPortScanning();
+    _portChangeController.close();
+    _killActiveProcess();
+  }
+
   Future<void> _killActiveProcess() async {
     if (_activeProcess != null) {
       try {
@@ -548,50 +713,6 @@ class ArduinoService implements ArduinoRepository {
         );
       }
       _activeProcess = null;
-    }
-  }
-
-  Future<String> _replacePlaceholders(
-    String sketchPath,
-    Map<String, String> placeholders,
-  ) async {
-    try {
-      final originalFile = File(sketchPath);
-      if (!await originalFile.exists()) {
-        _logService.addLog(
-          message: 'Sketch file not found: $sketchPath',
-          level: LogLevel.error,
-          step: ProcessStep.firmwareCompile,
-          origin: 'arduino-cli',
-        );
-        return sketchPath;
-      }
-
-      final tempDir = await getTemporaryDirectory();
-      final tempFilePath = path.join(tempDir.path, path.basename(sketchPath));
-      final tempFile = File(tempFilePath);
-
-      String content = await originalFile.readAsString();
-      for (final entry in placeholders.entries) {
-        content = content.replaceAll('{{${entry.key}}}', entry.value);
-      }
-      await tempFile.writeAsString(content);
-
-      _logService.addLog(
-        message: 'Placeholders replaced in sketch: $tempFilePath',
-        level: LogLevel.info,
-        step: ProcessStep.firmwareCompile,
-        origin: 'arduino-cli',
-      );
-      return tempFilePath;
-    } catch (e) {
-      _logService.addLog(
-        message: 'Error replacing placeholders: $e',
-        level: LogLevel.error,
-        step: ProcessStep.firmwareCompile,
-        origin: 'arduino-cli',
-      );
-      return sketchPath;
     }
   }
 

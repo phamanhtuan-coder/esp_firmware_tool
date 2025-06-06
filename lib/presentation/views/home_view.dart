@@ -1,14 +1,17 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
+import 'package:smart_net_firmware_loader/core/utils/string_extensions.dart';
 import 'package:smart_net_firmware_loader/data/models/device.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/data/services/arduino_service.dart';
 import 'package:smart_net_firmware_loader/data/services/bluetooth_service.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 import 'package:smart_net_firmware_loader/data/services/serial_monitor_service.dart';
+import 'package:smart_net_firmware_loader/data/services/template_service.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/logging_bloc.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/app_header.dart';
@@ -18,8 +21,8 @@ import 'package:smart_net_firmware_loader/presentation/widgets/firmware_control_
 import 'package:smart_net_firmware_loader/presentation/widgets/serial_monitor_terminal_widget.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/warning_dialog.dart';
 import 'package:get_it/get_it.dart';
-import 'package:synchronized/synchronized.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/batch_devices_list_view.dart';
+import 'package:smart_net_firmware_loader/presentation/widgets/loading_overlay.dart';
 
 class HomeView extends StatefulWidget {
   const HomeView({super.key});
@@ -41,10 +44,14 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   final ArduinoService _arduinoService = GetIt.instance<ArduinoService>();
   final BluetoothService _bluetoothService = GetIt.instance<BluetoothService>();
   final SerialMonitorService _serialMonitorService = GetIt.instance<SerialMonitorService>();
+  final TemplateService _templateService;
+
+  _HomeViewState() : _templateService = TemplateService(logService: GetIt.instance<LogService>());
 
   bool _showWarningDialog = false;
   String _warningType = '';
   bool _canFlash = false;
+  bool _isFlashing = false;
 
   @override
   void initState() {
@@ -171,60 +178,95 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     }
   }
 
-  final _flashLock = Lock();
 
   Future<void> _flashFirmware(
       String deviceId,
       String deviceSerial,
       String deviceType,
       String? localFilePath,
-      ) async {
-    await _flashLock.synchronized(() async {
-      if (_selectedPort == null || _selectedPort!.isEmpty) {
-        _logService.addLog(
-          message: 'No COM port selected. Please select a COM port first.',
-          level: LogLevel.warning,
-          step: ProcessStep.flash,
-          origin: 'system',
+  ) async {
+    if (_selectedPort == null || _selectedPort!.isEmpty) {
+      _logService.addLog(
+        message: 'No COM port selected',
+        level: LogLevel.warning,
+        step: ProcessStep.flash,
+        origin: 'system',
+      );
+      return;
+    }
+
+    setState(() => _isFlashing = true);
+
+    try {
+      String? sketchPath;
+
+      if (!localFilePath.isNullOrEmpty) {
+        // Nếu là local file, sử dụng trực tiếp
+        sketchPath = localFilePath!;
+      } else {
+        // Lấy firmware source code và xử lý template
+        final firmware = context.read<HomeBloc>().state.firmwares.firstWhere(
+          (f) => f.firmwareId.toString() == context.read<HomeBloc>().state.selectedFirmwareId);
+
+        // Sử dụng TemplateService để xử lý template
+        sketchPath = await _templateService.prepareFirmwareTemplate(
+          firmware.filePath,
+          deviceSerial,
+          deviceId,
+          useQuotesForDefines: true
         );
-        return;
+
+        if (sketchPath == null) throw Exception('Failed to prepare firmware template');
       }
 
-      try {
-        final success = await _arduinoService.compileAndFlash(
-          sketchPath: localFilePath ?? context.read<HomeBloc>().state.selectedFirmwareId!,
-          port: _selectedPort!,
-          deviceId: deviceSerial,
+      // Detect board type from template
+      final boardType = _templateService.extractBoardType(await File(sketchPath).readAsString());
+
+      // Sử dụng ArduinoService để compile và flash
+      final success = await _arduinoService.compileAndFlash(
+        sketchPath: sketchPath,
+        port: _selectedPort!,
+        deviceId: deviceSerial,
+        deviceType: boardType,
+      );
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Nạp firmware thành công!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
         );
 
-        if (success) {
-          _logService.addLog(
-            message: '✅ Firmware upload successful',
-            level: LogLevel.success,
-            step: ProcessStep.flash,
-            origin: 'system',
-            deviceId: deviceSerial,
-          );
-          _startSerialMonitor(deviceSerial);
-        } else {
-          _logService.addLog(
-            message: '❌ Firmware upload failed',
-            level: LogLevel.error,
-            step: ProcessStep.flash,
-            origin: 'system',
-            deviceId: deviceSerial,
-          );
-        }
-      } catch (e) {
-        _logService.addLog(
-          message: 'Error flashing firmware: $e',
-          level: LogLevel.error,
-          step: ProcessStep.flash,
-          origin: 'system',
-          deviceId: deviceSerial,
+        // Cập nhật trạng thái thiết bị
+        context.read<HomeBloc>().add(
+          StatusUpdateEvent(deviceSerial, true),
         );
+
+        // Khởi động serial monitor
+        _startSerialMonitor(deviceSerial);
+      } else {
+        throw Exception('Flashing failed');
       }
-    });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi nạp firmware: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+
+      // Cập nhật trạng thái thiết bị thành thất bại
+      context.read<HomeBloc>().add(
+        StatusUpdateEvent(deviceSerial, false),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isFlashing = false);
+      }
+    }
   }
 
   Widget _buildSerialMonitorTab(HomeState state) {
@@ -298,7 +340,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       case 'switch_to_version':
         return 'Bạn đang chuyển sang chế độ chọn version từ server. Mọi file firmware cục bộ sẽ được xóa bỏ. Tiếp tục?';
       case 'select_local_file':
-        return 'Bạn đang sử dụng file firmware cục bộ. Việc này có thể gây ra rủi ro nếu file không được kiểm tra. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
+        return 'Bạn đang sử d���ng file firmware cục bộ. Việc này có thể gây ra rủi ro nếu file không được kiểm tra. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       case 'version_change':
         return 'Bạn đang thay đổi phiên bản firmware so với mặc định. Việc này có thể gây ra rủi ro nếu phiên bản không tương thích. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       case 'manual_serial':
@@ -368,165 +410,168 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         }
       },
       builder: (context, state) {
-        return Scaffold(
-          backgroundColor: _isDarkTheme ? AppColors.darkBackground : AppColors.background,
-          appBar: AppHeader(
-            isDarkTheme: _isDarkTheme,
-            onThemeToggled: () => setState(() => _isDarkTheme = !_isDarkTheme),
-          ),
-          body: SafeArea(
-            child: Stack(
-              children: [
-                Container(
-                  color: _isDarkTheme ? AppColors.darkBackground : AppColors.background,
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // Left panel - Batch selection and devices list
-                            SizedBox(
-                              width: 400, // Fixed width for left panel
-                              child: Card(
-                                margin: const EdgeInsets.all(8.0),
-                                elevation: 4.0,
-                                color: _isDarkTheme ? AppColors.darkCardBackground : AppColors.cardBackground,
-                                child: Column(
-                                  children: [
-                                    BatchSelectionPanel(
-                                      plannings: state.plannings,
-                                      batches: state.batches,
-                                      selectedPlanningId: state.selectedPlanningId,
-                                      selectedBatchId: state.selectedBatchId,
-                                      onPlanningSelected: (value) {
-                                        context.read<HomeBloc>().add(SelectPlanningEvent(value));
-                                      },
-                                      onBatchSelected: (value) {
-                                        context.read<HomeBloc>().add(SelectBatchEvent(value));
-                                      },
-                                      isDarkTheme: _isDarkTheme,
-                                      isLoading: state.isLoading,
-                                    ),
-                                    if (state.devices.isNotEmpty)
-                                      Expanded(
-                                        child: _buildBatchDevicesTable(state.devices),
+        return LoadingOverlay(
+          isLoading: _isFlashing,
+          child: Scaffold(
+            backgroundColor: _isDarkTheme ? AppColors.darkBackground : AppColors.background,
+            appBar: AppHeader(
+              isDarkTheme: _isDarkTheme,
+              onThemeToggled: () => setState(() => _isDarkTheme = !_isDarkTheme),
+            ),
+            body: SafeArea(
+              child: Stack(
+                children: [
+                  Container(
+                    color: _isDarkTheme ? AppColors.darkBackground : AppColors.background,
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Left panel - Batch selection and devices list
+                              SizedBox(
+                                width: 400, // Fixed width for left panel
+                                child: Card(
+                                  margin: const EdgeInsets.all(8.0),
+                                  elevation: 4.0,
+                                  color: _isDarkTheme ? AppColors.darkCardBackground : AppColors.cardBackground,
+                                  child: Column(
+                                    children: [
+                                      BatchSelectionPanel(
+                                        plannings: state.plannings,
+                                        batches: state.batches,
+                                        selectedPlanningId: state.selectedPlanningId,
+                                        selectedBatchId: state.selectedBatchId,
+                                        onPlanningSelected: (value) {
+                                          context.read<HomeBloc>().add(SelectPlanningEvent(value));
+                                        },
+                                        onBatchSelected: (value) {
+                                          context.read<HomeBloc>().add(SelectBatchEvent(value));
+                                        },
+                                        isDarkTheme: _isDarkTheme,
+                                        isLoading: state.isLoading,
                                       ),
-                                  ],
+                                      if (state.devices.isNotEmpty)
+                                        Expanded(
+                                          child: _buildBatchDevicesTable(state.devices),
+                                        ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                            // Right panel - Controls and Console
-                            Expanded(
-                              child: Card(
-                                margin: const EdgeInsets.all(8.0),
-                                elevation: 4.0,
-                                color: _isDarkTheme ? AppColors.darkCardBackground : AppColors.cardBackground,
-                                child: Column(
-                                  children: [
-                                    // Firmware control panel with fixed height
-                                    SizedBox(
-                                      height: 460, // Fixed height for control panel
-                                      child: FirmwareControlPanel(
-                                        isDarkTheme: _isDarkTheme,
-                                        selectedFirmwareVersion: state.selectedFirmwareId,
-                                        selectedPort: state.selectedPort,
-                                        serialController: _serialController,
-                                        isLocalFileMode: state.isLocalFileMode,
-                                        firmwares: state.firmwares,
-                                        availablePorts: state.availablePorts,
-                                        onFirmwareVersionSelected: (value) {
-                                          _selectedFirmwareVersion = value;
-                                          _handleWarningAction('version_change', value: value);
-                                        },
-                                        onUsbPortSelected: (value) {
-                                          setState(() => _selectedPort = value);
-                                          context.read<HomeBloc>().add(SelectPortEvent(value));
-                                        },
-                                        onLocalFileSearch: () => _handleWarningAction('select_local_file'),
-                                        onUsbPortRefresh: () => context.read<HomeBloc>().add(RefreshPortsEvent()),
-                                        onSerialSubmitted: (value) => _handleWarningAction('manual_serial'),
-                                        onQrCodeScan: () => context.read<HomeBloc>().add(StartQrScanEvent()),
-                                        onQrCodeAvailabilityChanged: (_) {},
-                                        onWarningRequested: (type, {value}) {
-                                          if (type == 'flash_firmware') {
-                                            if (_canFlash) {
-                                              _flashFirmware(
-                                                state.selectedDeviceId ?? '',
-                                                _serialController.text,
-                                                state.selectedDeviceType ?? '',
-                                                state.localFilePath,
-                                              );
+                              // Right panel - Controls and Console
+                              Expanded(
+                                child: Card(
+                                  margin: const EdgeInsets.all(8.0),
+                                  elevation: 4.0,
+                                  color: _isDarkTheme ? AppColors.darkCardBackground : AppColors.cardBackground,
+                                  child: Column(
+                                    children: [
+                                      // Firmware control panel with fixed height
+                                      SizedBox(
+                                        height: 460, // Fixed height for control panel
+                                        child: FirmwareControlPanel(
+                                          isDarkTheme: _isDarkTheme,
+                                          selectedFirmwareVersion: state.selectedFirmwareId,
+                                          selectedPort: state.selectedPort,
+                                          serialController: _serialController,
+                                          isLocalFileMode: state.isLocalFileMode,
+                                          firmwares: state.firmwares,
+                                          availablePorts: state.availablePorts,
+                                          onFirmwareVersionSelected: (value) {
+                                            _selectedFirmwareVersion = value;
+                                            _handleWarningAction('version_change', value: value);
+                                          },
+                                          onUsbPortSelected: (value) {
+                                            setState(() => _selectedPort = value);
+                                            context.read<HomeBloc>().add(SelectPortEvent(value));
+                                          },
+                                          onLocalFileSearch: () => _handleWarningAction('select_local_file'),
+                                          onUsbPortRefresh: () => context.read<HomeBloc>().add(RefreshPortsEvent()),
+                                          onSerialSubmitted: (value) => _handleWarningAction('manual_serial'),
+                                          onQrCodeScan: () => context.read<HomeBloc>().add(StartQrScanEvent()),
+                                          onQrCodeAvailabilityChanged: (_) {},
+                                          onWarningRequested: (type, {value}) {
+                                            if (type == 'flash_firmware') {
+                                              if (_canFlash) {
+                                                _flashFirmware(
+                                                  state.selectedDeviceId ?? '',
+                                                  _serialController.text,
+                                                  state.selectedDeviceType ?? '',
+                                                  state.localFilePath,
+                                                );
+                                              }
+                                            } else {
+                                              _handleWarningAction(type, value: value);
                                             }
-                                          } else {
-                                            _handleWarningAction(type, value: value);
-                                          }
-                                        },
-                                        onFlashStatusChanged: _handleFlashStatusChanged,
-                                      ),
-                                    ),
-                                    // Console section with remaining height in scrollview
-                                    Expanded(
-                                      child: SingleChildScrollView(
-                                        child: Column(
-                                          children: [
-                                            Container(
-                                              color: _isDarkTheme ? AppColors.darkTabBackground : AppColors.componentBackground,
-                                              child: TabBar(
-                                                controller: _tabController,
-                                                tabs: const [
-                                                  Tab(text: 'Console Log'),
-                                                  Tab(text: 'Serial Monitor'),
-                                                ],
-                                                labelColor: _isDarkTheme ? AppColors.accent : Colors.blue,
-                                                unselectedLabelColor: _isDarkTheme ? AppColors.darkTextSecondary : Colors.grey,
-                                                indicatorColor: _isDarkTheme ? AppColors.accent : Colors.blue,
-                                              ),
-                                            ),
-                                            SizedBox(
-                                              height: 300, // Minimum height for console
-                                              child: TabBarView(
-                                                controller: _tabController,
-                                                children: [
-                                                  ConsoleTerminalWidget(
-                                                    scrollController: _scrollController,
-                                                    isActiveTab: _tabController.index == 0,
-                                                  ),
-                                                  _buildSerialMonitorTab(state),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
+                                          },
+                                          onFlashStatusChanged: _handleFlashStatusChanged,
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                      // Console section with remaining height in scrollview
+                                      Expanded(
+                                        child: SingleChildScrollView(
+                                          child: Column(
+                                            children: [
+                                              Container(
+                                                color: _isDarkTheme ? AppColors.darkTabBackground : AppColors.componentBackground,
+                                                child: TabBar(
+                                                  controller: _tabController,
+                                                  tabs: const [
+                                                    Tab(text: 'Console Log'),
+                                                    Tab(text: 'Serial Monitor'),
+                                                  ],
+                                                  labelColor: _isDarkTheme ? AppColors.accent : Colors.blue,
+                                                  unselectedLabelColor: _isDarkTheme ? AppColors.darkTextSecondary : Colors.grey,
+                                                  indicatorColor: _isDarkTheme ? AppColors.accent : Colors.blue,
+                                                ),
+                                              ),
+                                              SizedBox(
+                                                height: 300, // Minimum height for console
+                                                child: TabBarView(
+                                                  controller: _tabController,
+                                                  children: [
+                                                    ConsoleTerminalWidget(
+                                                      scrollController: _scrollController,
+                                                      isActiveTab: _tabController.index == 0,
+                                                    ),
+                                                    _buildSerialMonitorTab(state),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                // Overlay warning dialog in the center of the screen
-                if (_showWarningDialog)
-                  Positioned.fill(
-                    child: Container(
-                      color: Colors.black54,
-                      child: Center(
-                        child: WarningDialog(
-                          isDarkTheme: _isDarkTheme,
-                          onCancel: () => setState(() => _showWarningDialog = false),
-                          onContinue: _handleWarningContinue,
-                          title: _getWarningTitle(),
-                          message: _getWarningMessage(),
+                  // Overlay warning dialog in the center of the screen
+                  if (_showWarningDialog)
+                    Positioned.fill(
+                      child: Container(
+                        color: Colors.black54,
+                        child: Center(
+                          child: WarningDialog(
+                            isDarkTheme: _isDarkTheme,
+                            onCancel: () => setState(() => _showWarningDialog = false),
+                            onContinue: _handleWarningContinue,
+                            title: _getWarningTitle(),
+                            message: _getWarningMessage(),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         );
