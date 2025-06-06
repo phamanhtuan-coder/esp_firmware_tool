@@ -273,6 +273,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         selectedBatchId: event.batchId,
         devices: [],
         firmwares: [],
+        selectedFirmwareId: null,
       ));
 
       if (event.batchId != null) {
@@ -290,12 +291,18 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         final devices = results[0] as List<Device>;
         final firmwares = results[1] as List<Firmware>;
 
+        // Get default firmware from batch or template rules
+        final defaultFirmware = await _apiService.getDefaultFirmware(
+          int.parse(batch.templateId),
+          batch.firmwareId
+        );
+
         print('Fetched ${devices.length} devices and ${firmwares.length} firmwares');
 
         emit(state.copyWith(
           devices: devices,
           firmwares: firmwares,
-          selectedFirmwareId: batch.firmwareId?.toString(),
+          selectedFirmwareId: defaultFirmware?.firmwareId.toString(),
           isLoading: false,
         ));
       } else {
@@ -306,6 +313,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       emit(state.copyWith(
         devices: [],
         firmwares: [],
+        selectedFirmwareId: null,
         isLoading: false,
       ));
     }

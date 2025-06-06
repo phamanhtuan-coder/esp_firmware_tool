@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:smart_net_firmware_loader/data/models/batch.dart';
@@ -21,6 +22,8 @@ class ApiService implements ApiRepository {
         'Accept': 'application/json',
       };
 
+  final Map<int, List<Firmware>> _firmwareCache = {};
+
   @override
   Future<List<Planning>> fetchPlannings() async {
     try {
@@ -43,12 +46,12 @@ class ApiService implements ApiRepository {
         if (responseData['success'] == true && responseData['data'] != null) {
           final List<dynamic> planningsData = responseData['data'] as List;
 
-          // Remove duplicates based on planning_id
-          final Map<String, Planning> uniquePlannings = {};
-          for (var data in planningsData) {
-            final planning = Planning.fromJson(data);
-            uniquePlannings[planning.id] = planning;
-          }
+          // Use LinkedHashMap to preserve order while removing duplicates
+          final uniquePlannings = LinkedHashMap<String, Planning>.fromIterable(
+            planningsData.map((data) => Planning.fromJson(data)),
+            key: (planning) => (planning as Planning).id,
+            value: (planning) => planning as Planning,
+          );
 
           _logService.addLog(
             message: 'Đã tải ${uniquePlannings.length} kế hoạch',
@@ -123,15 +126,13 @@ class ApiService implements ApiRepository {
         if (responseData['success'] == true && responseData['data'] != null) {
           final List<dynamic> batchesData = responseData['data'] as List;
 
-          // Use a map to automatically handle duplicates based on batch_id
-          final Map<String, Batch> uniqueBatches = {};
-          for (var data in batchesData) {
-            final batch = Batch.fromJson(data);
-            // Only add the batch if it belongs to the requested planning
-            if (planningId == null || batch.planningId == planningId) {
-              uniqueBatches[batch.id] = batch;
-            }
-          }
+          // Use LinkedHashMap to preserve order while removing duplicates
+          final uniqueBatches = LinkedHashMap<String, Batch>.fromIterable(
+            batchesData.map((data) => Batch.fromJson(data))
+                .where((batch) => planningId == null || batch.planningId == planningId),
+            key: (batch) => (batch as Batch).id,
+            value: (batch) => batch as Batch,
+          );
 
           _logService.addLog(
             message: 'Đã tải ${uniqueBatches.length} lô sản xuất cho kế hoạch $planningId',
@@ -183,7 +184,7 @@ class ApiService implements ApiRepository {
       );
 
       _logService.addLog(
-        message: 'Đang tải danh sách thiết bị cho lô $batchId...',
+        message: 'Đang tải danh sách thiết bị cho l�� $batchId...',
         level: LogLevel.info,
         step: ProcessStep.deviceRefresh,
         origin: 'system',
@@ -201,12 +202,12 @@ class ApiService implements ApiRepository {
         if (responseData['success'] == true && responseData['data'] != null) {
           final List<dynamic> devicesData = responseData['data'] as List;
 
-          // Remove duplicates based on device serial
-          final Map<String, Device> uniqueDevices = {};
-          for (var data in devicesData) {
-            final device = Device.fromJson(data);
-            uniqueDevices[device.serial] = device;
-          }
+          // Use LinkedHashMap to preserve order while removing duplicates
+          final uniqueDevices = LinkedHashMap<String, Device>.fromIterable(
+            devicesData.map((data) => Device.fromJson(data)),
+            key: (device) => (device as Device).serial,
+            value: (device) => device as Device,
+          );
 
           _logService.addLog(
             message: 'Đã tải ${uniqueDevices.length} thiết bị cho lô $batchId',
@@ -262,6 +263,10 @@ class ApiService implements ApiRepository {
 
   @override
   Future<List<Firmware>> fetchFirmwares(int templateId) async {
+    if (_firmwareCache.containsKey(templateId)) {
+      return _firmwareCache[templateId]!;
+    }
+
     try {
       DebugLogger.d(
         'Fetching firmwares for template $templateId...',
@@ -282,70 +287,67 @@ class ApiService implements ApiRepository {
         headers: _headers,
       );
 
-      DebugLogger.http('GET', endpoint, response: response.body);
-
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final responseData = jsonDecode(response.body);
         if (responseData['success'] == true && responseData['data'] != null) {
           final List<dynamic> firmwaresData = responseData['data'] as List;
 
-          // Remove duplicates based on firmware_id
-          final Map<int, Firmware> uniqueFirmwares = {};
-          for (var data in firmwaresData) {
-            final firmware = Firmware.fromJson(data);
-            uniqueFirmwares[firmware.firmwareId] = firmware;
-          }
+          // Use LinkedHashMap to preserve order while removing duplicates
+          final uniqueFirmwares = LinkedHashMap<int, Firmware>.fromIterable(
+            firmwaresData
+                .map((json) => Firmware.fromJson(json))
+                .where((fw) => !fw.isDeleted),
+            key: (fw) => (fw as Firmware).firmwareId,
+            value: (fw) => fw as Firmware,
+          );
+
+          final firmwares = uniqueFirmwares.values.toList();
+
+          // Cache the results
+          _firmwareCache[templateId] = firmwares;
 
           _logService.addLog(
-            message: 'Đã tải ${uniqueFirmwares.length} firmware cho template $templateId',
+            message: 'Đã tải ${firmwares.length} firmware cho template $templateId',
             level: LogLevel.success,
             step: ProcessStep.firmwareDownload,
             origin: 'system',
           );
 
-          DebugLogger.d(
-            'Successfully fetched ${uniqueFirmwares.length} firmwares for template $templateId',
-            className: 'ApiService',
-            methodName: 'fetchFirmwares',
-          );
-
-          return uniqueFirmwares.values.toList();
+          return firmwares;
         }
-
-        final errorMessage = responseData['message'] ?? 'Unknown error occurred';
-        DebugLogger.e('Error fetching firmwares: $errorMessage');
-        _logService.addLog(
-          message: 'Lỗi tải firmware: $errorMessage',
-          level: LogLevel.error,
-          step: ProcessStep.firmwareDownload,
-          origin: 'system',
-        );
-        return [];
-      } else {
-        final errorMessage = 'HTTP Error: ${response.statusCode}';
-        DebugLogger.e('Error fetching firmwares: $errorMessage');
-        _logService.addLog(
-          message: 'Lỗi tải firmware: $errorMessage',
-          level: LogLevel.error,
-          step: ProcessStep.firmwareDownload,
-          origin: 'system',
-        );
-        return [];
       }
+
+      return [];
     } catch (e, stackTrace) {
       DebugLogger.e(
         'Exception in fetchFirmwares',
         error: e,
         stackTrace: stackTrace,
       );
-      _logService.addLog(
-        message: 'Lỗi tải firmware: $e',
-        level: LogLevel.error,
-        step: ProcessStep.firmwareDownload,
-        origin: 'system',
-      );
       return [];
     }
+  }
+
+  Future<Firmware?> getDefaultFirmware(int templateId, int? batchFirmwareId) async {
+    final firmwares = await fetchFirmwares(templateId);
+
+    // First try to find firmware specified in batch
+    if (batchFirmwareId != null) {
+      final batchFirmware = firmwares.firstWhere(
+        (fw) => fw.firmwareId == batchFirmwareId,
+        orElse: () => firmwares.first,
+      );
+      return batchFirmware;
+    }
+
+    // If no batch firmware, try to find mandatory approved firmware
+    return firmwares.firstWhere(
+      (fw) => fw.isMandatory && fw.isApproved,
+      orElse: () => firmwares.firstWhere(
+        (fw) => fw.isApproved,
+        orElse: () => firmwares.first,
+      ),
+    );
   }
 
   @override

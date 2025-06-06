@@ -14,4 +14,5 @@ abstract class ApiRepository {
     String status, {
     String? reason,
   });
+  Future<Firmware?> getDefaultFirmware(int templateId, int? batchFirmwareId);
 }
