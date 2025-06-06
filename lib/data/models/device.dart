@@ -15,6 +15,11 @@ class Device {
     this.imageUrl,
   });
 
+  bool get isReadyToFlash => status == 'firmware_uploading';
+  bool get isCompleted => status == 'firmware_uploaded' || status == 'completed';
+  bool get hasError => status == 'firmware_failed' || status == 'error';
+  bool get isInProgress => status == 'in_progress' || status == 'firmware_upload';
+
   Device copyWith({
     String? id,
     String? batchId,
@@ -34,11 +39,29 @@ class Device {
   }
 
   factory Device.fromJson(Map<String, dynamic> json) {
+    String normalizeStatus(String? rawStatus) {
+      switch (rawStatus?.toLowerCase()) {
+        case 'firmware_uploading':
+          return 'firmware_uploading';
+        case 'firmware_upload':
+        case 'firmware_uploaded':
+          return 'firmware_uploaded';
+        case 'in_progress':
+          return 'in_progress';
+        case 'error':
+          return 'error';
+        case 'completed':
+          return 'completed';
+        default:
+          return 'pending';
+      }
+    }
+
     return Device(
       id: json['device_serial']?.toString() ?? '',
       batchId: json['production_batch_id']?.toString() ?? '',
       serial: json['device_serial']?.toString() ?? '',
-      status: json['status']?.toString() ?? 'pending',
+      status: normalizeStatus(json['status']?.toString()),
       reason: json['reason']?.toString(),
       imageUrl: json['image_url']?.toString(),
     );

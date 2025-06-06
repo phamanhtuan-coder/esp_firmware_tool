@@ -114,90 +114,91 @@ class BatchDevicesListView extends StatelessWidget {
                               ),
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                child: Row(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Expanded(
-                                      flex: 3,
-                                      child: Text(
-                                        device.serial,
-                                        style: TextStyle(
-                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                          color: isDarkTheme ? Colors.white : Colors.black87,
-                                        ),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 12,
-                                            height: 12,
-                                            decoration: BoxDecoration(
-                                              color: _getStatusColor(device.status),
-                                              shape: BoxShape.circle,
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            device.serial,
+                                            style: TextStyle(
+                                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                              fontSize: 15,
+                                              color: isDarkTheme ? Colors.white : Colors.black87,
                                             ),
                                           ),
-                                          const SizedBox(width: 8),
-                                          Text(
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        // Status indicator
+                                        Container(
+                                          width: 10,
+                                          height: 10,
+                                          decoration: BoxDecoration(
+                                            color: _getStatusColor(device.status),
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        // Status text
+                                        Expanded(
+                                          child: Text(
                                             _getStatusText(device.status),
                                             style: TextStyle(
-                                              color: isDarkTheme ? Colors.white70 : Colors.black87,
+                                              fontSize: 13,
+                                              color: isDarkTheme ? Colors.white70 : Colors.black54,
                                             ),
                                           ),
-                                        ],
-                                      ),
-                                    ),
-                                    Expanded(
-                                      flex: 3,
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.end,
-                                        children: [
-                                          ElevatedButton(
+                                        ),
+                                        // Action buttons with smaller size
+                                        SizedBox(
+                                          height: 32,
+                                          child: ElevatedButton(
                                             onPressed: () => onUpdateDeviceStatus(device.id, 'completed'),
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor: AppColors.success,
                                               foregroundColor: Colors.white,
-                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                              minimumSize: const Size(90, 32),
-                                              textStyle: const TextStyle(fontSize: 13),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(6),
-                                              ),
+                                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                                              minimumSize: const Size(32, 32),
+                                              textStyle: const TextStyle(fontSize: 12),
                                             ),
                                             child: const Row(
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
-                                                Icon(Icons.check_circle_outline, size: 16),
+                                                Icon(Icons.check, size: 16),
                                                 SizedBox(width: 4),
                                                 Text('Hoàn thành'),
                                               ],
                                             ),
                                           ),
-                                          const SizedBox(width: 8),
-                                          ElevatedButton(
+                                        ),
+                                        const SizedBox(width: 8),
+                                        SizedBox(
+                                          height: 32,
+                                          child: ElevatedButton(
                                             onPressed: () => onUpdateDeviceStatus(device.id, 'error'),
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor: AppColors.error,
                                               foregroundColor: Colors.white,
-                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                              minimumSize: const Size(90, 32),
-                                              textStyle: const TextStyle(fontSize: 13),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(6),
-                                              ),
+                                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                                              minimumSize: const Size(32, 32),
+                                              textStyle: const TextStyle(fontSize: 12),
                                             ),
                                             child: const Row(
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
-                                                Icon(Icons.error_outline, size: 16),
+                                                Icon(Icons.error, size: 16),
                                                 SizedBox(width: 4),
-                                                Text('Báo lỗi'),
+                                                Text('Lỗi'),
                                               ],
                                             ),
                                           ),
-                                        ],
-                                      ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),

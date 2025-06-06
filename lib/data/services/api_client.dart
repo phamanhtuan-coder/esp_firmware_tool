@@ -43,22 +43,27 @@ class ApiService implements ApiRepository {
         if (responseData['success'] == true && responseData['data'] != null) {
           final List<dynamic> planningsData = responseData['data'] as List;
 
-          final List<Planning> plannings = planningsData.map((data) => Planning.fromJson(data)).toList();
+          // Remove duplicates based on planning_id
+          final Map<String, Planning> uniquePlannings = {};
+          for (var data in planningsData) {
+            final planning = Planning.fromJson(data);
+            uniquePlannings[planning.id] = planning;
+          }
 
           _logService.addLog(
-            message: 'Đã tải ${plannings.length} kế hoạch',
+            message: 'Đã tải ${uniquePlannings.length} kế hoạch',
             level: LogLevel.success,
             step: ProcessStep.productBatch,
             origin: 'system',
           );
 
           DebugLogger.d(
-            'Successfully fetched ${plannings.length} plannings',
+            'Successfully fetched ${uniquePlannings.length} plannings',
             className: 'ApiService',
             methodName: 'fetchPlannings',
           );
 
-          return plannings;
+          return uniquePlannings.values.toList();
         }
 
         final errorMessage = responseData['message'] ?? 'Unknown error occurred';
@@ -91,9 +96,9 @@ class ApiService implements ApiRepository {
   }
 
   @override
-  Future<List<Batch>> fetchBatches() async {
+  Future<List<Batch>> fetchBatches(String? planningId) async {
     try {
-      DebugLogger.d('Fetching batches...', className: 'ApiService');
+      DebugLogger.d('Fetching batches for planning $planningId...', className: 'ApiService');
 
       _logService.addLog(
         message: 'Đang tải danh sách lô sản xuất...',
@@ -102,38 +107,68 @@ class ApiService implements ApiRepository {
         origin: 'system',
       );
 
+      final endpoint = planningId != null
+          ? '$baseUrl/production-tracking/info-need-upload-firmware/batch/$planningId/null'
+          : '$baseUrl/production-tracking/info-need-upload-firmware/batch/null/null';
+
       final response = await _httpClient.get(
-        Uri.parse('$baseUrl/production-tracking/info-need-upload-firmware/batch/null/null'),
+        Uri.parse(endpoint),
         headers: _headers,
       );
 
-      DebugLogger.http('GET', '/batch/null/null', response: response.body);
+      DebugLogger.http('GET', endpoint, response: response.body);
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final responseData = jsonDecode(response.body);
         if (responseData['success'] == true && responseData['data'] != null) {
           final List<dynamic> batchesData = responseData['data'] as List;
 
+          // Use a map to automatically handle duplicates based on batch_id
           final Map<String, Batch> uniqueBatches = {};
           for (var data in batchesData) {
             final batch = Batch.fromJson(data);
-            uniqueBatches[batch.id] = batch;
+            // Only add the batch if it belongs to the requested planning
+            if (planningId == null || batch.planningId == planningId) {
+              uniqueBatches[batch.id] = batch;
+            }
           }
 
-          DebugLogger.d('Fetched ${uniqueBatches.length} batches', className: 'ApiService');
+          _logService.addLog(
+            message: 'Đã tải ${uniqueBatches.length} lô sản xuất cho kế hoạch $planningId',
+            level: LogLevel.success,
+            step: ProcessStep.productBatch,
+            origin: 'system',
+          );
+
           return uniqueBatches.values.toList();
         }
 
         final errorMessage = responseData['message'] ?? 'Unknown error occurred';
-        DebugLogger.e('Error fetching batches: $errorMessage');
+        _logService.addLog(
+          message: 'Lỗi tải lô sản xuất: $errorMessage',
+          level: LogLevel.error,
+          step: ProcessStep.productBatch,
+          origin: 'system',
+        );
         return [];
       } else {
         final errorMessage = 'HTTP Error: ${response.statusCode}';
-        DebugLogger.e('Error fetching batches: $errorMessage');
+        _logService.addLog(
+          message: 'Lỗi tải lô sản xuất: $errorMessage',
+          level: LogLevel.error,
+          step: ProcessStep.productBatch,
+          origin: 'system',
+        );
         return [];
       }
     } catch (e, stackTrace) {
       DebugLogger.e('Exception in fetchBatches', error: e, stackTrace: stackTrace);
+      _logService.addLog(
+        message: 'Lỗi tải lô sản xuất: $e',
+        level: LogLevel.error,
+        step: ProcessStep.productBatch,
+        origin: 'system',
+      );
       return [];
     }
   }
@@ -141,6 +176,12 @@ class ApiService implements ApiRepository {
   @override
   Future<List<Device>> fetchDevices(String batchId) async {
     try {
+      DebugLogger.d(
+        'Fetching devices for batch ID: $batchId',
+        className: 'ApiService',
+        methodName: 'fetchDevices',
+      );
+
       _logService.addLog(
         message: 'Đang tải danh sách thiết bị cho lô $batchId...',
         level: LogLevel.info,
@@ -153,15 +194,14 @@ class ApiService implements ApiRepository {
         headers: _headers,
       );
 
-      print('Devices Response status: ${response.statusCode}');
-      print('Devices Response body: ${response.body}');
+      DebugLogger.http('GET', '/tracking/null/$batchId', response: response.body);
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final responseData = jsonDecode(response.body);
         if (responseData['success'] == true && responseData['data'] != null) {
           final List<dynamic> devicesData = responseData['data'] as List;
 
-          // Convert response to Device objects and remove duplicates
+          // Remove duplicates based on device serial
           final Map<String, Device> uniqueDevices = {};
           for (var data in devicesData) {
             final device = Device.fromJson(data);
@@ -175,33 +215,43 @@ class ApiService implements ApiRepository {
             origin: 'system',
           );
 
+          DebugLogger.d(
+            'Successfully fetched ${uniqueDevices.length} devices for batch $batchId',
+            className: 'ApiService',
+            methodName: 'fetchDevices',
+          );
+
           return uniqueDevices.values.toList();
         }
+
         final errorMessage = responseData['message'] ?? 'Unknown error occurred';
-        DebugLogger.e('Error fetching batches: $errorMessage');
+        DebugLogger.e('Error fetching devices: $errorMessage');
         _logService.addLog(
-          message: 'Error fetching devices: $errorMessage',
+          message: 'Lỗi khi tải danh sách thiết bị: $errorMessage',
           level: LogLevel.error,
           step: ProcessStep.deviceRefresh,
           origin: 'system',
         );
         return [];
-      }
-      else {
+      } else {
         final errorMessage = 'HTTP Error: ${response.statusCode}';
         DebugLogger.e('Error fetching devices: $errorMessage');
         _logService.addLog(
-          message: 'Error fetching devices: $errorMessage',
+          message: 'Lỗi khi tải danh sách thiết bị: $errorMessage',
           level: LogLevel.error,
           step: ProcessStep.deviceRefresh,
           origin: 'system',
         );
         return [];
       }
-    } catch (e) {
-      print('Exception in fetchDevices: $e');
+    } catch (e, stackTrace) {
+      DebugLogger.e(
+        'Exception in fetchDevices',
+        error: e,
+        stackTrace: stackTrace,
+      );
       _logService.addLog(
-        message: 'Exception fetching devices: $e',
+        message: 'Lỗi khi tải danh sách thiết bị: $e',
         level: LogLevel.error,
         step: ProcessStep.deviceRefresh,
         origin: 'system',
@@ -213,39 +263,83 @@ class ApiService implements ApiRepository {
   @override
   Future<List<Firmware>> fetchFirmwares(int templateId) async {
     try {
+      DebugLogger.d(
+        'Fetching firmwares for template $templateId...',
+        className: 'ApiService',
+        methodName: 'fetchFirmwares',
+      );
+
       _logService.addLog(
-        message: 'Fetching firmwares for template $templateId...',
+        message: 'Đang tải danh sách firmware cho template $templateId...',
         level: LogLevel.info,
         step: ProcessStep.firmwareDownload,
         origin: 'system',
       );
+
+      final endpoint = '$baseUrl/firmware/by-template/$templateId';
       final response = await _httpClient.get(
-        Uri.parse('$baseUrl/firmware/by-template/$templateId'),
+        Uri.parse(endpoint),
         headers: _headers,
       );
+
+      DebugLogger.http('GET', endpoint, response: response.body);
+
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        final List<dynamic> data = jsonDecode(response.body)['data'];
-        final firmwares = data.map((json) => Firmware.fromJson(json)).toList();
+        final responseData = jsonDecode(response.body);
+        if (responseData['success'] == true && responseData['data'] != null) {
+          final List<dynamic> firmwaresData = responseData['data'] as List;
+
+          // Remove duplicates based on firmware_id
+          final Map<int, Firmware> uniqueFirmwares = {};
+          for (var data in firmwaresData) {
+            final firmware = Firmware.fromJson(data);
+            uniqueFirmwares[firmware.firmwareId] = firmware;
+          }
+
+          _logService.addLog(
+            message: 'Đã tải ${uniqueFirmwares.length} firmware cho template $templateId',
+            level: LogLevel.success,
+            step: ProcessStep.firmwareDownload,
+            origin: 'system',
+          );
+
+          DebugLogger.d(
+            'Successfully fetched ${uniqueFirmwares.length} firmwares for template $templateId',
+            className: 'ApiService',
+            methodName: 'fetchFirmwares',
+          );
+
+          return uniqueFirmwares.values.toList();
+        }
+
+        final errorMessage = responseData['message'] ?? 'Unknown error occurred';
+        DebugLogger.e('Error fetching firmwares: $errorMessage');
         _logService.addLog(
-          message:
-              'Fetched ${firmwares.length} firmwares for template $templateId',
-          level: LogLevel.success,
+          message: 'Lỗi tải firmware: $errorMessage',
+          level: LogLevel.error,
           step: ProcessStep.firmwareDownload,
           origin: 'system',
         );
-        return firmwares;
+        return [];
       } else {
+        final errorMessage = 'HTTP Error: ${response.statusCode}';
+        DebugLogger.e('Error fetching firmwares: $errorMessage');
         _logService.addLog(
-          message: 'Error fetching firmwares: ${response.body}',
+          message: 'Lỗi tải firmware: $errorMessage',
           level: LogLevel.error,
           step: ProcessStep.firmwareDownload,
           origin: 'system',
         );
         return [];
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      DebugLogger.e(
+        'Exception in fetchFirmwares',
+        error: e,
+        stackTrace: stackTrace,
+      );
       _logService.addLog(
-        message: 'Exception fetching firmwares: $e',
+        message: 'Lỗi tải firmware: $e',
         level: LogLevel.error,
         step: ProcessStep.firmwareDownload,
         origin: 'system',
@@ -257,47 +351,77 @@ class ApiService implements ApiRepository {
   @override
   Future<String?> fetchFirmwareFile(String firmwareId) async {
     try {
+      DebugLogger.d(
+        'Fetching firmware file for ID: $firmwareId',
+        className: 'ApiService',
+        methodName: 'fetchFirmwareFile',
+      );
+
       _logService.addLog(
-        message: 'Fetching firmware file for ID $firmwareId...',
+        message: 'Đang tải file firmware $firmwareId...',
         level: LogLevel.info,
         step: ProcessStep.firmwareDownload,
         origin: 'system',
       );
+
+      final endpoint = '$baseUrl/firmware/detail/$firmwareId';
       final response = await _httpClient.get(
-        Uri.parse('$baseUrl/firmware/detail/$firmwareId'),
+        Uri.parse(endpoint),
         headers: _headers,
       );
+
+      DebugLogger.http('GET', endpoint, response: response.body);
+
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        final data = jsonDecode(response.body)['data'];
+        final responseData = jsonDecode(response.body);
+        final data = responseData['data'];
         final sourceCode = data['file_path'] as String?;
+
         if (sourceCode == null || sourceCode.isEmpty) {
+          const errorMessage = 'Firmware file path is empty';
+          DebugLogger.e(errorMessage);
           _logService.addLog(
-            message: 'Error: Firmware file path is empty',
+            message: 'Lỗi: $errorMessage',
             level: LogLevel.error,
             step: ProcessStep.firmwareDownload,
             origin: 'system',
           );
           return null;
         }
+
         _logService.addLog(
-          message: 'Fetched firmware file for ID $firmwareId',
+          message: 'Đã tải file firmware $firmwareId',
           level: LogLevel.success,
           step: ProcessStep.firmwareDownload,
           origin: 'system',
         );
+
+        DebugLogger.d(
+          'Successfully fetched firmware file for ID $firmwareId',
+          className: 'ApiService',
+          methodName: 'fetchFirmwareFile',
+        );
+
         return sourceCode;
       } else {
+        final errorMessage = 'HTTP Error: ${response.statusCode}';
+        DebugLogger.e('Error fetching firmware file: $errorMessage');
         _logService.addLog(
-          message: 'Error fetching firmware file: ${response.body}',
+          message: 'Lỗi tải file firmware: $errorMessage',
           level: LogLevel.error,
           step: ProcessStep.firmwareDownload,
           origin: 'system',
         );
         return null;
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      DebugLogger.e(
+        'Exception in fetchFirmwareFile',
+        error: e,
+        stackTrace: stackTrace,
+      );
       _logService.addLog(
-        message: 'Exception fetching firmware file: $e',
+        message: 'Lỗi tải file firmware: $e',
         level: LogLevel.error,
         step: ProcessStep.firmwareDownload,
         origin: 'system',

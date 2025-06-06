@@ -460,7 +460,7 @@ class TemplateService {
       print('DEBUG: Metadata saved to: ${metadataFile.path}');
     } catch (e) {
       print('DEBUG: Error saving metadata: $e');
-      throw e; // Re-throw to be handled by the caller
+      rethrow; // Re-throw to be handled by the caller
     }
   }
 

@@ -59,6 +59,8 @@ class UpdateDeviceStatusEvent extends HomeEvent {
 
 class FlashFirmwareEvent extends HomeEvent {}
 
+class FetchBatchesEvent extends HomeEvent {}
+
 class HomeState {
   final List<Planning> plannings;
   final String? selectedPlanningId;
@@ -157,6 +159,33 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<StartQrScanEvent>(_onStartQrScan);
     on<UpdateDeviceStatusEvent>(_onUpdateDeviceStatus);
     on<FlashFirmwareEvent>(_onFlashFirmware);
+    on<FetchBatchesEvent>(_onFetchBatches); // Thêm handler mới
+  }
+
+  Future<void> _onFetchBatches(
+    FetchBatchesEvent event,
+    Emitter<HomeState> emit,
+  ) async {
+    try {
+      if (state.selectedPlanningId == null) return;
+
+      emit(state.copyWith(isLoading: true));
+
+      print('Fetching batches for planning ${state.selectedPlanningId}...');
+      final batches = await _apiService.fetchBatches(state.selectedPlanningId);
+      print('Fetched ${batches.length} batches for planning ${state.selectedPlanningId}');
+
+      emit(state.copyWith(
+        batches: batches,
+        isLoading: false,
+      ));
+    } catch (e) {
+      print('Error fetching batches: $e');
+      emit(state.copyWith(
+        batches: [],
+        isLoading: false,
+      ));
+    }
   }
 
   Future<void> _onLoadInitialData(
@@ -196,30 +225,23 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       print('Planning selected: ${event.planningId}');
       emit(state.copyWith(isLoading: true));
 
-      // Reset batch-related state
+      // Clear all dependent state when switching plannings
       emit(state.copyWith(
         selectedPlanningId: event.planningId,
         selectedBatchId: null,
         batches: [], // Clear existing batches
         devices: [],
         firmwares: [],
+        selectedFirmwareId: null, // Clear selected firmware
+        selectedSerial: null, // Clear selected serial
       ));
 
       if (event.planningId != null) {
-        // Fetch all batches from API
-        print('Fetching batches for planning ${event.planningId}...');
-        final allBatches = await _apiService.fetchBatches();
-        print('Fetched ${allBatches.length} total batches');
-
-        // Filter batches for selected planning
-        final planningBatches = allBatches
-            .where((b) => b.planningId == event.planningId)
-            .toList();
-        print('Filtered ${planningBatches.length} batches for planning ${event.planningId}');
-
+        // Fetch batches for selected planning
+        final batches = await _apiService.fetchBatches(event.planningId);
         emit(state.copyWith(
-          batches: planningBatches,
-          isLoading: false
+          batches: batches,
+          isLoading: false,
         ));
       } else {
         emit(state.copyWith(isLoading: false));
@@ -231,6 +253,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         selectedBatchId: null,
         devices: [],
         firmwares: [],
+        selectedFirmwareId: null,
+        selectedSerial: null,
         isLoading: false,
       ));
     }

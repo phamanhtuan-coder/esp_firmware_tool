@@ -67,7 +67,7 @@ class LoggingState {
 }
 
 class LoggingBloc extends Bloc<LoggingEvent, LoggingState> {
-  LoggingBloc() : super(LoggingState()) {
+  LoggingBloc() : super(const LoggingState()) {
     on<AddLogEvent>(_onAddLog);
     on<FilterLogEvent>(_onFilterLog);
     on<ClearLogsEvent>(_onClearLogs);
@@ -94,7 +94,7 @@ class LoggingBloc extends Bloc<LoggingEvent, LoggingState> {
   }
 
   void _onClearLogs(ClearLogsEvent event, Emitter<LoggingState> emit) {
-    emit(LoggingState()); // Reset to initial state
+    emit(const LoggingState()); // Reset to initial state
   }
 
   void _onAutoScroll(AutoScrollEvent event, Emitter<LoggingState> emit) {

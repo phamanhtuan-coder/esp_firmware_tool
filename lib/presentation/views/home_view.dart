@@ -325,8 +325,13 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   }
 
   void _handleFlashStatusChanged(bool canFlash) {
-    setState(() {
-      _canFlash = canFlash;
+    if (!mounted) return;
+    Future.microtask(() {
+      if (mounted) {
+        setState(() {
+          _canFlash = canFlash;
+        });
+      }
     });
   }
 
@@ -336,13 +341,16 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       listenWhen: (previous, current) => previous != current,
       listener: (context, state) {
         // Handle state changes here instead of during build
-        if (mounted) {
-          setState(() {
-            _selectedFirmwareVersion = state.selectedFirmwareId;
-            _selectedPort = state.selectedPort;
-            _canFlash = state.canFlash;
-          });
-        }
+        if (!mounted) return;
+        Future.microtask(() {
+          if (mounted) {
+            setState(() {
+              _selectedFirmwareVersion = state.selectedFirmwareId;
+              _selectedPort = state.selectedPort;
+              _canFlash = state.canFlash;
+            });
+          }
+        });
       },
       builder: (context, state) {
         return Scaffold(

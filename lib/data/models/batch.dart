@@ -17,7 +17,7 @@ class Batch {
     final batchId = json['production_batch_id']?.toString() ?? '';
     return Batch(
       id: batchId,
-      name: json['name']?.toString() ?? batchId,
+      name: batchId, // Using production_batch_id as the display name
       planningId: json['planning_id']?.toString() ?? '',
       templateId: json['template_id']?.toString() ?? '',
       firmwareId: json['firmware_id'] as int?,

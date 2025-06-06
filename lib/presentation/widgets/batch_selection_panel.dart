@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
 import 'package:smart_net_firmware_loader/core/config/app_config.dart';
 import 'package:smart_net_firmware_loader/data/models/batch.dart';
 import 'package:smart_net_firmware_loader/data/models/planning.dart';
+import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
 
 class BatchSelectionPanel extends StatelessWidget {
   final List<Planning> plannings;
@@ -31,11 +33,22 @@ class BatchSelectionPanel extends StatelessWidget {
     final effectiveDarkTheme =
         isDarkTheme ?? Theme.of(context).brightness == Brightness.dark;
 
+    // Filter batches to only show ones belonging to selected planning
+    final filteredBatches = selectedPlanningId != null
+        ? batches.where((batch) => batch.planningId == selectedPlanningId).toList()
+        : [];
+
+    // Only set batch value if it exists in filtered list
+    final effectiveSelectedBatchId = filteredBatches.any((b) => b.id == selectedBatchId)
+        ? selectedBatchId
+        : null;
+
     return Padding(
       padding: const EdgeInsets.all(AppConfig.defaultPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Planning dropdown section
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -51,7 +64,9 @@ class BatchSelectionPanel extends StatelessWidget {
               Stack(
                 children: [
                   DropdownButtonFormField<String?>(
-                    value: selectedPlanningId,
+                    value: plannings.any((p) => p.id == selectedPlanningId)
+                        ? selectedPlanningId
+                        : null,
                     decoration: InputDecoration(
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -98,13 +113,17 @@ class BatchSelectionPanel extends StatelessWidget {
                         child: Text(planning.id),
                       );
                     }).toList(),
-                    onChanged: isLoading ? null : onPlanningSelected,
+                    onChanged: isLoading ? null : (value) {
+                      // Reset batch selection when planning changes
+                      if (value != selectedPlanningId) {
+                        onBatchSelected(null);
+                      }
+                      onPlanningSelected(value);
+                    },
                     hint: Text(
                       '-- Chọn kế hoạch sản xuất --',
                       style: TextStyle(
-                        color: effectiveDarkTheme
-                            ? Colors.grey[400]
-                            : Colors.grey[600],
+                        color: effectiveDarkTheme ? Colors.grey[400] : Colors.grey[600],
                       ),
                     ),
                   ),
@@ -113,6 +132,7 @@ class BatchSelectionPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
+          // Batch dropdown section
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -128,7 +148,7 @@ class BatchSelectionPanel extends StatelessWidget {
               Stack(
                 children: [
                   DropdownButtonFormField<String?>(
-                    value: selectedBatchId,
+                    value: effectiveSelectedBatchId,
                     decoration: InputDecoration(
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -163,6 +183,12 @@ class BatchSelectionPanel extends StatelessWidget {
                             )
                           : null,
                     ),
+                    onTap: selectedPlanningId != null && !isLoading
+                        ? () {
+                            final homeBloc = context.read<HomeBloc>();
+                            homeBloc.add(FetchBatchesEvent());
+                          }
+                        : null,
                     icon: const Icon(Icons.arrow_drop_down, color: Colors.black87),
                     dropdownColor: AppColors.componentBackground,
                     style: const TextStyle(
@@ -171,24 +197,21 @@ class BatchSelectionPanel extends StatelessWidget {
                       fontWeight: FontWeight.w500,
                     ),
                     isExpanded: true,
-                    items: batches.map((batch) {
+                    items: filteredBatches.map((batch) {
                       return DropdownMenuItem<String?>(
                         value: batch.id,
                         child: Text(batch.name),
                       );
                     }).toList(),
-                    onChanged:
-                        (selectedPlanningId != null && !isLoading)
-                            ? onBatchSelected
-                            : null,
+                    onChanged: (selectedPlanningId != null && !isLoading)
+                        ? onBatchSelected
+                        : null,
                     hint: Text(
                       selectedPlanningId != null
                           ? '-- Chọn lô sản xuất --'
                           : 'Vui lòng chọn kế hoạch trước',
                       style: TextStyle(
-                        color: effectiveDarkTheme
-                            ? Colors.grey[400]
-                            : Colors.grey[600],
+                        color: effectiveDarkTheme ? Colors.grey[400] : Colors.grey[600],
                       ),
                     ),
                   ),
