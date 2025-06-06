@@ -409,19 +409,54 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     Emitter<HomeState> emit,
   ) async {
     try {
+      String newStatus;
+      bool isSuccessful;
+
+      if (event.status == 'completed') {
+        newStatus = 'firmware_uploaded';
+        isSuccessful = true;
+      } else if (event.status == 'error') {
+        newStatus = 'firmware_failed';
+        isSuccessful = false;
+      } else {
+        return;
+      }
+
       // Update device status via API
-      await _apiService.updateDeviceStatusWithResult(
+      final result = await _apiService.updateDeviceStatusWithResult(
         deviceSerial: event.deviceId,
-        isSuccessful: event.status == 'success',
+        isSuccessful: isSuccessful,
       );
 
+      // Show result dialog
+      emit(state.copyWith(
+        showStatusDialog: true,
+        statusDialogType: result['success'] == true ? 'success' : 'error',
+        statusDialogMessage: result['message'] ?? (isSuccessful
+          ? 'Cập nhật trạng thái thiết bị thành công'
+          : 'Cập nhật trạng thái thiết bị thất bại'),
+      ));
+
+      // Always refresh devices list after status update
       if (state.selectedBatchId != null) {
-        // Refresh devices list after status update
+        print('Refreshing devices list after status update...');
         final devices = await _apiService.fetchDevices(state.selectedBatchId!);
         emit(state.copyWith(devices: devices));
       }
+
     } catch (e) {
       print('Error updating device status: $e');
+      emit(state.copyWith(
+        showStatusDialog: true,
+        statusDialogType: 'error',
+        statusDialogMessage: 'Lỗi cập nhật trạng thái: $e',
+      ));
+
+      // Still try to refresh devices list even after error
+      if (state.selectedBatchId != null) {
+        final devices = await _apiService.fetchDevices(state.selectedBatchId!);
+        emit(state.copyWith(devices: devices));
+      }
     }
   }
 
@@ -465,30 +500,34 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         isSuccessful: event.isSuccessful,
       );
 
-      if (result['success'] == true) {
-        // Refresh devices list after successful status update
-        if (state.selectedBatchId != null) {
-          final devices = await _apiService.fetchDevices(state.selectedBatchId!);
-          emit(state.copyWith(
-            devices: devices,
-            showStatusDialog: true,
-            statusDialogType: 'success',
-            statusDialogMessage: result['message'] ?? 'Cập nhật trạng thái thành công',
-          ));
-        }
-      } else {
-        emit(state.copyWith(
-          showStatusDialog: true,
-          statusDialogType: 'error',
-          statusDialogMessage: result['message'] ?? 'Lỗi cập nhật trạng thái',
-        ));
+      // Show result dialog
+      emit(state.copyWith(
+        showStatusDialog: true,
+        statusDialogType: result['success'] == true ? 'success' : 'error',
+        statusDialogMessage: result['message'] ?? (event.isSuccessful
+          ? 'Cập nhật trạng thái thành công'
+          : 'Lỗi cập nhật trạng thái'),
+      ));
+
+      // Always refresh devices list after status update
+      if (state.selectedBatchId != null) {
+        print('Refreshing devices list after status update...');
+        final devices = await _apiService.fetchDevices(state.selectedBatchId!);
+        emit(state.copyWith(devices: devices));
       }
     } catch (e) {
+      print('Error in status update: $e');
       emit(state.copyWith(
         showStatusDialog: true,
         statusDialogType: 'error',
         statusDialogMessage: 'Lỗi cập nhật trạng thái: $e',
       ));
+
+      // Still try to refresh devices list even after error
+      if (state.selectedBatchId != null) {
+        final devices = await _apiService.fetchDevices(state.selectedBatchId!);
+        emit(state.copyWith(devices: devices));
+      }
     }
   }
 

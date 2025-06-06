@@ -287,36 +287,39 @@ class ApiService implements ApiRepository {
         headers: _headers,
       );
 
+      DebugLogger.http('GET', endpoint, response: response.body);
+
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final responseData = jsonDecode(response.body);
         if (responseData['success'] == true && responseData['data'] != null) {
-          final List<dynamic> firmwaresData = responseData['data'] as List;
-
-          // Use LinkedHashMap to preserve order while removing duplicates
-          final uniqueFirmwares = LinkedHashMap<int, Firmware>.fromIterable(
-            firmwaresData
+          final data = responseData['data'];
+          if (data is List) {
+            final firmwares = data
                 .map((json) => Firmware.fromJson(json))
-                .where((fw) => !fw.isDeleted),
-            key: (fw) => (fw as Firmware).firmwareId,
-            value: (fw) => fw as Firmware,
-          );
+                .where((fw) => !fw.isDeleted)
+                .toList();
 
-          final firmwares = uniqueFirmwares.values.toList();
+            // Cache the results
+            _firmwareCache[templateId] = firmwares;
 
-          // Cache the results
-          _firmwareCache[templateId] = firmwares;
+            _logService.addLog(
+              message: 'Đã tải ${firmwares.length} firmware cho template $templateId',
+              level: LogLevel.success,
+              step: ProcessStep.firmwareDownload,
+              origin: 'system',
+            );
 
-          _logService.addLog(
-            message: 'Đã tải ${firmwares.length} firmware cho template $templateId',
-            level: LogLevel.success,
-            step: ProcessStep.firmwareDownload,
-            origin: 'system',
-          );
-
-          return firmwares;
+            return firmwares;
+          }
         }
       }
 
+      _logService.addLog(
+        message: 'Không có firmware nào cho template $templateId',
+        level: LogLevel.warning,
+        step: ProcessStep.firmwareDownload,
+        origin: 'system',
+      );
       return [];
     } catch (e, stackTrace) {
       DebugLogger.e(
@@ -324,10 +327,17 @@ class ApiService implements ApiRepository {
         error: e,
         stackTrace: stackTrace,
       );
+      _logService.addLog(
+        message: 'Lỗi tải firmware: $e',
+        level: LogLevel.error,
+        step: ProcessStep.firmwareDownload,
+        origin: 'system',
+      );
       return [];
     }
   }
 
+  @override
   Future<Firmware?> getDefaultFirmware(int templateId, int? batchFirmwareId) async {
     final firmwares = await fetchFirmwares(templateId);
 

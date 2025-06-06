@@ -16,9 +16,10 @@ class Device {
   });
 
   bool get isReadyToFlash => status == 'firmware_uploading';
-  bool get isCompleted => status == 'firmware_uploaded' || status == 'completed';
-  bool get hasError => status == 'firmware_failed' || status == 'error';
-  bool get isInProgress => status == 'in_progress' || status == 'firmware_upload';
+  bool get isCompleted => status == 'firmware_uploaded';
+  bool get hasError => status == 'firmware_failed';
+  bool get isInProgress => status == 'in_progress';
+  bool get isWaitingForQr => status == 'firmware_upload';
 
   Device copyWith({
     String? id,
@@ -44,14 +45,13 @@ class Device {
         case 'firmware_uploading':
           return 'firmware_uploading';
         case 'firmware_upload':
+          return 'firmware_upload';
         case 'firmware_uploaded':
           return 'firmware_uploaded';
+        case 'firmware_failed':
+          return 'firmware_failed';
         case 'in_progress':
           return 'in_progress';
-        case 'error':
-          return 'error';
-        case 'completed':
-          return 'completed';
         default:
           return 'pending';
       }

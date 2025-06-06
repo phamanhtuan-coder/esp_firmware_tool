@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
 import 'package:smart_net_firmware_loader/data/models/device.dart';
+import 'package:smart_net_firmware_loader/presentation/widgets/warning_dialog.dart';
 
 class BatchDevicesListView extends StatelessWidget {
   final List<Device> devices;
@@ -19,13 +20,15 @@ class BatchDevicesListView extends StatelessWidget {
   String _getStatusText(String status) {
     switch (status) {
       case 'firmware_uploading':
-        return 'Sẵn sàng nạp firmware';
+        return 'Đã quét QR, sẵn sàng nạp firmware';
+      case 'firmware_upload':
+        return 'Chờ quét QR để nạp firmware';
       case 'firmware_uploaded':
         return 'Đã nạp firmware';
-      case 'error':
-        return 'Lỗi';
-      case 'completed':
-        return 'Hoàn thành';
+      case 'firmware_failed':
+        return 'Nạp firmware thất bại';
+      case 'in_progress':
+        return 'Đang lắp ráp';
       default:
         return status;
     }
@@ -35,15 +38,36 @@ class BatchDevicesListView extends StatelessWidget {
     switch (status) {
       case 'firmware_uploading':
         return Colors.blue;
+      case 'firmware_upload':
+        return Colors.orange;
       case 'firmware_uploaded':
         return Colors.green;
-      case 'error':
+      case 'firmware_failed':
         return Colors.red;
-      case 'completed':
-        return Colors.green;
+      case 'in_progress':
+        return Colors.grey;
       default:
         return Colors.grey;
     }
+  }
+
+  void _showConfirmationDialog(BuildContext context, Device device, String newStatus) {
+    showDialog(
+      context: context,
+      builder: (context) => WarningDialog(
+        isDarkTheme: isDarkTheme,
+        type: newStatus == 'completed' ? 'success' : 'warning',
+        title: newStatus == 'completed' ? 'Xác nhận hoàn thành' : 'Xác nhận báo lỗi',
+        message: newStatus == 'completed'
+            ? 'Xác nhận thiết bị ${device.serial} đã nạp firmware thành công?'
+            : 'Xác nhận thiết bị ${device.serial} nạp firmware thất bại?',
+        onCancel: () => Navigator.pop(context),
+        onContinue: () {
+          Navigator.pop(context);
+          onUpdateDeviceStatus(device.id, newStatus);
+        },
+      ),
+    );
   }
 
   @override
@@ -134,7 +158,6 @@ class BatchDevicesListView extends StatelessWidget {
                                     const SizedBox(height: 8),
                                     Row(
                                       children: [
-                                        // Status indicator
                                         Container(
                                           width: 10,
                                           height: 10,
@@ -144,7 +167,6 @@ class BatchDevicesListView extends StatelessWidget {
                                           ),
                                         ),
                                         const SizedBox(width: 8),
-                                        // Status text
                                         Expanded(
                                           child: Text(
                                             _getStatusText(device.status),
@@ -154,50 +176,52 @@ class BatchDevicesListView extends StatelessWidget {
                                             ),
                                           ),
                                         ),
-                                        // Action buttons with smaller size
-                                        SizedBox(
-                                          height: 32,
-                                          child: ElevatedButton(
-                                            onPressed: () => onUpdateDeviceStatus(device.id, 'completed'),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: AppColors.success,
-                                              foregroundColor: Colors.white,
-                                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                                              minimumSize: const Size(32, 32),
-                                              textStyle: const TextStyle(fontSize: 12),
-                                            ),
-                                            child: const Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(Icons.check, size: 16),
-                                                SizedBox(width: 4),
-                                                Text('Hoàn thành'),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        SizedBox(
-                                          height: 32,
-                                          child: ElevatedButton(
-                                            onPressed: () => onUpdateDeviceStatus(device.id, 'error'),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: AppColors.error,
-                                              foregroundColor: Colors.white,
-                                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                                              minimumSize: const Size(32, 32),
-                                              textStyle: const TextStyle(fontSize: 12),
-                                            ),
-                                            child: const Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(Icons.error, size: 16),
-                                                SizedBox(width: 4),
-                                                Text('Lỗi'),
-                                              ],
+                                        // Action buttons with smaller size - chỉ hiển thị khi không phải trạng thái completed, error hoặc in_progress
+                                        if (!device.hasError && !device.isCompleted && !device.isInProgress && !device.isWaitingForQr) ...[
+                                          SizedBox(
+                                            height: 32,
+                                            child: ElevatedButton(
+                                              onPressed: () => _showConfirmationDialog(context, device, 'completed'),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: AppColors.success,
+                                                foregroundColor: Colors.white,
+                                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                                minimumSize: const Size(32, 32),
+                                                textStyle: const TextStyle(fontSize: 12),
+                                              ),
+                                              child: const Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(Icons.check, size: 16),
+                                                  SizedBox(width: 4),
+                                                  Text('Hoàn thành'),
+                                                ],
+                                              ),
                                             ),
                                           ),
-                                        ),
+                                          const SizedBox(width: 8),
+                                          SizedBox(
+                                            height: 32,
+                                            child: ElevatedButton(
+                                              onPressed: () => _showConfirmationDialog(context, device, 'error'),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: AppColors.error,
+                                                foregroundColor: Colors.white,
+                                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                                minimumSize: const Size(32, 32),
+                                                textStyle: const TextStyle(fontSize: 12),
+                                              ),
+                                              child: const Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(Icons.error, size: 16),
+                                                  SizedBox(width: 4),
+                                                  Text('Lỗi'),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ],
