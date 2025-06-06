@@ -26,7 +26,8 @@ class BatchSelectionPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveDarkTheme = isDarkTheme ?? Theme.of(context).brightness == Brightness.dark;
+    final effectiveDarkTheme =
+        isDarkTheme ?? Theme.of(context).brightness == Brightness.dark;
 
     return Padding(
       padding: const EdgeInsets.all(AppConfig.defaultPadding),
@@ -49,37 +50,49 @@ class BatchSelectionPanel extends StatelessWidget {
                 value: selectedPlanningId,
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppConfig.cardBorderRadius),
-                    borderSide: BorderSide(
-                      width: 2,
-                      color: effectiveDarkTheme ? Colors.grey[600]! : Colors.grey[400]!,
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: AppColors.borderColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: AppColors.borderColor),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(
+                      color: AppColors.primary,
+                      width: 1.5,
                     ),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                  fillColor: effectiveDarkTheme ? AppColors.darkPanelBackground : Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  fillColor: AppColors.componentBackground,
                   filled: true,
                 ),
-                icon: Icon(
-                  Icons.arrow_drop_down,
-                  color: effectiveDarkTheme ? Colors.white70 : Colors.black87,
+                icon: const Icon(Icons.arrow_drop_down, color: Colors.black87),
+                dropdownColor: AppColors.componentBackground,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w500,
                 ),
-                isExpanded: true,
-                dropdownColor: effectiveDarkTheme ? AppColors.darkPanelBackground : Colors.white,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: effectiveDarkTheme ? Colors.white : Colors.black87,
-                ),
-                items: plannings.map((planning) {
-                  return DropdownMenuItem<String?>(
-                    value: planning.id,
-                    child: Text(planning.name ?? 'Unnamed Planning'),
-                  );
-                }).toList(),
+                items:
+                    plannings.map((planning) {
+                      return DropdownMenuItem<String?>(
+                        value: planning.id,
+                        child: Text(planning.name ?? 'Unnamed Planning'),
+                      );
+                    }).toList(),
                 onChanged: onPlanningSelected,
                 hint: Text(
                   '-- Chọn kế hoạch sản xuất --',
                   style: TextStyle(
-                    color: effectiveDarkTheme ? Colors.grey[400] : Colors.grey[600],
+                    color:
+                        effectiveDarkTheme
+                            ? Colors.grey[400]
+                            : Colors.grey[600],
                   ),
                 ),
               ),
@@ -102,38 +115,53 @@ class BatchSelectionPanel extends StatelessWidget {
                 value: selectedBatchId,
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppConfig.cardBorderRadius),
-                    borderSide: BorderSide(
-                      width: 2,
-                      color: effectiveDarkTheme ? Colors.grey[600]! : Colors.grey[400]!,
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: AppColors.borderColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: AppColors.borderColor),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(
+                      color: AppColors.primary,
+                      width: 1.5,
                     ),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                  fillColor: effectiveDarkTheme ? AppColors.darkPanelBackground : Colors.white,
-                  filled: true,
                   enabled: selectedPlanningId != null,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  fillColor: AppColors.componentBackground,
+                  filled: true,
                 ),
-                icon: Icon(
-                  Icons.arrow_drop_down,
-                  color: effectiveDarkTheme ? Colors.white70 : Colors.black87,
+                icon: const Icon(Icons.arrow_drop_down, color: Colors.black87),
+                dropdownColor: AppColors.componentBackground,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w500,
                 ),
                 isExpanded: true,
-                dropdownColor: effectiveDarkTheme ? AppColors.darkPanelBackground : Colors.white,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: effectiveDarkTheme ? Colors.white : Colors.black87,
-                ),
-                items: batches.map((batch) {
-                  return DropdownMenuItem<String?>(
-                    value: batch.id,
-                    child: Text(batch.name),
-                  );
-                }).toList(),
+                items:
+                    batches.map((batch) {
+                      return DropdownMenuItem<String?>(
+                        value: batch.id,
+                        child: Text(batch.name),
+                      );
+                    }).toList(),
                 onChanged: selectedPlanningId != null ? onBatchSelected : null,
                 hint: Text(
-                  selectedPlanningId != null ? '-- Chọn lô sản xuất --' : 'Vui lòng chọn kế hoạch trước',
+                  selectedPlanningId != null
+                      ? '-- Chọn lô sản xuất --'
+                      : 'Vui lòng chọn kế hoạch trước',
                   style: TextStyle(
-                    color: effectiveDarkTheme ? Colors.grey[400] : Colors.grey[600],
+                    color:
+                        effectiveDarkTheme
+                            ? Colors.grey[400]
+                            : Colors.grey[600],
                   ),
                 ),
               ),

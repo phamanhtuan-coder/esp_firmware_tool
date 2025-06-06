@@ -126,6 +126,7 @@ class _LoginViewState extends State<LoginView> {
                     TextField(
                       controller: _usernameController,
                       onChanged: (_) => setState(() {}),
+                      style: const TextStyle(color: AppColors.text),
                       decoration: InputDecoration(
                         labelText: 'Tên đăng nhập',
                         hintText: 'Nhập tên đăng nhập của bạn',
@@ -135,11 +136,11 @@ class _LoginViewState extends State<LoginView> {
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
+                          borderSide: const BorderSide(color: AppColors.borderColor)
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
+                          borderSide: const BorderSide(color: AppColors.borderColor)
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -171,6 +172,7 @@ class _LoginViewState extends State<LoginView> {
                       controller: _passwordController,
                       onChanged: (_) => setState(() {}),
                       obscureText: !_showPassword,
+                      style: const TextStyle(color: AppColors.text),
                       decoration: InputDecoration(
                         labelText: 'Mật khẩu',
                         hintText: 'Nhập mật khẩu của bạn',
@@ -187,11 +189,11 @@ class _LoginViewState extends State<LoginView> {
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
+                          borderSide:const BorderSide(color: AppColors.borderColor)
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
+                          borderSide: const BorderSide(color: AppColors.borderColor),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -225,7 +227,7 @@ class _LoginViewState extends State<LoginView> {
                         onPressed: _isLoading ? null : () => _login(context),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
+                          foregroundColor:AppColors.background,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -238,7 +240,7 @@ class _LoginViewState extends State<LoginView> {
                                   width: 24,
                                   height: 24,
                                   child: CircularProgressIndicator(
-                                    color: Colors.white,
+                                    color:AppColors.background,
                                     strokeWidth: 2,
                                   ),
                                 )

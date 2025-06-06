@@ -57,4 +57,5 @@ class AppColors {
   static const Color darkPanelBackground = Color(0xFF252525);
   static const Color darkTextPrimary = Color(0xFFE0E0E0);
   static const Color darkTextSecondary = Color(0xFFAAAAAA);
+  static const Color borderColor = Color(0xFF424242);
 }

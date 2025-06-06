@@ -99,12 +99,14 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
       }
 
       final matchingDevice = state.devices.firstWhere(
-            (device) => device.serial.trim().toLowerCase() == value.trim().toLowerCase(),
+        (device) =>
+            device.serial.trim().toLowerCase() == value.trim().toLowerCase(),
         orElse: () => Device(id: '', batchId: '', serial: ''),
       );
 
       if (matchingDevice.id.isEmpty) {
-        _serialErrorText = 'Serial không tồn tại trong lô ${state.selectedBatchId}';
+        _serialErrorText =
+            'Serial không tồn tại trong lô ${state.selectedBatchId}';
         _serialSuccessText = null;
         _isSerialValid = false;
         return;
@@ -112,7 +114,8 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
 
       if (matchingDevice.status == 'firmware_uploading') {
         _serialErrorText = null;
-        _serialSuccessText = '✅ Serial hợp lệ - Thiết bị sẵn sàng cho nạp firmware';
+        _serialSuccessText =
+            '✅ Serial hợp lệ - Thiết bị sẵn sàng cho nạp firmware';
         _isSerialValid = true;
         widget.onSerialSubmitted(value);
       } else {
@@ -252,11 +255,17 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
   bool _canFlash() {
     if (widget.isLocalFileMode) {
       final state = context.read<HomeBloc>().state;
-      final canFlash = state.localFilePath != null && widget.selectedPort != null && _isSerialValid;
+      final canFlash =
+          state.localFilePath != null &&
+          widget.selectedPort != null &&
+          _isSerialValid;
       widget.onFlashStatusChanged(canFlash);
       return canFlash;
     } else {
-      final canFlash = widget.selectedFirmwareVersion != null && widget.selectedPort != null && _isSerialValid;
+      final canFlash =
+          widget.selectedFirmwareVersion != null &&
+          widget.selectedPort != null &&
+          _isSerialValid;
       widget.onFlashStatusChanged(canFlash);
       return canFlash;
     }
@@ -281,35 +290,73 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                         isSelected: _selections,
                         onPressed: _handleModeToggle,
                         borderRadius: BorderRadius.circular(8),
-                        selectedBorderColor: Colors.transparent,
+                        selectedBorderColor: AppColors.primary,
                         borderColor: Colors.transparent,
-                        fillColor: AppColors.componentBackground.withOpacity(0.5),
+                        fillColor:
+                            widget.isDarkTheme
+                                ? AppColors.primary
+                                : AppColors.componentBackground,
                         selectedColor: AppColors.primary,
-                        color: widget.isDarkTheme ? Colors.grey[400] : Colors.grey[700],
+                        color:
+                            widget.isDarkTheme
+                                ? AppColors.darkTextPrimary
+                                : AppColors.text,
                         constraints: const BoxConstraints(
                           minWidth: 120,
                           minHeight: 40,
                         ),
-                        children: const [
+                        children: [
                           Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 16),
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.storage),
-                                SizedBox(width: 8),
-                                Text('Chọn Version'),
+                                Icon(
+                                  Icons.storage,
+                                  color:
+                                      widget.isDarkTheme
+                                          ? AppColors.darkTextPrimary
+                                          : AppColors.text,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Chọn Version',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color:
+                                        widget.isDarkTheme
+                                            ? AppColors.darkTextPrimary
+                                            : AppColors.text,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                           Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 16),
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.upload_file),
-                                SizedBox(width: 8),
-                                Text('Upload File'),
+                                Icon(
+                                  Icons.upload_file,
+                                  color:
+                                      widget.isDarkTheme
+                                          ? AppColors.darkTextPrimary
+                                          : AppColors.text,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Upload File',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color:
+                                        widget.isDarkTheme
+                                            ? AppColors.darkTextPrimary
+                                            : AppColors.text,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -323,7 +370,10 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                 Container(
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: widget.isDarkTheme ? AppColors.darkPanelBackground : AppColors.componentBackground,
+                    color:
+                        widget.isDarkTheme
+                            ? AppColors.darkPanelBackground
+                            : Colors.white,
                     borderRadius: BorderRadius.circular(8),
                     boxShadow: [
                       BoxShadow(
@@ -350,33 +400,50 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                         child: DropdownButtonFormField<String>(
                           value: widget.selectedFirmwareVersion,
-                          onChanged: _selections[0] ? _handleFirmwareVersionChange : null,
-                          items: widget.firmwares.map((firmware) {
-                            return DropdownMenuItem(
-                              value: firmware.firmwareId.toString(),
-                              child: Text(firmware.version),
-                            );
-                          }).toList(),
+                          onChanged:
+                              _selections[0]
+                                  ? _handleFirmwareVersionChange
+                                  : null,
+                          items:
+                              widget.firmwares.map((firmware) {
+                                return DropdownMenuItem(
+                                  value: firmware.firmwareId.toString(),
+                                  child: Text(firmware.version),
+                                );
+                              }).toList(),
                           decoration: InputDecoration(
                             enabled: _selections[0],
                             hintText: 'Chọn phiên bản',
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: Colors.grey.shade300),
+                              borderSide: const BorderSide(
+                                color: AppColors.borderColor,
+                              ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: Colors.grey.shade300),
+                              borderSide: const BorderSide(
+                                color: AppColors.borderColor,
+                              ),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                              borderSide: const BorderSide(
+                                color: AppColors.primary,
+                                width: 1.5,
+                              ),
                             ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
                             fillColor: AppColors.componentBackground,
                             filled: true,
                           ),
-                          icon: const Icon(Icons.arrow_drop_down, color: Colors.black87),
+                          icon: const Icon(
+                            Icons.arrow_drop_down,
+                            color: Colors.black87,
+                          ),
                           dropdownColor: AppColors.componentBackground,
                           style: const TextStyle(
                             fontSize: 14,
@@ -400,7 +467,10 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                 Container(
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: widget.isDarkTheme ? AppColors.darkPanelBackground : Colors.white,
+                    color:
+                        widget.isDarkTheme
+                            ? AppColors.darkPanelBackground
+                            : Colors.white,
                     borderRadius: BorderRadius.circular(8),
                     boxShadow: [
                       BoxShadow(
@@ -430,21 +500,60 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                             Expanded(
                               child: TextField(
                                 controller: TextEditingController(
-                                  text: state.localFilePath != null
-                                      ? state.localFilePath!.split(Platform.pathSeparator).last
-                                      : '',
+                                  text:
+                                      state.localFilePath != null
+                                          ? state.localFilePath!
+                                              .split(Platform.pathSeparator)
+                                              .last
+                                          : '',
                                 ),
                                 enabled: true,
                                 readOnly: true,
-                                decoration: const InputDecoration(
+                                decoration: InputDecoration(
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: const BorderSide(
+                                      color: AppColors.borderColor,
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: const BorderSide(
+                                      color: AppColors.borderColor,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: const BorderSide(
+                                      color: AppColors.primary,
+                                      width: 1.5,
+                                    ),
+                                  ),
                                   hintText: 'Chưa có file nào được chọn',
-
+                                  hintStyle: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  fillColor: AppColors.componentBackground,
+                                  filled: true,
+                                ),
+                                style: const TextStyle(
+                                  color: Colors.black87,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
                             const SizedBox(width: 8),
                             ElevatedButton.icon(
-                              onPressed: _selections[1] ? widget.onLocalFileSearch : null,
+                              onPressed:
+                                  _selections[1]
+                                      ? widget.onLocalFileSearch
+                                      : null,
                               icon: const Icon(Icons.upload_file),
                               label: const Text('Chọn file'),
                             ),
@@ -480,15 +589,37 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                                 decoration: InputDecoration(
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(8),
-                                    borderSide: BorderSide(color: Colors.grey.shade300),
+                                    borderSide: const BorderSide(
+                                      color: AppColors.borderColor,
+                                    ),
                                   ),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                  fillColor: Colors.white,
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: const BorderSide(
+                                      color: AppColors.borderColor,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: const BorderSide(
+                                      color: AppColors.primary,
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  fillColor: AppColors.componentBackground,
                                   filled: true,
                                   errorText: _serialErrorText,
-                                  suffixIcon: _serialSuccessText != null
-                                    ? const Icon(Icons.check_circle, color: AppColors.success)
-                                    : null,
+                                  suffixIcon:
+                                      _serialSuccessText != null
+                                          ? const Icon(
+                                            Icons.check_circle,
+                                            color: AppColors.success,
+                                          )
+                                          : null,
                                   hintText: 'Nhập số serial...',
                                   hintStyle: TextStyle(
                                     color: Colors.grey[600],
@@ -507,7 +638,10 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                                   padding: const EdgeInsets.only(top: 8),
                                   child: Text(
                                     _serialSuccessText!,
-                                    style: const TextStyle(color: AppColors.success, fontSize: 12),
+                                    style: const TextStyle(
+                                      color: AppColors.success,
+                                      fontSize: 12,
+                                    ),
                                   ),
                                 ),
                             ],
@@ -550,28 +684,47 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                             decoration: InputDecoration(
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(color: Colors.grey.shade300),
+                                borderSide: const BorderSide(
+                                  color: AppColors.borderColor,
+                                ),
                               ),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              fillColor: Colors.white,
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(
+                                  color: AppColors.borderColor,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(
+                                  color: AppColors.primary,
+                                  width: 1.5,
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              fillColor: AppColors.componentBackground,
                               filled: true,
                             ),
                             icon: const Icon(
                               Icons.arrow_drop_down,
                               color: Colors.black87,
                             ),
-                            dropdownColor: Colors.white,
+                            dropdownColor: AppColors.componentBackground,
                             style: const TextStyle(
                               fontSize: 14,
                               color: Colors.black87,
                               fontWeight: FontWeight.w500,
                             ),
-                            items: widget.availablePorts.map((port) {
-                              return DropdownMenuItem(
-                                value: port,
-                                child: Text(port),
-                              );
-                            }).toList(),
+                            items:
+                                widget.availablePorts.map((port) {
+                                  return DropdownMenuItem(
+                                    value: port,
+                                    child: Text(port),
+                                  );
+                                }).toList(),
                             onChanged: widget.onUsbPortSelected,
                             hint: Text(
                               'Chọn cổng COM',
@@ -588,7 +741,10 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                           icon: const Icon(Icons.refresh),
                           label: const Text('Làm mới cổng'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: widget.isDarkTheme ? AppColors.accent : AppColors.secondary,
+                            backgroundColor:
+                                widget.isDarkTheme
+                                    ? AppColors.accent
+                                    : AppColors.secondary,
                             foregroundColor: Colors.white,
                           ),
                         ),
@@ -603,31 +759,40 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Builder(builder: (context) {
-                      final canFlash = _isSerialValid &&
-                        widget.selectedPort != null &&
-                        (widget.isLocalFileMode
-                          ? state.localFilePath != null
-                          : widget.selectedFirmwareVersion != null);
+                    Builder(
+                      builder: (context) {
+                        final canFlash =
+                            _isSerialValid &&
+                            widget.selectedPort != null &&
+                            (widget.isLocalFileMode
+                                ? state.localFilePath != null
+                                : widget.selectedFirmwareVersion != null);
 
-                      return ElevatedButton.icon(
-                        onPressed: canFlash ? () {
-                          if (widget.isLocalFileMode && state.localFilePath == null) {
-                            widget.onWarningRequested('select_local_file');
-                            return;
-                          }
+                        return ElevatedButton.icon(
+                          onPressed:
+                              canFlash
+                                  ? () {
+                                    if (widget.isLocalFileMode &&
+                                        state.localFilePath == null) {
+                                      widget.onWarningRequested(
+                                        'select_local_file',
+                                      );
+                                      return;
+                                    }
 
-                          widget.onWarningRequested('flash_firmware');
-                        } : null,
-                        icon: const Icon(Icons.flash_on),
-                        label: const Text('Nạp Firmware'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.flash,
-                          foregroundColor: Colors.white,
-                          disabledBackgroundColor: Colors.grey[400],
-                        ),
-                      );
-                    }),
+                                    widget.onWarningRequested('flash_firmware');
+                                  }
+                                  : null,
+                          icon: const Icon(Icons.flash_on),
+                          label: const Text('Nạp Firmware'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.flash,
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: Colors.grey[400],
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ],
@@ -638,4 +803,3 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     );
   }
 }
-
