@@ -15,6 +15,7 @@ import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 import 'package:smart_net_firmware_loader/data/services/serial_monitor_service.dart';
 import 'package:smart_net_firmware_loader/data/services/template_service.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
+import 'package:smart_net_firmware_loader/domain/blocs/logging_bloc.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/app_header.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/batch_selection_panel.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/console_terminal_widget.dart';
@@ -77,18 +78,27 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
 
   void _handleTabChange() {
     if (!mounted) return;
+
+    // Stop serial monitor when switching away from its tab
     if (_tabController.index != 1) {
       _serialMonitorService.stopMonitor();
+      _logService.addLog(
+        message: 'Switched to Console Log - Serial monitor stopped',
+        level: LogLevel.info,
+        step: ProcessStep.consoleLog,
+        origin: 'system',
+      );
+    } else {
+      // Switching to Serial Monitor tab
+      _logService.addLog(
+        message: 'Switched to Serial Monitor',
+        level: LogLevel.info,
+        step: ProcessStep.serialMonitor,
+        origin: 'system',
+      );
     }
-    if (mounted) {
-      setState(() {});
-    }
-    _logService.addLog(
-      message: 'Switched to tab ${_tabController.index == 0 ? "Console Log" : "Serial Monitor"}',
-      level: LogLevel.debug,
-      step: _tabController.index == 0 ? ProcessStep.consoleLog : ProcessStep.serialMonitor,
-      origin: 'system',
-    );
+
+    setState(() {});
   }
 
   Future<void> _initializeServices() async {
@@ -543,40 +553,42 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   }
 
   Widget _buildConsoleSection() {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          Container(
-            color: _isDarkTheme ? AppColors.darkTabBackground : AppColors.componentBackground,
-            child: TabBar(
-              controller: _tabController,
-              tabs: const [
-                Tab(text: 'Console Log'),
-                Tab(text: 'Serial Monitor'),
-              ],
-              labelColor: _isDarkTheme ? AppColors.accent : Colors.blue,
-              unselectedLabelColor: _isDarkTheme ? AppColors.darkTextSecondary : Colors.grey,
-              indicatorColor: _isDarkTheme ? AppColors.accent : Colors.blue,
-            ),
+    return Column(
+      children: [
+        Container(
+          color: _isDarkTheme ? AppColors.darkTabBackground : AppColors.componentBackground,
+          child: TabBar(
+            controller: _tabController,
+            tabs: const [
+              Tab(text: 'Console Log'),
+              Tab(text: 'Serial Monitor'),
+            ],
+            labelColor: _isDarkTheme ? AppColors.accent : Colors.blue,
+            unselectedLabelColor: _isDarkTheme ? AppColors.darkTextSecondary : Colors.grey,
+            indicatorColor: _isDarkTheme ? AppColors.accent : Colors.blue,
           ),
-          SizedBox(
-            height: 300,
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                ConsoleTerminalWidget(
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              // Console Log Tab
+              BlocProvider.value(
+                value: context.read<LoggingBloc>(),
+                child: ConsoleTerminalWidget(
                   isActiveTab: _tabController.index == 0,
                 ),
-                BlocBuilder<HomeBloc, HomeState>(
-                  builder: (context, state) {
-                    return _buildSerialMonitorTab(state);
-                  },
-                ),
-              ],
-            ),
+              ),
+              // Serial Monitor Tab
+              BlocBuilder<HomeBloc, HomeState>(
+                builder: (context, state) {
+                  return _buildSerialMonitorTab(state);
+                },
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

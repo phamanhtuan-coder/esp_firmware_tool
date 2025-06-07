@@ -85,9 +85,10 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> with Auto
   final List<ConsoleLineDisplay> _displayLines = [];
   bool _isAutoScrollEnabled = true;
   final ScrollController _scrollController = ScrollController();
+  static const maxLines = 1000; // Giới hạn số dòng để tránh memory leak
 
   @override
-  bool get wantKeepAlive => true; // Keep state when tab is inactive
+  bool get wantKeepAlive => true;
 
   void _scrollToBottom() {
     if (_isAutoScrollEnabled && _scrollController.hasClients) {
@@ -104,263 +105,208 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> with Auto
   }
 
   @override
-  void initState() {
-    super.initState();
-    _scrollController.addListener(() {
-      if (_scrollController.hasClients) {
-        final maxScroll = _scrollController.position.maxScrollExtent;
-        final currentScroll = _scrollController.position.pixels;
-        setState(() {
-          _isAutoScrollEnabled = (maxScroll - currentScroll) <= 50;
-        });
-      }
-    });
-  }
-
-  @override
   void didUpdateWidget(ConsoleTerminalWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    // Handle tab activation
     if (widget.isActiveTab && !oldWidget.isActiveTab) {
-      // Tab became active
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_isAutoScrollEnabled) {
+        if (_isAutoScrollEnabled && mounted) {
           _scrollToBottom();
         }
       });
     }
   }
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
+  TextStyle _getLogStyle(ConsoleLineDisplay line, bool isDarkTheme) {
+    final baseStyle = TextStyle(
+      fontFamily: 'Courier New',
+      fontSize: 14.0,
+      height: 1.5,
+      color: line.getColor(isDarkTheme),
+    );
+
+    if (line.level == LogLevel.error || line.level == LogLevel.success) {
+      return baseStyle.copyWith(fontWeight: FontWeight.w600);
+    }
+
+    if (line.origin == 'arduino-cli') {
+      if (line.content.contains('Sketch uses') ||
+          line.content.contains('bytes written') ||
+          line.content.contains('Upload complete')) {
+        return baseStyle.copyWith(fontWeight: FontWeight.w600);
+      }
+    }
+
+    return baseStyle;
+  }
+
+  Widget _buildLogLine(ConsoleLineDisplay line, bool isDarkTheme) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (line.getIcon() != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 8, top: 2),
+              child: Icon(
+                line.getIcon(),
+                size: 14,
+                color: line.getColor(isDarkTheme),
+              ),
+            ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '[${line.timestamp}] ',
+                        style: TextStyle(
+                          color: isDarkTheme ? Colors.grey[400] : Colors.grey[600],
+                          fontFamily: 'Courier New',
+                          fontSize: 12.0,
+                        ),
+                      ),
+                      TextSpan(
+                        text: line.content,
+                        style: _getLogStyle(line, isDarkTheme),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final isDarkTheme = Theme.of(context).brightness == Brightness.dark;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final minHeight = constraints.maxHeight;
-        return SizedBox(
-          height: minHeight,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: isDarkTheme ? Colors.black : AppColors.componentBackground,
-                    borderRadius: BorderRadius.circular(8.0),
-                    border: Border.all(
-                      color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
-                    ),
+    return BlocConsumer<LoggingBloc, LoggingState>(
+      listenWhen: (previous, current) =>
+        previous.logs.length != current.logs.length ||
+        previous.filter != current.filter,
+      listener: (context, state) {
+        if (_isAutoScrollEnabled && mounted) {
+          _scrollToBottom();
+        }
+
+        // Trim logs if exceeding maxLines
+        if (state.logs.length > maxLines) {
+          context.read<LoggingBloc>().add(
+            TrimLogsEvent(maxLines),
+          );
+        }
+      },
+      buildWhen: (previous, current) =>
+        previous.logs != current.logs ||
+        previous.filter != current.filter,
+      builder: (context, state) {
+        final filteredLogs = state.filter != null && state.filter!.isNotEmpty
+          ? state.logs.where(
+              (log) => log.message.toLowerCase().contains(
+                state.filter!.toLowerCase(),
+              ),
+            ).toList()
+          : state.logs;
+
+        return Column(
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDarkTheme ? Colors.black : AppColors.componentBackground,
+                  borderRadius: BorderRadius.circular(8.0),
+                  border: Border.all(
+                    color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
                   ),
-                  child: Scrollbar(
-                    thumbVisibility: true,
+                ),
+                child: Scrollbar(
+                  thumbVisibility: true,
+                  controller: _scrollController,
+                  child: ListView.builder(
                     controller: _scrollController,
-                    child: SingleChildScrollView(
-                      controller: _scrollController,
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: BlocBuilder<LoggingBloc, LoggingState>(
-                          buildWhen: (previous, current) {
-                            return previous.logs != current.logs ||
-                                previous.filter != current.filter;
-                          },
-                          builder: (context, state) {
-                            final logsToDisplay =
-                                state.filter != null && state.filter!.isNotEmpty
-                                    ? state.logs
-                                        .where(
-                                          (log) => log.message.toLowerCase().contains(
-                                            state.filter!.toLowerCase(),
-                                          ),
-                                        )
-                                        .toList()
-                                    : state.logs;
-
-                            _displayLines.clear();
-                            for (var log in logsToDisplay) {
-                              _displayLines.add(
-                                ConsoleLineDisplay(
-                                  log.formattedTimestamp,
-                                  log.message,
-                                  level: log.level,
-                                  origin: log.origin,
-                                  isSystemMessage: log.origin == 'system',
-                                ),
-                              );
-                            }
-
-                            if (_isAutoScrollEnabled) {
-                              _scrollToBottom();
-                            }
-
-                            return _displayLines.isEmpty
-                                ? Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.terminal,
-                                        size: 48,
-                                        color: Colors.grey[700],
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        'No console output',
-                                        style: TextStyle(
-                                          color: Colors.grey[600],
-                                          fontSize: 15,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                                : SelectableText.rich(
-                                    TextSpan(
-                                      children:
-                                          _displayLines.map((line) {
-                                            final icon = line.getIcon();
-                                            return TextSpan(
-                                              children: [
-                                                if (icon != null)
-                                                  WidgetSpan(
-                                                    alignment:
-                                                        PlaceholderAlignment.middle,
-                                                    child: Padding(
-                                                      padding: const EdgeInsets.only(
-                                                        right: 8,
-                                                      ),
-                                                      child: Icon(
-                                                        icon,
-                                                        size: 14,
-                                                        color: line.getColor(
-                                                          isDarkTheme,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                TextSpan(
-                                                  text: '[${line.timestamp}] ',
-                                                  style: TextStyle(
-                                                    color:
-                                                        line.isSystemMessage
-                                                            ? Colors.yellow.withValues(alpha: 0.8)
-                                                            : Colors.grey.withValues(alpha: 0.7),
-                                                    fontFamily: 'Courier New',
-                                                    fontSize: 12.0,
-                                                    height: 1.5,
-                                                  ),
-                                                ),
-                                                TextSpan(
-                                                  text: '${line.content}\n',
-                                                  style: TextStyle(
-                                                    color:
-                                                        line.isSystemMessage
-                                                            ? Colors.yellow
-                                                            : line.getColor(true),
-                                                    fontFamily: 'Courier New',
-                                                    fontSize: 14.0,
-                                                    height: 1.5,
-                                                    fontWeight: _getLineWeight(line),
-                                                  ),
-                                                ),
-                                              ],
-                                            );
-                                          }).toList(),
-                                    ),
-                                  );
-                          },
-                        ),
-                      ),
-                    ),
+                    padding: const EdgeInsets.all(8.0),
+                    itemCount: filteredLogs.length,
+                    itemBuilder: (context, index) {
+                      final log = filteredLogs[index];
+                      final line = ConsoleLineDisplay(
+                        log.formattedTimestamp,
+                        log.message,
+                        level: log.level,
+                        origin: log.origin,
+                        isSystemMessage: log.origin == 'system',
+                      );
+                      return _buildLogLine(line, isDarkTheme);
+                    },
                   ),
                 ),
               ),
-              Container(
-                margin: const EdgeInsets.only(top: 8.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color:
-                              isDarkTheme
-                                  ? Colors.grey.shade700
-                                  : Colors.grey.shade300,
-                        ),
-                      ),
-                      child: IconButton(
-                        onPressed: () {
-                          setState(() {
-                            _isAutoScrollEnabled = !_isAutoScrollEnabled;
-                            if (_isAutoScrollEnabled) {
-                              _scrollToBottom();
-                            }
-                          });
-                        },
-                        icon: Icon(
-                          _isAutoScrollEnabled
-                              ? Icons.vertical_align_bottom
-                              : Icons.vertical_align_center,
-                          color: _isAutoScrollEnabled ? Colors.blue : Colors.grey,
-                        ),
-                        tooltip:
-                            _isAutoScrollEnabled
-                                ? 'Auto-scroll enabled'
-                                : 'Auto-scroll disabled',
+            ),
+            Container(
+              margin: const EdgeInsets.only(top: 8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color:
-                              isDarkTheme
-                                  ? Colors.grey.shade700
-                                  : Colors.grey.shade300,
-                        ),
+                    child: IconButton(
+                      onPressed: () {
+                        setState(() {
+                          _isAutoScrollEnabled = !_isAutoScrollEnabled;
+                          if (_isAutoScrollEnabled) {
+                            _scrollToBottom();
+                          }
+                        });
+                      },
+                      icon: Icon(
+                        _isAutoScrollEnabled
+                            ? Icons.vertical_align_bottom
+                            : Icons.vertical_align_center,
+                        color: _isAutoScrollEnabled ? Colors.blue : Colors.grey,
                       ),
-                      child: IconButton(
-                        onPressed: () {
-                          context.read<LoggingBloc>().add(ClearLogsEvent());
-                        },
-                        icon: const Icon(Icons.clear_all),
-                        tooltip: 'Clear console',
-                        color: isDarkTheme ? Colors.grey[400] : Colors.grey[600],
+                      tooltip: _isAutoScrollEnabled
+                          ? 'Auto-scroll enabled'
+                          : 'Auto-scroll disabled',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
                       ),
                     ),
-                  ],
-                ),
+                    child: IconButton(
+                      onPressed: () {
+                        context.read<LoggingBloc>().add(ClearLogsEvent());
+                      },
+                      icon: const Icon(Icons.clear_all),
+                      tooltip: 'Clear console',
+                      color: isDarkTheme ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         );
       },
     );
-  }
-
-  FontWeight _getLineWeight(ConsoleLineDisplay line) {
-    if (line.level == LogLevel.success || line.level == LogLevel.error) {
-      return FontWeight.w600;
-    }
-    if (line.origin == 'arduino-cli' &&
-        (line.content.contains('Sketch uses') ||
-            line.content.contains('bytes written') ||
-            line.content.contains('Upload complete'))) {
-      return FontWeight.w600;
-    }
-    return FontWeight.normal;
   }
 }

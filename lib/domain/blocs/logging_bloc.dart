@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 
+// Events
 abstract class LoggingEvent {}
 
 class AddLogEvent extends LoggingEvent {
@@ -17,6 +18,12 @@ class ClearLogsEvent extends LoggingEvent {}
 
 class AutoScrollEvent extends LoggingEvent {}
 
+class TrimLogsEvent extends LoggingEvent {
+  final int maxLines;
+  TrimLogsEvent(this.maxLines);
+}
+
+// State
 class LoggingState {
   final List<LogEntry> logs;
   final List<LogEntry> filteredLogs;
@@ -52,7 +59,7 @@ class LoggingState {
       return LoggingState(
         logs: newLogs,
         filteredLogs: filtered,
-        filter: filter,
+        filter: filter ?? this.filter,
         autoScroll: autoScroll ?? this.autoScroll,
       );
     }
@@ -60,7 +67,7 @@ class LoggingState {
     return LoggingState(
       logs: logs ?? this.logs,
       filteredLogs: filteredLogs ?? this.filteredLogs,
-      filter: filter,
+      filter: filter ?? this.filter,
       autoScroll: autoScroll ?? this.autoScroll,
     );
   }
@@ -72,6 +79,7 @@ class LoggingBloc extends Bloc<LoggingEvent, LoggingState> {
     on<FilterLogEvent>(_onFilterLog);
     on<ClearLogsEvent>(_onClearLogs);
     on<AutoScrollEvent>(_onAutoScroll);
+    on<TrimLogsEvent>(_onTrimLogs);
   }
 
   void _onAddLog(AddLogEvent event, Emitter<LoggingState> emit) {
@@ -99,5 +107,12 @@ class LoggingBloc extends Bloc<LoggingEvent, LoggingState> {
 
   void _onAutoScroll(AutoScrollEvent event, Emitter<LoggingState> emit) {
     emit(state.copyWith(autoScroll: true));
+  }
+
+  void _onTrimLogs(TrimLogsEvent event, Emitter<LoggingState> emit) {
+    if (state.logs.length > event.maxLines) {
+      final trimmedLogs = state.logs.skip(state.logs.length - event.maxLines).toList();
+      emit(state.copyWith(logs: trimmedLogs));
+    }
   }
 }
