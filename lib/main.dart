@@ -53,8 +53,8 @@ Future<void> setupWindow() async {
   try {
     // Basic window setup first
     WindowOptions windowOptions = const WindowOptions(
-      size: Size(1024, 768),
-      minimumSize: Size(1024, 768),
+      size: Size(1600, 900),
+      minimumSize: Size(1600, 900),
       center: true,
       backgroundColor: Colors.transparent,
       skipTaskbar: false,
@@ -340,3 +340,6 @@ class CloseWindowListener extends WindowListener {
     }
   }
 }
+
+
+

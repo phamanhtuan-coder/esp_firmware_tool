@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
+import 'package:path/path.dart';
+import 'package:smart_net_firmware_loader/core/utils/page_routes.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/logging_bloc.dart';
 import 'package:smart_net_firmware_loader/presentation/views/home_view.dart';
@@ -34,10 +36,30 @@ class AppRoutes {
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     final builder = routes[settings.name];
     if (builder != null) {
-      return MaterialPageRoute(
-        builder: builder,
-        settings: settings,
-      );
+      // Xác định kiểu animation dựa trên route
+      switch (settings.name) {
+        case splash:
+          return NoAnimationPageRoute(
+            builder: builder,
+            settings: settings,
+          );
+
+        case login:
+          return FadePageRoute(
+            page: Builder(builder: (context) => builder(context)),
+          );
+
+        case home:
+          return SlideUpPageRoute(
+            page: Builder(builder: (context) => builder(context)),
+          );
+
+        default:
+          return MaterialPageRoute(
+            builder: builder,
+            settings: settings,
+          );
+      }
     }
     return null;
   }

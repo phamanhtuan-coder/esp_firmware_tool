@@ -77,8 +77,6 @@ class _LoginViewState extends State<LoginView> {
 
   @override
   Widget build(BuildContext context) {
-    // Instead of using local theme state, use the app's current theme
-    _isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final backgroundColor = _isDarkMode ? AppColors.darkBackground : AppColors.background;
     final cardColor = _isDarkMode ? AppColors.darkCardBackground : Colors.white;
     final textColor = _isDarkMode ? AppColors.darkTextPrimary : AppColors.text;
