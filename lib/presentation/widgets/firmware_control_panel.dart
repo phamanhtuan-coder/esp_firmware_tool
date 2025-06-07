@@ -394,6 +394,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Row 1: Toggle Buttons
                 Container(
                   margin: const EdgeInsets.only(bottom: 16),
                   child: Row(
@@ -404,19 +405,10 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                         borderRadius: BorderRadius.circular(8),
                         selectedBorderColor: AppColors.primary,
                         borderColor: Colors.transparent,
-                        fillColor:
-                            widget.isDarkTheme
-                                ? AppColors.primary
-                                : AppColors.componentBackground,
+                        fillColor: widget.isDarkTheme ? AppColors.primary : AppColors.componentBackground,
                         selectedColor: AppColors.primary,
-                        color:
-                            widget.isDarkTheme
-                                ? AppColors.darkTextPrimary
-                                : AppColors.text,
-                        constraints: const BoxConstraints(
-                          minWidth: 120,
-                          minHeight: 40,
-                        ),
+                        color: widget.isDarkTheme ? AppColors.darkTextPrimary : AppColors.text,
+                        constraints: const BoxConstraints(minWidth: 120, minHeight: 40),
                         children: [
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -478,153 +470,53 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                   ),
                 ),
 
-                // Firmware version selection
-                Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color:
-                        widget.isDarkTheme
-                            ? AppColors.darkPanelBackground
-                            : Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text(
-                          'Phiên bản Firmware',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
+                // Row 2: Version Selection and File Selection (2 columns)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Column 1: Firmware Version Selection
+                    Expanded(
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 8, bottom: 16),
+                        decoration: BoxDecoration(
+                          color: widget.isDarkTheme ? AppColors.darkPanelBackground : Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                        child: DropdownButtonFormField<String>(
-                          value: widget.selectedFirmwareVersion,
-                          onChanged:
-                              _selections[0]
-                                  ? _handleFirmwareVersionChange
-                                  : null,
-                          items:
-                              widget.firmwares.map((firmware) {
-                                return DropdownMenuItem(
-                                  value: firmware.firmwareId.toString(),
-                                  child: Text(firmware.version),
-                                );
-                              }).toList(),
-                          decoration: InputDecoration(
-                            enabled: _selections[0],
-                            hintText: 'Chọn phiên bản',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(
-                                color: AppColors.borderColor,
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(
-                                color: AppColors.borderColor,
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(
-                                color: AppColors.primary,
-                                width: 1.5,
-                              ),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                            fillColor: AppColors.componentBackground,
-                            filled: true,
-                          ),
-                          icon: const Icon(
-                            Icons.arrow_drop_down,
-                            color: Colors.black87,
-                          ),
-                          dropdownColor: AppColors.componentBackground,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          hint: Text(
-                            'Chọn phiên bản',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // File selection
-                Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color:
-                        widget.isDarkTheme
-                            ? AppColors.darkPanelBackground
-                            : Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(
-                          'File Firmware',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                              color: widget.isDarkTheme
-                                  ? AppColors.darkTextPrimary
-                                  : AppColors.text
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: TextField(
-                                controller: TextEditingController(
-                                  text:
-                                      state.localFilePath != null
-                                          ? state.localFilePath!
-                                              .split(Platform.pathSeparator)
-                                              .last
-                                          : '',
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                'Phiên bản Firmware',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: widget.isDarkTheme ? AppColors.darkTextPrimary : AppColors.text
                                 ),
-                                enabled: true,
-                                readOnly: true,
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              child: DropdownButtonFormField<String>(
+                                value: widget.selectedFirmwareVersion,
+                                onChanged: _selections[0] ? _handleFirmwareVersionChange : null,
+                                items: widget.firmwares.map((firmware) {
+                                  return DropdownMenuItem(
+                                    value: firmware.firmwareId.toString(),
+                                    child: Text(firmware.version),
+                                  );
+                                }).toList(),
                                 decoration: InputDecoration(
+                                  enabled: _selections[0],
+                                  hintText: 'Chọn phiên bản',
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(8),
                                     borderSide: const BorderSide(
@@ -644,11 +536,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                                       width: 1.5,
                                     ),
                                   ),
-                                  hintText: 'Chưa có file nào được chọn',
-                                  hintStyle: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontWeight: FontWeight.w400,
-                                  ),
                                   contentPadding: const EdgeInsets.symmetric(
                                     horizontal: 16,
                                     vertical: 12,
@@ -656,227 +543,314 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                                   fillColor: AppColors.componentBackground,
                                   filled: true,
                                 ),
-                                style: const TextStyle(
+                                icon: const Icon(
+                                  Icons.arrow_drop_down,
                                   color: Colors.black87,
+                                ),
+                                dropdownColor: AppColors.componentBackground,
+                                style: const TextStyle(
                                   fontSize: 14,
+                                  color: Colors.black87,
                                   fontWeight: FontWeight.w500,
                                 ),
+                                hint: Text(
+                                  'Chọn phiên bản',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            ElevatedButton.icon(
-                              onPressed:
-                                  _selections[1]
-                                      ? widget.onLocalFileSearch
-                                      : null,
-                              icon: const Icon(Icons.upload_file),
-                              label: const Text('Chọn file'),
                             ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Row 3: Serial input and QR scan
-                Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color:
-                    widget.isDarkTheme
-                        ? AppColors.darkPanelBackground
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(
-                          'Số Serial',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                              color: widget.isDarkTheme
-                                  ? AppColors.darkTextPrimary
-                                  : AppColors.text
-                          ),
+                    ),
+                    // Column 2: File Selection
+                    Expanded(
+                      child: Container(
+                        margin: const EdgeInsets.only(left: 8, bottom: 16),
+                        decoration: BoxDecoration(
+                          color: widget.isDarkTheme ? AppColors.darkPanelBackground : Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start, // Thêm alignment top
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                'File Firmware',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: widget.isDarkTheme ? AppColors.darkTextPrimary : AppColors.text
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              child: Row(
                                 children: [
-                                  TextField(
-                                    controller: widget.serialController,
-                                    decoration: InputDecoration(
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                        borderSide: const BorderSide(
-                                          color: AppColors.borderColor,
+                                  Expanded(
+                                    child: TextField(
+                                      controller: TextEditingController(
+                                        text: state.localFilePath != null
+                                            ? state.localFilePath!.split(Platform.pathSeparator).last
+                                            : '',
+                                      ),
+                                      enabled: false,
+                                      readOnly: true,
+                                      decoration: InputDecoration(
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                          borderSide: const BorderSide(
+                                            color: AppColors.borderColor,
+                                          ),
                                         ),
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                        borderSide: const BorderSide(
-                                          color: AppColors.borderColor,
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                          borderSide: const BorderSide(
+                                            color: AppColors.borderColor,
+                                          ),
                                         ),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                        borderSide: const BorderSide(
-                                          color: AppColors.primary,
-                                          width: 1.5,
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                          borderSide: const BorderSide(
+                                            color: AppColors.primary,
+                                            width: 1.5,
+                                          ),
                                         ),
+                                        hintText: 'Chưa có file nào được chọn',
+                                        hintStyle: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontWeight: FontWeight.w400,
+                                        ),
+                                        contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 12,
+                                        ),
+                                        fillColor: AppColors.componentBackground,
+                                        filled: true,
                                       ),
-                                      contentPadding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 12,
-                                      ),
-                                      fillColor: AppColors.componentBackground,
-                                      filled: true,
-                                      errorText: _serialErrorText,
-                                      suffixIcon:
-                                          _serialSuccessText != null
-                                              ? const Icon(
-                                                Icons.check_circle,
-                                                color: AppColors.success,
-                                              )
-                                              : null,
-                                      hintText: 'Nhập số serial...',
-                                      hintStyle: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontWeight: FontWeight.w400,
+                                      style: const TextStyle(
+                                        color: Colors.black87,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
                                       ),
                                     ),
-                                    style: const TextStyle(
-                                      color: Colors.black87,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    onChanged: _validateSerial,
                                   ),
-                                  if (_serialSuccessText != null)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 8),
-                                      child: Text(
-                                        _serialSuccessText!,
-                                        style: const TextStyle(
-                                          color: AppColors.success,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ),
+                                  const SizedBox(width: 8),
+                                  ElevatedButton.icon(
+                                    onPressed: _selections[1] ? widget.onLocalFileSearch : null,
+                                    icon: const Icon(Icons.upload_file),
+                                    label: const Text('Chọn file'),
+                                  ),
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            Column(
-                              children: [
-                                ElevatedButton.icon(
-                                  onPressed: _handleQrScan,
-                                  icon: const Icon(Icons.qr_code_scanner),
-                                  label: const Text('Quét QR Code'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.scanQr,
-                                    foregroundColor: Colors.white,
-                                  ),
-                                ),
-                                // Thêm invisible box có chiều cao động
-                                AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  height: _serialErrorText != null || _serialSuccessText != null ? 20 : 0,
-                                ),
-                              ],
-                            ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
 
-                const SizedBox(height: 16),
-
-                // Row 4: USB port selection and refresh
-                Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color:
-                    widget.isDarkTheme
-                        ? AppColors.darkPanelBackground
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(
-                          'Cổng USB',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: widget.isDarkTheme
-                                ? AppColors.darkTextPrimary
-                                : AppColors.text
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _buildPortDropdown(context),
+                // Row 3: Serial Input and Port Selection (2 columns)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Column 1: Serial Input
+                    Expanded(
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 8, bottom: 16),
+                        decoration: BoxDecoration(
+                          color: widget.isDarkTheme ? AppColors.darkPanelBackground : Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
                             ),
-                            const SizedBox(width: 8),
-                            ElevatedButton.icon(
-                              onPressed: widget.onUsbPortRefresh,
-                              icon: const Icon(Icons.refresh),
-                              label: const Text('Làm mới cổng'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor:
-                                    widget.isDarkTheme
-                                        ? AppColors.accent
-                                        : AppColors.secondary,
-                                foregroundColor: Colors.white,
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                'Số Serial',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: widget.isDarkTheme ? AppColors.darkTextPrimary : AppColors.text
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        TextField(
+                                          controller: widget.serialController,
+                                          decoration: InputDecoration(
+                                            border: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(8),
+                                              borderSide: const BorderSide(
+                                                color: AppColors.borderColor,
+                                              ),
+                                            ),
+                                            enabledBorder: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(8),
+                                              borderSide: const BorderSide(
+                                                color: AppColors.borderColor,
+                                              ),
+                                            ),
+                                            focusedBorder: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(8),
+                                              borderSide: const BorderSide(
+                                                color: AppColors.primary,
+                                                width: 1.5,
+                                              ),
+                                            ),
+                                            contentPadding: const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 12,
+                                            ),
+                                            fillColor: AppColors.componentBackground,
+                                            filled: true,
+                                            errorText: _serialErrorText,
+                                            suffixIcon:
+                                                _serialSuccessText != null
+                                                    ? const Icon(
+                                                      Icons.check_circle,
+                                                      color: AppColors.success,
+                                                    )
+                                                    : null,
+                                            hintText: 'Nhập số serial...',
+                                            hintStyle: TextStyle(
+                                              color: Colors.grey[600],
+                                              fontWeight: FontWeight.w400,
+                                            ),
+                                          ),
+                                          style: const TextStyle(
+                                            color: Colors.black87,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                          onChanged: _validateSerial,
+                                        ),
+                                        if (_serialSuccessText != null)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 8),
+                                            child: Text(
+                                              _serialSuccessText!,
+                                              style: const TextStyle(
+                                                color: AppColors.success,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Column(
+                                    children: [
+                                      ElevatedButton.icon(
+                                        onPressed: _handleQrScan,
+                                        icon: const Icon(Icons.qr_code_scanner),
+                                        label: const Text('Quét QR Code'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.scanQr,
+                                          foregroundColor: Colors.white,
+                                        ),
+                                      ),
+                                      // Dynamic spacing for error/success messages
+                                      AnimatedContainer(
+                                        duration: const Duration(milliseconds: 200),
+                                        height: _serialErrorText != null || _serialSuccessText != null ? 20 : 0,
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    // Column 2: Port Selection
+                    Expanded(
+                      child: Container(
+                        margin: const EdgeInsets.only(left: 8, bottom: 16),
+                        decoration: BoxDecoration(
+                          color: widget.isDarkTheme ? AppColors.darkPanelBackground : Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                'Cổng USB',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: widget.isDarkTheme ? AppColors.darkTextPrimary : AppColors.text
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildPortDropdown(context),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  ElevatedButton.icon(
+                                    onPressed: widget.onUsbPortRefresh,
+                                    icon: const Icon(Icons.refresh),
+                                    label: const Text('Làm mới'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: widget.isDarkTheme ? AppColors.accent : AppColors.secondary,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
 
-                const SizedBox(height: 16),
-
-                // Row 5: Flash firmware button
+                // Row 4: Flash Button
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -884,11 +858,10 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                       builder: (context) {
                         final canFlash = widget.selectedPort != null &&
                             _isSerialValid &&
-                            ((widget.isLocalFileMode && state.localFilePath != null) ||
-                             (!widget.isLocalFileMode && widget.selectedFirmwareVersion != null));
+                            ((state.isLocalFileMode && state.localFilePath != null) ||
+                             (!state.isLocalFileMode && widget.selectedFirmwareVersion != null));
 
                         if (canFlash != _canFlash) {
-                          // Notify parent of flash status change
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (mounted) {
                               widget.onFlashStatusChanged(canFlash);
@@ -1041,3 +1014,4 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     return '';
   }
 }
+
