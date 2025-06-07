@@ -717,6 +717,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                         child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start, // Thêm alignment top
                           children: [
                             Expanded(
                               child: Column(
@@ -786,14 +787,23 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            ElevatedButton.icon(
-                              onPressed: _handleQrScan,
-                              icon: const Icon(Icons.qr_code_scanner),
-                              label: const Text('Quét QR Code'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.scanQr,
-                                foregroundColor: Colors.white,
-                              ),
+                            Column(
+                              children: [
+                                ElevatedButton.icon(
+                                  onPressed: _handleQrScan,
+                                  icon: const Icon(Icons.qr_code_scanner),
+                                  label: const Text('Quét QR Code'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.scanQr,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                ),
+                                // Thêm invisible box có chiều cao động
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  height: _serialErrorText != null || _serialSuccessText != null ? 20 : 0,
+                                ),
+                              ],
                             ),
                           ],
                         ),
