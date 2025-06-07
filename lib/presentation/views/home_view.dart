@@ -702,7 +702,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                     children: [
                                       // Firmware control panel with fixed height
                                       SizedBox(
-                                        height: 460, // Fixed height for control panel
+                                        height: MediaQuery.of(context).size.height * 0.65, // 65% of screen height
                                         child: FirmwareControlPanel(
                                           isDarkTheme: _isDarkTheme,
                                           selectedFirmwareVersion: state.selectedFirmwareId,
@@ -738,9 +738,51 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                           onFlashStatusChanged: _handleFlashStatusChanged,
                                         ),
                                       ),
-                                      // Console section with remaining height in scrollview
-                                      Expanded(
-                                        child: _buildConsoleSection(),
+                                      // Console section with fixed height and scrollable
+                                      Container(
+                                        height: MediaQuery.of(context).size.height * 0.25, // 25% of screen height
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            top: BorderSide(
+                                              color: _isDarkTheme ? Colors.grey[800]! : Colors.grey[300]!,
+                                              width: 1,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Container(
+                                              color: _isDarkTheme ? AppColors.darkTabBackground : AppColors.componentBackground,
+                                              child: TabBar(
+                                                controller: _tabController,
+                                                tabs: const [
+                                                  Tab(text: 'Console Log'),
+                                                  Tab(text: 'Serial Monitor'),
+                                                ],
+                                                labelColor: _isDarkTheme ? AppColors.accent : Colors.blue,
+                                                unselectedLabelColor: _isDarkTheme ? AppColors.darkTextSecondary : Colors.grey,
+                                                indicatorColor: _isDarkTheme ? AppColors.accent : Colors.blue,
+                                                indicatorWeight: 3,
+                                              ),
+                                            ),
+                                            Expanded(
+                                              child: TabBarView(
+                                                controller: _tabController,
+                                                children: [
+                                                  // Console Log Tab
+                                                  BlocProvider.value(
+                                                    value: context.read<LoggingBloc>(),
+                                                    child: ConsoleTerminalWidget(
+                                                      isActiveTab: _tabController.index == 0,
+                                                    ),
+                                                  ),
+                                                  // Serial Monitor Tab
+                                                  _buildSerialMonitorTab(state),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ),

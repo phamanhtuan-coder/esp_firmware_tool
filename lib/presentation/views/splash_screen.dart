@@ -22,7 +22,7 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    // DebugLogger.lifecycle('SplashScreen initialized');
+    DebugLogger.lifecycle('SplashScreen initialized');
 
     _controller = AnimationController(
       vsync: this,
@@ -53,25 +53,21 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    // Use a minimum display time for the splash screen (3 seconds)
-    // This ensures users can see the splash screen even if initialization is fast
-    Timer(const Duration(seconds: 3), _checkNavigationToLogin);
+    // Navigate after animation completes
+    Future.delayed(const Duration(seconds: 3), () {
+      _navigateToLogin();
+    });
   }
 
-  void _checkNavigationToLogin() {
-    // DebugLogger.lifecycle('Checking navigation from splash to login');
-    if (mounted && !_navigated) {
-      setState(() {
-        _navigated = true;
-      });
-      // DebugLogger.lifecycle('Navigating from splash to login');
-      Navigator.of(context).pushReplacementNamed(AppRoutes.login);
-    }
+  void _navigateToLogin() {
+    if (!mounted || _navigated) return;
+    _navigated = true;
+
+    Navigator.of(context).pushReplacementNamed(AppRoutes.login);
   }
 
   @override
   void dispose() {
-    // DebugLogger.lifecycle('SplashScreen disposed');
     _controller.dispose();
     super.dispose();
   }
@@ -80,124 +76,40 @@ class _SplashScreenState extends State<SplashScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [AppColors.primary.withOpacity(0.1), AppColors.background],
-          ),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ScaleTransition(
-                scale: _scaleAnimation,
-                child: Container(
-                  height: 140,
-                  width: 140,
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withOpacity(0.2),
-                        blurRadius: 15,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ScaleTransition(
+              scale: _scaleAnimation,
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: SlideTransition(
+                  position: _slideAnimation,
                   child: Image.asset(
                     'assets/app_icon.png',
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      DebugLogger.e(
-                        'Error loading app icon',
-                        error: error,
-                        stackTrace: stackTrace,
-                      );
-                      return Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.error_outline,
-                            size: 60,
-                            color: AppColors.primary,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Error: $error',
-                            style: const TextStyle(
-                              color: AppColors.error,
-                              fontSize: 12,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      );
-                    },
+                    width: 120,
+                    height: 120,
                   ),
                 ),
               ),
-              const SizedBox(height: 30),
-              SlideTransition(
+            ),
+            const SizedBox(height: 20),
+            FadeTransition(
+              opacity: _fadeAnimation,
+              child: SlideTransition(
                 position: _slideAnimation,
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: const Text(
-                    'SmartNet Firmware Loader',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
-                    ),
+                child: const Text(
+                  'SmartNet Firmware Loader',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
-              SlideTransition(
-                position: _slideAnimation,
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: const Text(
-                      'Smart IoT Device Management',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 40),
-              FadeTransition(
-                opacity: _fadeAnimation,
-                child: SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: CircularProgressIndicator(
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      AppColors.primary,
-                    ),
-                    strokeWidth: 3,
-                    backgroundColor: AppColors.primary.withOpacity(0.1),
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

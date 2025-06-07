@@ -50,46 +50,108 @@ Future<void> setupServiceLocator() async {
 }
 
 Future<void> setupWindow() async {
-  await windowManager.ensureInitialized();
+  try {
+    // Basic window setup first
+    WindowOptions windowOptions = const WindowOptions(
+      size: Size(1024, 768),
+      minimumSize: Size(1024, 768),
+      center: true,
+      backgroundColor: Colors.transparent,
+      skipTaskbar: false,
+      titleBarStyle: TitleBarStyle.normal,
+    );
 
-  // Set window properties first
-  await Future.wait([
-    windowManager.setPreventClose(true),
-    windowManager.setSkipTaskbar(false),
-    windowManager.setTitle('SmartNet Firmware Loader'),
-    windowManager.setTitleBarStyle(TitleBarStyle.normal),
-    windowManager.setBackgroundColor(Colors.transparent),
-    windowManager.setHasShadow(true),
-    // Set minimum size constraints
-    windowManager.setMinimumSize(const Size(1024, 768)),
-  ]);
+    await windowManager.waitUntilReadyToShow(windowOptions);
+    await windowManager.setPreventClose(true);
+    await windowManager.setTitle('SmartNet Firmware Loader');
+    await windowManager.setHasShadow(true);
 
-  // Wait for window to be ready
-  await windowManager.waitUntilReadyToShow();
+    // Show window
+    await windowManager.show();
 
-  // Center and show window
-  await windowManager.center();
-  await windowManager.show();
-
-  // Maximize after showing
-  await windowManager.maximize();
-  await windowManager.focus();
+    // Center and maximize after showing
+    await Future.delayed(const Duration(milliseconds: 200));
+    await windowManager.maximize();
+  } catch (e) {
+    debugPrint('Error in setupWindow: $e');
+    try {
+      // Fallback to basic window show
+      await windowManager.show();
+    } catch (e) {
+      debugPrint('Critical error showing window: $e');
+    }
+  }
 }
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    debugPrint('Starting app initialization...');
 
-  // Initialize services first
-  await setupServiceLocator();
+    // 1. Initialize Flutter bindings first
+    WidgetsFlutterBinding.ensureInitialized();
+    debugPrint('Flutter bindings initialized');
 
-  // Then setup window
-  await setupWindow();
+    // 2. Setup error handling
+    FlutterError.onError = (FlutterErrorDetails details) {
+      FlutterError.presentError(details);
+      debugPrint('Flutter error: ${details.exception}');
+      debugPrintStack(stackTrace: details.stack);
+    };
+    debugPrint('Error handling setup complete');
 
-  // Add close handler
-  windowManager.addListener(CloseWindowListener());
+    // 3. Initialize window manager
+    await windowManager.ensureInitialized();
+    debugPrint('Window manager initialized');
 
-  // Run app
-  runApp(MyApp(key: appKey));
+    // 4. Initialize services first to ensure they're ready
+    debugPrint('Initializing services...');
+    await setupServiceLocator();
+    debugPrint('Services initialized');
+
+    // 5. Create and run the app before showing window
+    debugPrint('Running app...');
+    runApp(const MyApp());
+    debugPrint('App running');
+
+    // 6. Add close handler
+    windowManager.addListener(CloseWindowListener());
+    debugPrint('Close handler added');
+
+    // 7. Finally setup and show window
+    debugPrint('Setting up window...');
+    await Future.delayed(const Duration(milliseconds: 100));
+    await setupWindow();
+    debugPrint('Window setup complete');
+
+  } catch (e, stackTrace) {
+    debugPrint('Critical error starting app: $e');
+    debugPrintStack(stackTrace: stackTrace);
+
+    // Show error screen if startup fails
+    runApp(MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              const SizedBox(height: 16),
+              const Text(
+                'Ứng dụng khởi động thất bại',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Lỗi: $e',
+                style: const TextStyle(fontSize: 14),
+                textAlign: TextAlign.center
+              ),
+            ],
+          ),
+        ),
+      ),
+    ));
+  }
 }
 
 Future<bool> showCloseConfirmationDialog() async {
@@ -155,8 +217,9 @@ class AppState extends State<MyApp> {
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
         themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
-        initialRoute: AppRoutes.login,
+        initialRoute: AppRoutes.splash,
         routes: AppRoutes.routes,
+        onGenerateRoute: AppRoutes.onGenerateRoute,
         debugShowCheckedModeBanner: false,
       ),
     );
@@ -200,14 +263,76 @@ class CloseWindowListener extends WindowListener {
           );
         }
 
-        // Cleanup tasks
-        await Future.wait([
-          // Give time for the UI to update
-          Future.delayed(const Duration(milliseconds: 100)),
-          // Clean up any resources, close connections, etc
-          GetIt.instance.reset(),
-          // Add any other cleanup tasks here
-        ]);
+        try {
+          // Cleanup services in proper order
+          final getIt = GetIt.instance;
+
+          // Close connection-based services first
+          if (getIt.isRegistered<SerialMonitorService>()) {
+            try {
+              final service = getIt<SerialMonitorService>();
+              if (service.toString().contains('dispose')) {
+                (service as dynamic).dispose();
+              }
+            } catch (e) {
+              debugPrint('Error disposing SerialMonitorService: $e');
+            }
+          }
+
+          if (getIt.isRegistered<BluetoothService>()) {
+            try {
+              final service = getIt<BluetoothService>();
+              if (service.toString().contains('dispose')) {
+                (service as dynamic).dispose();
+              }
+            } catch (e) {
+              debugPrint('Error disposing BluetoothService: $e');
+            }
+          }
+
+          if (getIt.isRegistered<ArduinoService>()) {
+            try {
+              final service = getIt<ArduinoService>();
+              if (service.toString().contains('dispose')) {
+                (service as dynamic).dispose();
+              }
+            } catch (e) {
+              debugPrint('Error disposing ArduinoService: $e');
+            }
+          }
+
+          // Then close other services
+          if (getIt.isRegistered<LogService>()) {
+            try {
+              final service = getIt<LogService>();
+              if (service.toString().contains('dispose')) {
+                (service as dynamic).dispose();
+              }
+            } catch (e) {
+              debugPrint('Error disposing LogService: $e');
+            }
+          }
+
+          if (getIt.isRegistered<ApiService>()) {
+            try {
+              final service = getIt<ApiService>();
+              if (service.toString().contains('dispose')) {
+                (service as dynamic).dispose();
+              }
+            } catch (e) {
+              debugPrint('Error disposing ApiService: $e');
+            }
+          }
+
+          // Wait a bit to ensure UI is updated
+          await Future.delayed(const Duration(milliseconds: 100));
+
+          // Finally reset service locator
+          await GetIt.instance.reset();
+        } catch (e) {
+          debugPrint('Error during cleanup: $e');
+          // Continue with window destroy even if cleanup fails
+        }
 
         // Finally destroy the window
         await windowManager.destroy();
