@@ -1163,70 +1163,71 @@ class ArduinoService implements ArduinoRepository {
 
   LogLevel _getLogLevelFromOutput(String output) {
     final lower = output.toLowerCase();
-    if (lower.contains('error') || lower.contains('failed')) {
+
+    // Kiểm tra các lỗi
+    if (lower.contains('error') ||
+        lower.contains('failed') ||
+        lower.contains('cannot access') ||
+        lower.contains('not found') ||
+        lower.contains('denied')) {
       return LogLevel.error;
-    } else if (lower.contains('warning')) {
+    }
+
+    // Kiểm tra warnings
+    if (lower.contains('warning')) {
       return LogLevel.warning;
-    } else if (lower.contains('success') ||
+    }
+
+    // Kiểm tra thành công
+    if (lower.contains('success') ||
         lower.contains('done') ||
         lower.contains('uploaded') ||
+        lower.contains('complete') ||
         (lower.contains('bytes') && lower.contains('written'))) {
       return LogLevel.success;
-    } else if (lower.contains('avrdude') ||
+    }
+
+    // Kiểm tra thông tin chi tiết
+    if (lower.contains('avrdude:') ||
         lower.contains('compiling') ||
         lower.contains('writing') ||
-        lower.contains('reading')) {
+        lower.contains('reading') ||
+        lower.contains('sketch uses') ||
+        lower.contains('maximum is') ||
+        lower.contains('global variables use')) {
       return LogLevel.verbose;
     }
+
     return LogLevel.info;
   }
 
-  Stream<String> startSerialMonitor(String port, int baudRate) {
-    final controller = StreamController<String>();
+  void _logProcessOutput(String output, LogLevel level, ProcessStep step, String deviceId) {
+    if (output.trim().isEmpty) return;
 
-    // Command to start monitor
-    final command = '$_arduinoCliPath monitor -p $port -c baudrate=$baudRate';
+    final lines = output.split('\n');
+    for (var line in lines) {
+      if (line.trim().isEmpty) continue;
 
-    // Start process and pipe output
-    Process.start(command, [], runInShell: true).then((process) {
-      _activeProcess = process;
-
-      process.stdout.transform(utf8.decoder).listen((data) {
-        if (!controller.isClosed) {
-          controller.add(data);
-        }
-      });
-
-      process.stderr.transform(utf8.decoder).listen((data) {
-        if (!controller.isClosed) {
-          controller.addError(data);
-        }
-      });
-
-      process.exitCode.then((code) {
-        if (!controller.isClosed) {
-          if (code != 0) {
-            controller.addError('Monitor process exited with code $code');
-          }
-          controller.close();
-        }
-      });
-    }).catchError((error) {
-      controller.addError(error);
-      controller.close();
-    });
-
-    return controller.stream;
-  }
-
-  void stopSerialMonitor() {
-    _activeProcess?.kill();
-    _activeProcess = null;
-  }
-
-  void sendSerialCommand(String command) {
-    if (_activeProcess != null) {
-      _activeProcess!.stdin.writeln(command);
+      _logService.addLog(
+        message: line.trim(),
+        level: _getLogLevelFromOutput(line),
+        step: step,
+        deviceId: deviceId,
+        origin: 'arduino-cli',
+        rawOutput: line,
+      );
     }
+  }
+
+  String _formatSize(String output) {
+    // Định dạng thông tin kích thước sketch để dễ đọc hơn
+    final sketchMatch = RegExp(r'Sketch uses (\d+) bytes.*Maximum is (\d+)').firstMatch(output);
+    if (sketchMatch != null) {
+      final used = int.parse(sketchMatch.group(1)!);
+      final total = int.parse(sketchMatch.group(2)!);
+      final percent = (used / total * 100).toStringAsFixed(1);
+      return '📊 Sketch sử dụng $used bytes ($percent%) trên tổng $total bytes';
+    }
+    return output;
   }
 }

@@ -240,9 +240,23 @@ class TemplateService {
   }
 
   String _processDefines(String content, String serialNumber, String deviceId, {bool useQuotesForDefines = true}) {
-    // Clean up serial number and device ID - remove any duplicates
+    _logService.addLog(
+      message: 'Bắt đầu chuẩn bị template với serial number: $serialNumber',
+      level: LogLevel.info,
+      step: ProcessStep.templatePreparation,
+      origin: 'system',
+    );
+
+    // Clean up serial number and device ID
     serialNumber = _cleanupIdentifier(serialNumber);
     deviceId = _cleanupIdentifier(deviceId);
+
+    _logService.addLog(
+      message: '» Đã chuẩn hóa thông tin:\n  - Serial: $serialNumber\n  - Device ID: $deviceId',
+      level: LogLevel.info,
+      step: ProcessStep.templatePreparation,
+      origin: 'system',
+    );
 
     // Check if the defines already exist in the content
     bool hasSerialNumberDefine = content.contains('#define SERIAL_NUMBER') ||
@@ -250,44 +264,75 @@ class TemplateService {
     bool hasDeviceIdDefine = content.contains('#define DEVICE_ID') ||
                             content.contains('#define device_id');
 
-    // Replace template placeholders first
-    content = content.replaceAll('{{SERIAL_NUMBER}}', serialNumber);
-    content = content.replaceAll('{{DEVICE_ID}}', deviceId);
+    // Define patterns for different define formats
+    final definePlaceholderPattern = RegExp(r'#define\s+(SERIAL_NUMBER|DEVICE_ID)\s+"?\{\{[A-Z_]+\}\}"?');
+    final definePattern = RegExp(r'#define\s+(SERIAL_NUMBER|DEVICE_ID)\s+"?[^"\n\r]*"?');
 
-    // Define patterns for quoted and unquoted defines
-    final definePlaceholderPattern = RegExp(r'#define\s+(SERIAL_NUMBER|DEVICE_ID)\s+"(\{\{[A-Z_]+\}\})"');
-    final defineQuotePattern = RegExp(r'#define\s+(SERIAL_NUMBER|DEVICE_ID)\s+"([^"\n\r]*)"');
-    final defineUnquotePattern = RegExp(r'#define\s+(SERIAL_NUMBER|DEVICE_ID)\s+([^"\n\r]*)');
-
-    // Replace placeholder defines with actual values
+    // First handle any existing #define statements with placeholders
     content = content.replaceAllMapped(definePlaceholderPattern, (match) {
       final defineName = match.group(1)!;
       final value = defineName == 'SERIAL_NUMBER' ? serialNumber : deviceId;
+      _logService.addLog(
+        message: '» Thay thế placeholder #define $defineName với giá trị "$value"',
+        level: LogLevel.info,
+        step: ProcessStep.templatePreparation,
+        origin: 'system',
+      );
       return '#define $defineName "$value"';
     });
 
-    // Replace quoted defines
-    content = content.replaceAllMapped(defineQuotePattern, (match) {
+    // Then handle any other #define statements
+    content = content.replaceAllMapped(definePattern, (match) {
       final defineName = match.group(1)!;
       final value = defineName == 'SERIAL_NUMBER' ? serialNumber : deviceId;
+      _logService.addLog(
+        message: '» Cập nhật #define $defineName thành "$value"',
+        level: LogLevel.info,
+        step: ProcessStep.templatePreparation,
+        origin: 'system',
+      );
       return '#define $defineName "$value"';
     });
 
-    // Replace unquoted defines
-    content = content.replaceAllMapped(defineUnquotePattern, (match) {
-      final defineName = match.group(1)!;
-      final value = defineName == 'SERIAL_NUMBER' ? serialNumber : deviceId;
-      return '#define $defineName "$value"';
-    });
-
-    // If defines don't exist, add them at the beginning of the file
+    // Add missing defines at the beginning
     if (!hasSerialNumberDefine) {
       content = '#define SERIAL_NUMBER "$serialNumber"\n$content';
+      _logService.addLog(
+        message: '» Thêm mới #define SERIAL_NUMBER "$serialNumber"',
+        level: LogLevel.info,
+        step: ProcessStep.templatePreparation,
+        origin: 'system',
+      );
     }
 
     if (!hasDeviceIdDefine) {
-      content = '#define DEVICE_ID "$deviceId"\n $content';
+      content = '#define DEVICE_ID "$deviceId"\n$content';
+      _logService.addLog(
+        message: '» Thêm mới #define DEVICE_ID "$deviceId"',
+        level: LogLevel.info,
+        step: ProcessStep.templatePreparation,
+        origin: 'system',
+      );
     }
+
+    // Handle remaining placeholders
+    if (content.contains('{{SERIAL_NUMBER}}') || content.contains('{{DEVICE_ID}}')) {
+      _logService.addLog(
+        message: '» Xử lý các placeholder còn lại trong code',
+        level: LogLevel.info,
+        step: ProcessStep.templatePreparation,
+        origin: 'system',
+      );
+      content = content.replaceAll('{{SERIAL_NUMBER}}', serialNumber);
+      content = content.replaceAll('{{DEVICE_ID}}', deviceId);
+    }
+
+    _logService.addLog(
+      message: 'Hoàn thành chuẩn bị template',
+      level: LogLevel.success,
+      step: ProcessStep.templatePreparation,
+      origin: 'system',
+    );
 
     return content;
   }

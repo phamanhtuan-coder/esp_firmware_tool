@@ -15,6 +15,11 @@ class SerialMonitorService {
   Timer? _reconnectTimer;
   bool _isReconnecting = false;
 
+  // Buffer để tích lũy dữ liệu chưa hoàn chỉnh
+  StringBuffer _dataBuffer = StringBuffer();
+  Timer? _flushTimer;
+  static const _flushDelay = Duration(milliseconds: 50);
+
   // Current connection info
   String? _currentPort;
   int? _currentBaudRate;
@@ -41,7 +46,7 @@ class SerialMonitorService {
       stopMonitor();
 
       _logService.addLog(
-        message: 'Starting monitor on $port at $baudRate baud',
+        message: 'Starting serial monitor on $port at $baudRate baud',
         level: LogLevel.info,
         step: ProcessStep.serialMonitor,
         origin: 'serial-monitor',
@@ -66,15 +71,12 @@ class SerialMonitorService {
           throw Exception('Failed to open port: ${SerialPort.lastError}');
         }
 
-        // Set up reader
+        // Set up reader with buffering
         final reader = SerialPortReader(_serialPort!);
         reader.stream.listen(
           (data) {
             if (_outputController != null && !_outputController!.isClosed) {
-              final message = _decodeBytes(data);
-              if (message.isNotEmpty) {
-                _outputController!.add(message);
-              }
+              _processSerialData(data);
             }
           },
           onError: (error) {
@@ -112,6 +114,61 @@ class SerialMonitorService {
         origin: 'serial-monitor',
       );
       return false;
+    }
+  }
+
+  void _processSerialData(List<int> data) {
+    try {
+      // Decode bytes to string
+      final String decodedData = _decodeBytes(data);
+
+      // Add to buffer
+      _dataBuffer.write(decodedData);
+
+      // Cancel any existing flush timer
+      _flushTimer?.cancel();
+
+      // Schedule a new flush
+      _flushTimer = Timer(_flushDelay, () {
+        _flushBuffer();
+      });
+
+    } catch (e) {
+      print('Error processing serial data: $e');
+    }
+  }
+
+  void _flushBuffer() {
+    if (_dataBuffer.isEmpty) return;
+
+    try {
+      // Get the buffered data
+      String bufferedData = _dataBuffer.toString();
+
+      // Clear the buffer
+      _dataBuffer.clear();
+
+      // Split into lines, keeping any partial line in the buffer
+      List<String> lines = bufferedData.split('\n');
+
+      if (!bufferedData.endsWith('\n')) {
+        // Keep the last partial line in buffer
+        String partial = lines.removeLast();
+        _dataBuffer.write(partial);
+      }
+
+      // Output complete lines
+      for (String line in lines) {
+        // Trim carriage return and any whitespace
+        line = line.trim();
+        if (line.isNotEmpty) {
+          _outputController?.add(line);
+        }
+      }
+
+    } catch (e) {
+      print('Error flushing buffer: $e');
+      _dataBuffer.clear(); // Clear buffer on error
     }
   }
 
@@ -210,6 +267,8 @@ class SerialMonitorService {
 
   void dispose() {
     stopMonitor();
+    _flushTimer?.cancel();
+    _dataBuffer.clear();
     _outputController?.close();
     _statusController?.close();
   }
@@ -219,10 +278,15 @@ class SerialMonitorService {
       return utf8.decode(data, allowMalformed: true);
     } catch (e) {
       try {
+        // Replace non-printable characters with space
         return String.fromCharCodes(data.map((byte) {
-          return (byte < 32 || byte > 126) && byte != 10 && byte != 13 ? 32 : byte;
+          if ((byte < 32 || byte > 126) && byte != 10 && byte != 13) {
+            return 32; // space
+          }
+          return byte;
         }));
       } catch (e) {
+        // Fallback: show hex values
         return data.map((b) => '0x${b.toRadixString(16).padLeft(2, '0')}').join(' ');
       }
     }

@@ -40,61 +40,29 @@ class _SerialMonitorTerminalWidgetState
     extends State<SerialMonitorTerminalWidget> {
   final SerialMonitorService _monitorService =
       GetIt.instance<SerialMonitorService>();
-  final List<LineDisplay> _lines = [];
+  final List<String> _lines = [];
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  late final Ansi _ansi;
-  final bool _isAutoScrollEnabled = true;
   StreamSubscription? _subscription;
   StreamSubscription? _statusSubscription;
   bool _isMonitorActive = false;
+  bool _isAutoScrollEnabled = true;
+  static const maxLines = 1000;
 
   // Keep track of last used port and baud rate
   String? _lastPort;
   int? _lastBaudRate;
 
   final List<int> _baudRates = [
-    300,
-    1200,
-    2400,
-    4800,
-    9600,
-    19200,
-    38400,
-    57600,
-    74880,
-    115200,
-    230400,
-    250000,
-    500000,
-    921600,
-    1000000,
-    2000000,
+    300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 74880,
+    115200, 230400, 250000, 500000, 921600, 1000000, 2000000
   ];
   int _selectedBaudRate = 115200;
 
   @override
   void initState() {
     super.initState();
-    _ansi = Ansi(Ansi.terminalSupportsAnsi);
     _selectedBaudRate = widget.initialBaudRate;
-
-    final timestamp = DateTime.now().toString().split('.').first;
-    _lines.add(
-      LineDisplay(
-        timestamp,
-        'Welcome to Serial Monitor',
-        isSystemMessage: true,
-      ),
-    );
-    _lines.add(
-      LineDisplay(
-        timestamp,
-        'Select COM port and baud rate to start monitoring',
-        isSystemMessage: true,
-      ),
-    );
-
     _setupSerialMonitor();
   }
 
@@ -105,35 +73,26 @@ class _SerialMonitorTerminalWidgetState
     _subscription = _monitorService.outputStream.listen(
       (data) {
         if (mounted) {
-          _addLine(data);
-          context.read<LoggingBloc>().add(
-            AddLogEvent(
-              LogEntry(
-                message: data,
-                timestamp: DateTime.now(),
-                level: LogLevel.serialOutput,
-                step: ProcessStep.serialMonitor,
-                origin: 'serial-monitor',
-                rawOutput: data,
-              ),
-            ),
-          );
+          setState(() {
+            _lines.add(data);
+            if (_lines.length > maxLines) {
+              _lines.removeAt(0);
+            }
+          });
+
+          if (_isAutoScrollEnabled) {
+            _scrollToBottom();
+          }
         }
       },
       onError: (error) {
         if (mounted) {
-          _addLine('Error: $error', isSystemMessage: true);
-          context.read<LoggingBloc>().add(
-            AddLogEvent(
-              LogEntry(
-                message: 'Error: $error',
-                timestamp: DateTime.now(),
-                level: LogLevel.error,
-                step: ProcessStep.serialMonitor,
-                origin: 'serial-monitor',
-              ),
-            ),
-          );
+          setState(() {
+            _lines.add('Error: $error');
+            if (_lines.length > maxLines) {
+              _lines.removeAt(0);
+            }
+          });
         }
       },
       cancelOnError: false,
@@ -143,15 +102,19 @@ class _SerialMonitorTerminalWidgetState
     _statusSubscription = _monitorService.statusStream.listen(
       (status) {
         if (mounted) {
-          _handleStatusUpdate(status);
+          setState(() {
+            _isMonitorActive = status;
+            if (status) {
+              _lines.add('Serial monitor connected');
+            } else {
+              _lines.add('Serial monitor disconnected');
+            }
+            if (_lines.length > maxLines) {
+              _lines.removeAt(0);
+            }
+          });
         }
       },
-      onError: (error) {
-        if (mounted) {
-          _addLine('Status Error: $error', isSystemMessage: true);
-        }
-      },
-      cancelOnError: false,
     );
 
     // Start monitor if conditions are met
@@ -160,36 +123,27 @@ class _SerialMonitorTerminalWidgetState
     }
   }
 
-  void _handleStatusUpdate(bool status) {
-    setState(() {
-      _isMonitorActive = status;
-    });
-
-    if (status) {
-      _addLine('Serial monitor connected and active', isSystemMessage: true);
-    } else {
-      _addLine('Serial monitor disconnected', isSystemMessage: true);
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 100),
+        curve: Curves.easeOut,
+      );
     }
   }
 
   void _initializeMonitor() {
-    if (!widget.isActiveTab || !mounted) {
-      _addLine('Not starting monitor - tab not active', isSystemMessage: true);
-      return;
-    }
+    if (!widget.isActiveTab || !mounted) return;
 
     if (widget.initialPort != null &&
         widget.initialPort!.isNotEmpty &&
         _selectedBaudRate > 0) {
       _stopMonitor();
 
-      // Add a delay before starting to allow port to stabilize
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted && widget.isActiveTab) {
-          _addLine(
-            'Starting monitor on ${widget.initialPort} at $_selectedBaudRate baud...',
-            isSystemMessage: true,
-          );
+          _lines.add('Starting monitor on ${widget.initialPort} at $_selectedBaudRate baud...');
           _monitorService.startMonitor(widget.initialPort!, _selectedBaudRate);
           _isMonitorActive = true;
         }
@@ -201,7 +155,7 @@ class _SerialMonitorTerminalWidgetState
     if (_isMonitorActive && mounted) {
       _monitorService.stopMonitor();
       _isMonitorActive = false;
-      _addLine('Serial monitor stopped', isSystemMessage: true);
+      _lines.add('Serial monitor stopped');
     }
   }
 
@@ -214,74 +168,10 @@ class _SerialMonitorTerminalWidgetState
         if (mounted && widget.isActiveTab) {
           _monitorService.startMonitor(widget.initialPort!, _selectedBaudRate);
           _isMonitorActive = true;
-          _addLine(
-            'Restarting monitor on ${widget.initialPort} at $_selectedBaudRate baud...',
-            isSystemMessage: true,
-          );
+          _lines.add('Restarting monitor on ${widget.initialPort} at $_selectedBaudRate baud...');
         }
       });
     }
-  }
-
-  void _addLine(String line, {bool isSystemMessage = false}) {
-    if (!mounted) return;
-
-    setState(() {
-      final timestamp = DateTime.now().toString().split('.').first;
-      final processedLine = _processAnsiCodes(line);
-      _lines.add(
-        LineDisplay(timestamp, processedLine, isSystemMessage: isSystemMessage),
-      );
-      while (_lines.length > 1000) {
-        _lines.removeAt(0);
-      }
-    });
-
-    if (_isAutoScrollEnabled && mounted && _scrollController.hasClients) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 100),
-            curve: Curves.easeOut,
-          );
-        }
-      });
-    }
-  }
-
-  void _updateLines(String data) {
-    if (!mounted) return;
-    setState(() {
-      _lines.add(LineDisplay(
-        DateTime.now().toString().split('.').first,
-        data,
-      ));
-      while (_lines.length > 1000) {
-        _lines.removeAt(0);
-      }
-    });
-
-    if (_isAutoScrollEnabled && _scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 100),
-        curve: Curves.easeOut,
-      );
-    }
-  }
-
-  String _processAnsiCodes(String text) {
-    return text
-        .replaceAll(_ansi.bold, '')
-        .replaceAll(_ansi.none, '')
-        .replaceAll(_ansi.red, '')
-        .replaceAll(_ansi.green, '')
-        .replaceAll(_ansi.yellow, '')
-        .replaceAll(_ansi.blue, '')
-        .replaceAll(_ansi.magenta, '')
-        .replaceAll(_ansi.cyan, '')
-        .replaceAll(_ansi.gray, '');
   }
 
   void _sendCommand() {
@@ -289,25 +179,6 @@ class _SerialMonitorTerminalWidgetState
     if (command.isNotEmpty && mounted) {
       _monitorService.sendCommand(command);
       _inputController.clear();
-      context.read<LoggingBloc>().add(
-        AddLogEvent(
-          LogEntry(
-            message: 'Sent command: $command',
-            timestamp: DateTime.now(),
-            level: LogLevel.input,
-            step: ProcessStep.serialMonitor,
-            origin: 'user-input',
-          ),
-        ),
-      );
-    }
-  }
-
-  void _stopMonitorAndCleanup() {
-    if (mounted) {
-      final logService = GetIt.instance<LogService>();
-      logService.stopSerialMonitor();
-      _stopMonitor();
     }
   }
 
@@ -317,27 +188,38 @@ class _SerialMonitorTerminalWidgetState
 
     if (!mounted) return;
 
-    // Handle tab activation/deactivation
+    // Handle tab changes
     if (widget.isActiveTab != oldWidget.isActiveTab) {
       if (widget.isActiveTab) {
-        _addLine('Tab activated - initializing monitor...', isSystemMessage: true);
-        Future.delayed(const Duration(milliseconds: 500), () {
-          _stopMonitor();
-          Future.delayed(const Duration(milliseconds: 300), _initializeMonitor);
-        });
+        // Tab became active - restart monitor if there was a previous connection
+        if (_lastPort != null && _lastBaudRate != null) {
+          _lines.add('Tab activated - restarting monitor...');
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted) {
+              _monitorService.startMonitor(_lastPort!, _lastBaudRate!);
+              _isMonitorActive = true;
+            }
+          });
+        } else {
+          _initializeMonitor();
+        }
       } else {
-        _addLine('Tab deactivated - stopping monitor...', isSystemMessage: true);
-        _stopMonitor();
+        // Tab became inactive - stop monitor and save current connection info
+        if (_isMonitorActive && widget.initialPort != null) {
+          _lastPort = widget.initialPort;
+          _lastBaudRate = _selectedBaudRate;
+          _lines.add('Tab deactivated - stopping monitor...');
+          _stopMonitor();
+        }
       }
     }
-    // Handle port/baud rate changes
+    // Handle port or baud rate changes when active
     else if (widget.isActiveTab &&
-             (oldWidget.initialPort != widget.initialPort ||
-              oldWidget.initialBaudRate != widget.initialBaudRate)) {
-      _addLine(
-        'Port or baud rate changed - restarting monitor...',
-        isSystemMessage: true
-      );
+            (oldWidget.initialPort != widget.initialPort ||
+             oldWidget.initialBaudRate != widget.initialBaudRate)) {
+      _lastPort = widget.initialPort;
+      _lastBaudRate = _selectedBaudRate;
+      _lines.add('Port or baud rate changed - restarting monitor...');
       _stopMonitor();
       Future.delayed(const Duration(milliseconds: 300), _initializeMonitor);
     }
@@ -346,9 +228,7 @@ class _SerialMonitorTerminalWidgetState
   @override
   void dispose() {
     _subscription?.cancel();
-    _subscription = null;
     _statusSubscription?.cancel();
-    _statusSubscription = null;
     _stopMonitor();
     _inputController.dispose();
     _scrollController.dispose();
@@ -375,61 +255,31 @@ class _SerialMonitorTerminalWidgetState
                       color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
                     ),
                   ),
-                  child: StreamBuilder<String>(
-                    stream: _monitorService.outputStream,
-                    builder: (context, snapshot) {
-                      if (snapshot.hasData) {
-                        // Schedule update for next frame
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          _updateLines(snapshot.data!);
-                        });
-                      }
-
-                      return Scrollbar(
-                        thumbVisibility: true,
-                        controller: _scrollController,
-                        child: SingleChildScrollView(
-                          controller: _scrollController,
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: SelectableText.rich(
-                              TextSpan(
-                                children: List<TextSpan>.from(_lines.map((line) =>
-                                  TextSpan(
-                                    children: [
-                                      TextSpan(
-                                        text: '[${line.timestamp}] ',
-                                        style: TextStyle(
-                                          color: line.isSystemMessage
-                                              ? Colors.yellow.withOpacity(0.8)
-                                              : Colors.grey.withOpacity(0.7),
-                                          fontFamily: 'Courier New',
-                                          fontSize: 12.0,
-                                          height: 1.5,
-                                        ),
-                                      ),
-                                      TextSpan(
-                                        text: '${line.content}\n',
-                                        style: TextStyle(
-                                          color: line.isSystemMessage
-                                              ? Colors.yellow
-                                              : isDarkTheme
-                                                  ? Colors.lightGreenAccent
-                                                  : const Color(0xFF2E7D32),
-                                          fontFamily: 'Courier New',
-                                          fontSize: 14.0,
-                                          height: 1.5,
-                                        ),
-                                      ),
-                                    ],
-                                  )
-                                ).toList()),
-                              ),
-                            ),
+                  child: Scrollbar(
+                    thumbVisibility: true,
+                    controller: _scrollController,
+                    child: SingleChildScrollView(
+                      controller: _scrollController,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: SelectableText.rich(
+                          TextSpan(
+                            children: _lines.map((line) {
+                              final timestamp = DateTime.now().toString().split('.')[0];
+                              return TextSpan(
+                                text: '$line\n',
+                                style: TextStyle(
+                                  color: isDarkTheme ? Colors.lightGreenAccent : const Color(0xFF2E7D32),
+                                  fontFamily: 'Courier New',
+                                  fontSize: 14.0,
+                                  height: 1.5,
+                                ),
+                              );
+                            }).toList(),
                           ),
                         ),
-                      );
-                    },
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -442,51 +292,42 @@ class _SerialMonitorTerminalWidgetState
                         color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color:
-                              isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
+                          color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
                         ),
                       ),
                       padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: StreamBuilder<bool>(
-                        stream: _monitorService.statusStream,
-                        initialData: false,
-                        builder: (context, snapshot) {
-                          final isConnected = snapshot.data ?? false;
-                          return Row(
-                            children: [
-                              Icon(
-                                isConnected ? Icons.circle : Icons.circle_outlined,
-                                color: isConnected ? Colors.green : Colors.red,
-                                size: 12,
-                              ),
-                              const SizedBox(width: 8),
-                              DropdownButton<int>(
-                                value: _selectedBaudRate,
-                                dropdownColor:
-                                    isDarkTheme ? Colors.grey.shade800 : Colors.white,
-                                style: TextStyle(
-                                  color: isDarkTheme ? Colors.white : Colors.black,
-                                  fontSize: 14,
-                                ),
-                                underline: Container(),
-                                items: _baudRates.map((rate) {
-                                  return DropdownMenuItem<int>(
-                                    value: rate,
-                                    child: Text('$rate'),
-                                  );
-                                }).toList(),
-                                onChanged: isConnected ? null : (value) {
-                                  if (value != null && value != _selectedBaudRate && mounted) {
-                                    setState(() {
-                                      _selectedBaudRate = value;
-                                    });
-                                    _restartMonitor();
-                                  }
-                                },
-                              ),
-                            ],
-                          );
-                        },
+                      child: Row(
+                        children: [
+                          Icon(
+                            _isMonitorActive ? Icons.circle : Icons.circle_outlined,
+                            color: _isMonitorActive ? Colors.green : Colors.red,
+                            size: 12,
+                          ),
+                          const SizedBox(width: 8),
+                          DropdownButton<int>(
+                            value: _selectedBaudRate,
+                            dropdownColor: isDarkTheme ? Colors.grey.shade800 : Colors.white,
+                            style: TextStyle(
+                              color: isDarkTheme ? Colors.white : Colors.black,
+                              fontSize: 14,
+                            ),
+                            underline: Container(),
+                            items: _baudRates.map((rate) {
+                              return DropdownMenuItem<int>(
+                                value: rate,
+                                child: Text('$rate'),
+                              );
+                            }).toList(),
+                            onChanged: _isMonitorActive ? null : (value) {
+                              if (value != null && value != _selectedBaudRate && mounted) {
+                                setState(() {
+                                  _selectedBaudRate = value;
+                                });
+                                _restartMonitor();
+                              }
+                            },
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -501,20 +342,11 @@ class _SerialMonitorTerminalWidgetState
                           hintText: 'Enter command...',
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                              color:
-                                  isDarkTheme
-                                      ? Colors.grey.shade700
-                                      : Colors.grey.shade300,
-                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
                             borderSide: BorderSide(
-                              color:
-                                  isDarkTheme
-                                      ? Colors.grey.shade700
-                                      : Colors.grey.shade300,
+                              color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
                             ),
                           ),
                           focusedBorder: OutlineInputBorder(
@@ -524,38 +356,66 @@ class _SerialMonitorTerminalWidgetState
                               width: 2,
                             ),
                           ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          fillColor:
-                              isDarkTheme ? Colors.grey.shade800 : Colors.white,
+                          fillColor: isDarkTheme ? Colors.grey.shade800 : Colors.white,
                           filled: true,
                         ),
                         onSubmitted: (_) => _sendCommand(),
                       ),
                     ),
                     const SizedBox(width: 8.0),
-                    StreamBuilder<bool>(
-                      stream: _monitorService.statusStream,
-                      initialData: false,
-                      builder: (context, snapshot) {
-                        return ElevatedButton(
-                          onPressed: snapshot.data! ? _sendCommand : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: const Text('Send'),
-                        );
-                      },
+                    ElevatedButton(
+                      onPressed: _isMonitorActive ? _sendCommand : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                      child: const Text('Send'),
+                    ),
+                    const SizedBox(width: 8.0),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
+                        ),
+                      ),
+                      child: IconButton(
+                        onPressed: () {
+                          setState(() {
+                            _isAutoScrollEnabled = !_isAutoScrollEnabled;
+                          });
+                        },
+                        icon: Icon(
+                          _isAutoScrollEnabled ? Icons.vertical_align_bottom : Icons.vertical_align_center,
+                          color: _isAutoScrollEnabled ? Colors.blue : Colors.grey,
+                        ),
+                        tooltip: _isAutoScrollEnabled ? 'Auto-scroll enabled' : 'Auto-scroll disabled',
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: isDarkTheme ? Colors.grey.shade800 : Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isDarkTheme ? Colors.grey.shade700 : Colors.grey.shade300,
+                        ),
+                      ),
+                      child: IconButton(
+                        onPressed: () {
+                          setState(() {
+                            _lines.clear();
+                          });
+                        },
+                        icon: const Icon(Icons.clear_all),
+                        tooltip: 'Clear monitor',
+                        color: isDarkTheme ? Colors.grey[400] : Colors.grey[600],
+                      ),
                     ),
                   ],
                 ),

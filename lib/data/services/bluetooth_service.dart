@@ -16,19 +16,35 @@ class BluetoothService {
 
   Future<void> start({required Function(String) onSerialReceived}) async {
     _onSerialReceived = onSerialReceived;
+
+    _logService.addLog(
+      message: '🔄 Khởi động dịch vụ nhận QR code...',
+      level: LogLevel.info,
+      step: ProcessStep.scanQrCode,
+      origin: 'bluetooth',
+    );
+
     await _startTcpServer();
     await _startUdpServer();
+
+    _logService.addLog(
+      message: '✅ Đã sẵn sàng nhận dữ liệu từ QR code',
+      level: LogLevel.success,
+      step: ProcessStep.scanQrCode,
+      origin: 'bluetooth',
+    );
   }
 
   Future<void> _startTcpServer() async {
     try {
       _tcpServer = await ServerSocket.bind(InternetAddress.anyIPv4, 12345);
       _logService.addLog(
-        message: 'TCP server started on port 12345',
+        message: '» TCP server đang chạy trên cổng 12345',
         level: LogLevel.success,
         step: ProcessStep.scanQrCode,
         origin: 'bluetooth',
       );
+
       _tcpSubscription = _tcpServer!.listen((socket) {
         socket
             .transform(utf8.decoder as StreamTransformer<Uint8List, dynamic>)
@@ -37,7 +53,7 @@ class BluetoothService {
                 final serial = data.trim();
                 if (serial.isNotEmpty) {
                   _logService.addLog(
-                    message: 'Received serial via TCP: $serial',
+                    message: '📱 Đã nhận serial qua TCP: $serial',
                     level: LogLevel.info,
                     step: ProcessStep.scanQrCode,
                     origin: 'bluetooth',
@@ -47,7 +63,7 @@ class BluetoothService {
               },
               onError: (e) {
                 _logService.addLog(
-                  message: 'TCP error: $e',
+                  message: '❌ Lỗi TCP: $e',
                   level: LogLevel.error,
                   step: ProcessStep.scanQrCode,
                   origin: 'bluetooth',
@@ -57,7 +73,7 @@ class BluetoothService {
       });
     } catch (e) {
       _logService.addLog(
-        message: 'Failed to start TCP server: $e',
+        message: '❌ Không thể khởi động TCP server: $e',
         level: LogLevel.error,
         step: ProcessStep.scanQrCode,
         origin: 'bluetooth',
@@ -69,11 +85,12 @@ class BluetoothService {
     try {
       _udpSocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 12345);
       _logService.addLog(
-        message: 'UDP server started on port 12345',
+        message: '» UDP server đang chạy trên cổng 12345',
         level: LogLevel.success,
         step: ProcessStep.scanQrCode,
         origin: 'bluetooth',
       );
+
       _udpSubscription = _udpSocket!.listen((event) {
         if (event == RawSocketEvent.read) {
           final datagram = _udpSocket!.receive();
@@ -81,7 +98,7 @@ class BluetoothService {
             final serial = utf8.decode(datagram.data).trim();
             if (serial.isNotEmpty) {
               _logService.addLog(
-                message: 'Received serial via UDP: $serial',
+                message: '📱 Đã nhận serial qua UDP: $serial',
                 level: LogLevel.info,
                 step: ProcessStep.scanQrCode,
                 origin: 'bluetooth',
@@ -93,7 +110,7 @@ class BluetoothService {
       });
     } catch (e) {
       _logService.addLog(
-        message: 'Failed to start UDP server: $e',
+        message: '❌ Không thể khởi động UDP server: $e',
         level: LogLevel.error,
         step: ProcessStep.scanQrCode,
         origin: 'bluetooth',
@@ -110,8 +127,9 @@ class BluetoothService {
     _udpSocket = null;
     _tcpSubscription = null;
     _udpSubscription = null;
+
     _logService.addLog(
-      message: 'Bluetooth server stopped',
+      message: '🛑 Đã dừng dịch vụ nhận QR code',
       level: LogLevel.info,
       step: ProcessStep.scanQrCode,
       origin: 'bluetooth',

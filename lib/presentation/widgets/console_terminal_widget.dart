@@ -81,10 +81,13 @@ class ConsoleTerminalWidget extends StatefulWidget {
   State<ConsoleTerminalWidget> createState() => _ConsoleTerminalWidgetState();
 }
 
-class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
+class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> with AutomaticKeepAliveClientMixin {
   final List<ConsoleLineDisplay> _displayLines = [];
   bool _isAutoScrollEnabled = true;
   final ScrollController _scrollController = ScrollController();
+
+  @override
+  bool get wantKeepAlive => true; // Keep state when tab is inactive
 
   void _scrollToBottom() {
     if (_isAutoScrollEnabled && _scrollController.hasClients) {
@@ -103,7 +106,6 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
   @override
   void initState() {
     super.initState();
-    // Listen for scroll events
     _scrollController.addListener(() {
       if (_scrollController.hasClients) {
         final maxScroll = _scrollController.position.maxScrollExtent;
@@ -113,6 +115,21 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> {
         });
       }
     });
+  }
+
+  @override
+  void didUpdateWidget(ConsoleTerminalWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Handle tab activation
+    if (widget.isActiveTab && !oldWidget.isActiveTab) {
+      // Tab became active
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_isAutoScrollEnabled) {
+          _scrollToBottom();
+        }
+      });
+    }
   }
 
   @override
