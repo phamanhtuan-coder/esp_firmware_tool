@@ -4,11 +4,9 @@ import 'package:flutter_libserialport/flutter_libserialport.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 import 'package:get_it/get_it.dart';
-import 'package:smart_net_firmware_loader/data/services/arduino_service.dart';
 
 class SerialMonitorService {
   final LogService _logService = GetIt.instance<LogService>();
-  final ArduinoService _arduinoService = GetIt.instance<ArduinoService>();
   SerialPort? _serialPort;
   StreamController<String>? _outputController;
   StreamController<bool>? _statusController;

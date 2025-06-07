@@ -97,6 +97,9 @@ class TemplateService {
       bool useQuotesForDefines = true,
       }) async {
     try {
+      // Clean up old temp files first
+      await _cleanupTempFiles();
+
       print('DEBUG: Starting template preparation');
       print('DEBUG: Template path: $templatePath');
       print('DEBUG: Serial number: $serialNumber');
@@ -130,9 +133,16 @@ class TemplateService {
       // Get temporary directory for processed template
       print('DEBUG: Creating temp directory');
       final tempDir = await getTemporaryDirectory();
+      final baseDir = Directory(path.join(tempDir.path, 'esp_firmware_tool'));
+      if (!await baseDir.exists()) {
+        await baseDir.create(recursive: true);
+      }
+
       final sketchName = 'firmware_${serialNumber}_${DateTime.now().millisecondsSinceEpoch}';
-      final sketchDir = Directory(path.join(tempDir.path, sketchName));
-      await sketchDir.create(recursive: true);
+      final sketchDir = Directory(path.join(baseDir.path, sketchName));
+      if (!await sketchDir.exists()) {
+        await sketchDir.create(recursive: true);
+      }
       print('DEBUG: Temp directory created at: ${sketchDir.path}');
 
       // Process template with replacements
@@ -218,28 +228,8 @@ class TemplateService {
     }
   }
 
-  /// Update board type directives in the template file
-  String _updateBoardTypeDirectives(String content, String selectedBoardType) {
-    // Find all board type directives
-    final boardTypeRegex = RegExp(r'(\/\/\s*)?BOARD_TYPE:\s*(\w+)', multiLine: true);
 
-    // First, make sure all directives are commented
-    content = content.replaceAllMapped(boardTypeRegex, (match) {
-      final boardType = match.group(2)?.toLowerCase() ?? '';
-      return '// BOARD_TYPE: $boardType';
-    });
-
-    // Now add a special comment that Arduino CLI can use but won't be treated as code
-    content = content.replaceAll(
-      '// BOARD_TYPE: ${selectedBoardType.toLowerCase()}',
-      '// BOARD_TYPE: ${selectedBoardType.toLowerCase()} (ACTIVE)'
-    );
-
-    print('DEBUG: Set ${selectedBoardType.toLowerCase()} as active board type');
-    return content;
-  }
-
-  String _processDefines(String content, String serialNumber, String deviceId, {bool useQuotesForDefines = true}) {
+  String _processDefines(String content, String serialNumber, String deviceId) {
     _logService.addLog(
       message: 'Bắt đầu chuẩn bị template với serial number: $serialNumber',
       level: LogLevel.info,
@@ -509,5 +499,73 @@ class TemplateService {
       }
     }
     return false;
+  }
+
+  Future<void> _cleanupTempFiles() async {
+    try {
+      final systemTemp = Directory.systemTemp;
+      final pattern = RegExp(r'esp_firmware_tool.*');
+
+      await for (var entity in systemTemp.list()) {
+        try {
+          if (entity is Directory && pattern.hasMatch(path.basename(entity.path))) {
+            print('DEBUG: Attempting to clean up temp directory: ${entity.path}');
+
+            // Try to make files writable before deletion using platform-specific approach
+            await for (var file in entity.list(recursive: true)) {
+              try {
+                if (file is File) {
+                  // Update last modified time to help release file locks
+                  await file.setLastModified(DateTime.now());
+
+                  // On Windows, we'll use dart:io's setLastModified which helps release file locks
+                  // This is often enough to allow deletion
+                  await Future.delayed(const Duration(milliseconds: 100));
+                }
+              } catch (e) {
+                print('DEBUG: Failed to prepare file for deletion: $e');
+              }
+            }
+
+            // Attempt deletion with retry logic
+            bool deleted = false;
+            int attempts = 0;
+            while (!deleted && attempts < 3) {
+              try {
+                await entity.delete(recursive: true);
+                deleted = true;
+                print('DEBUG: Successfully cleaned up: ${entity.path}');
+              } catch (e) {
+                attempts++;
+                if (attempts < 3) {
+                  // Increase delay time with each attempt
+                  await Future.delayed(Duration(milliseconds: 500 * attempts));
+                } else {
+                  print('DEBUG: Failed to delete after 3 attempts: ${entity.path}');
+                  _logService.addLog(
+                    message: 'Warning: Could not clean up temporary directory: ${entity.path}. Error: $e',
+                    level: LogLevel.warning,
+                    step: ProcessStep.templatePreparation,
+                    origin: 'system',
+                  );
+                }
+              }
+            }
+          }
+        } catch (e) {
+          print('DEBUG: Error processing temp directory ${entity.path}: $e');
+          // Continue with next directory even if one fails
+        }
+      }
+    } catch (e) {
+      print('DEBUG: Non-critical error during temp cleanup: $e');
+      _logService.addLog(
+        message: 'Warning: Error during temporary file cleanup: $e',
+        level: LogLevel.warning,
+        step: ProcessStep.templatePreparation,
+        origin: 'system',
+      );
+      // Don't throw - allow the main process to continue
+    }
   }
 }

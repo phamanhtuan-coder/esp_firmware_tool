@@ -3,13 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_libserialport/flutter_libserialport.dart';
-import 'package:get_it/get_it.dart';
 import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
 import 'package:smart_net_firmware_loader/core/config/app_config.dart';
 import 'package:smart_net_firmware_loader/data/models/device.dart';
 import 'package:smart_net_firmware_loader/data/models/firmware.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
-import 'package:smart_net_firmware_loader/data/services/serial_monitor_service.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/logging_bloc.dart';
 
@@ -62,7 +60,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
 
   final List<bool> _selections = [true, false]; // [Version mode, File mode]
 
-  final SerialMonitorService _serialMonitorService = GetIt.instance<SerialMonitorService>();
 
   Timer? _portCheckTimer;
   final Set<String> _previousPorts = {};

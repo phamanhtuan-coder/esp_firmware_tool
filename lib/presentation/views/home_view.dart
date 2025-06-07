@@ -26,7 +26,6 @@ import 'package:get_it/get_it.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/batch_devices_list_view.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/loading_overlay.dart';
 
-import '../../data/services/api_client.dart';
 
 class HomeView extends StatefulWidget {
   const HomeView({super.key});
@@ -47,7 +46,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   final ArduinoService _arduinoService = GetIt.instance<ArduinoService>();
   final BluetoothService _bluetoothService = GetIt.instance<BluetoothService>();
   final SerialMonitorService _serialMonitorService = GetIt.instance<SerialMonitorService>();
-  final ApiService _apiService = GetIt.instance<ApiService>();
   final TemplateService _templateService;
 
   _HomeViewState() : _templateService = TemplateService(logService: GetIt.instance<LogService>());
@@ -430,65 +428,64 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   }
 
   void _handleWarningAction(String type, {String? value}) {
-    print('DEBUG: Handling warning action: $type');
-    print('DEBUG: Value: $value');
-    print('DEBUG: Can flash: $_canFlash');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
 
-    // Nếu là action flash firmware, thực hiện ngay không cần hiện warning
-    if (type == 'flash_firmware') {
-      if (_canFlash) {
-        final state = context.read<HomeBloc>().state;
-        print('DEBUG: Starting flash firmware with:');
-        print('DEBUG: Device ID: ${state.selectedDeviceId}');
-        print('DEBUG: Serial: ${_serialController.text}');
-        print('DEBUG: Device Type: ${state.selectedDeviceType}');
-        print('DEBUG: Local File: ${state.localFilePath}');
+      final state = context.read<HomeBloc>().state;
 
-        _flashFirmware(
-          state.selectedDeviceId ?? '',
-          _serialController.text,
-          state.selectedDeviceType ?? '',
-          state.localFilePath,
-        );
-      } else {
-        print('DEBUG: Cannot flash - conditions not met');
+      // Handle flash firmware action
+      if (type == 'flash_firmware') {
+        if (_canFlash && !_isFlashing) {
+          _flashFirmware(
+            state.selectedDeviceId ?? '',
+            _serialController.text,
+            state.selectedDeviceType ?? '',
+            state.localFilePath,
+          );
+        }
+        return;
       }
-      return;
-    }
 
-    // For other warning types, show warning dialog
-    setState(() {
-      _showWarningDialog = true;
-      _warningType = type;
+      // For other warning types, show warning dialog
+      setState(() {
+        _showWarningDialog = true;
+        _warningType = type;
+      });
     });
   }
 
   void _handleWarningContinue() {
-    setState(() {
-      _showWarningDialog = false;
-    });
+    if (!mounted) return;
 
-    switch (_warningType) {
-      case 'switch_to_local':
-        context.read<HomeBloc>().add(SelectLocalFileEvent(null));
-        break;
-      case 'switch_to_version':
-        context.read<HomeBloc>().add(SelectLocalFileEvent(null));
-        break;
-      case 'select_local_file':
-        _handleFilePick();
-        break;
-      case 'version_change':
-        if (_selectedFirmwareVersion != null) {
-          context.read<HomeBloc>().add(SelectFirmwareEvent(_selectedFirmwareVersion!));
-        }
-        break;
-      case 'manual_serial':
-        if (_serialController.text.isNotEmpty) {
-          context.read<HomeBloc>().add(SubmitSerialEvent(_serialController.text));
-        }
-        break;
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      setState(() {
+        _showWarningDialog = false;
+      });
+
+      switch (_warningType) {
+        case 'switch_to_local':
+          context.read<HomeBloc>().add(SelectLocalFileEvent(null));
+          break;
+        case 'switch_to_version':
+          context.read<HomeBloc>().add(SelectLocalFileEvent(null));
+          break;
+        case 'select_local_file':
+          _handleFilePick();
+          break;
+        case 'version_change':
+          if (_selectedFirmwareVersion != null) {
+            context.read<HomeBloc>().add(SelectFirmwareEvent(_selectedFirmwareVersion!));
+          }
+          break;
+        case 'manual_serial':
+          if (_serialController.text.isNotEmpty) {
+            context.read<HomeBloc>().add(SubmitSerialEvent(_serialController.text));
+          }
+          break;
+      }
+    });
   }
 
   String _getWarningTitle() {
@@ -542,13 +539,11 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   }
 
   void _handleFlashStatusChanged(bool canFlash) {
+    print('DEBUG: Flash status changed: $canFlash');
     if (!mounted) return;
-    Future.microtask(() {
-      if (mounted) {
-        setState(() {
-          _canFlash = canFlash;
-        });
-      }
+    setState(() {
+      _canFlash = canFlash;
+      print('DEBUG: _canFlash updated to: $_canFlash');
     });
   }
 
@@ -590,6 +585,31 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         ),
       ],
     );
+  }
+
+  void _handlePlanningSelected(String? value) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && value != null) {
+        context.read<HomeBloc>().add(SelectPlanningEvent(value));
+      }
+    });
+  }
+
+  void _handleBatchSelected(String? value) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && value != null) {
+        context.read<HomeBloc>().add(SelectBatchEvent(value));
+      }
+    });
+  }
+
+  void _handleUsbPortSelected(String? value) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() => _selectedPort = value);
+        context.read<HomeBloc>().add(SelectPortEvent(value));
+      }
+    });
   }
 
   @override
@@ -658,12 +678,8 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                         batches: state.batches,
                                         selectedPlanningId: state.selectedPlanningId,
                                         selectedBatchId: state.selectedBatchId,
-                                        onPlanningSelected: (value) {
-                                          context.read<HomeBloc>().add(SelectPlanningEvent(value));
-                                        },
-                                        onBatchSelected: (value) {
-                                          context.read<HomeBloc>().add(SelectBatchEvent(value));
-                                        },
+                                        onPlanningSelected: _handlePlanningSelected,
+                                        onBatchSelected: _handleBatchSelected,
                                         isDarkTheme: _isDarkTheme,
                                         isLoading: state.isLoading,
                                       ),
@@ -698,10 +714,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                             _selectedFirmwareVersion = value;
                                             _handleWarningAction('version_change', value: value);
                                           },
-                                          onUsbPortSelected: (value) {
-                                            setState(() => _selectedPort = value);
-                                            context.read<HomeBloc>().add(SelectPortEvent(value));
-                                          },
+                                          onUsbPortSelected: _handleUsbPortSelected,
                                           onLocalFileSearch: () => _handleWarningAction('select_local_file'),
                                           onUsbPortRefresh: () => context.read<HomeBloc>().add(RefreshPortsEvent()),
                                           onSerialSubmitted: (value) => _handleWarningAction('manual_serial'),

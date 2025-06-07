@@ -27,7 +27,7 @@ class ApiService implements ApiRepository {
   @override
   Future<List<Planning>> fetchPlannings() async {
     try {
-      DebugLogger.d('Fetching plannings list', className: 'ApiService', methodName: 'fetchPlannings');
+      // DebugLogger.d('Fetching plannings list', className: 'ApiService', methodName: 'fetchPlannings');
 
       _logService.addLog(
         message: 'Đang tải danh sách kế hoạch...',
@@ -60,11 +60,11 @@ class ApiService implements ApiRepository {
             origin: 'system',
           );
 
-          DebugLogger.d(
-            'Successfully fetched ${uniquePlannings.length} plannings',
-            className: 'ApiService',
-            methodName: 'fetchPlannings',
-          );
+          // DebugLogger.d(
+          //   'Successfully fetched ${uniquePlannings.length} plannings',
+          //   className: 'ApiService',
+          //   methodName: 'fetchPlannings',
+          // );
 
           return uniquePlannings.values.toList();
         }
@@ -87,7 +87,7 @@ class ApiService implements ApiRepository {
       }
       return [];
     } catch (e, stackTrace) {
-      DebugLogger.e('Exception in fetchPlannings', error: e, stackTrace: stackTrace);
+      // DebugLogger.e('Exception in fetchPlannings', error: e, stackTrace: stackTrace);
       _logService.addLog(
         message: 'Lỗi tải kế hoạch: $e',
         level: LogLevel.error,
@@ -101,7 +101,7 @@ class ApiService implements ApiRepository {
   @override
   Future<List<Batch>> fetchBatches(String? planningId) async {
     try {
-      DebugLogger.d('Fetching batches for planning $planningId...', className: 'ApiService');
+      // DebugLogger.d('Fetching batches for planning $planningId...', className: 'ApiService');
 
       _logService.addLog(
         message: 'Đang tải danh sách lô sản xuất...',
@@ -119,7 +119,7 @@ class ApiService implements ApiRepository {
         headers: _headers,
       );
 
-      DebugLogger.http('GET', endpoint, response: response.body);
+      // DebugLogger.http('GET', endpoint, response: response.body);
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final responseData = jsonDecode(response.body);
@@ -163,7 +163,7 @@ class ApiService implements ApiRepository {
         return [];
       }
     } catch (e, stackTrace) {
-      DebugLogger.e('Exception in fetchBatches', error: e, stackTrace: stackTrace);
+      // DebugLogger.e('Exception in fetchBatches', error: e, stackTrace: stackTrace);
       _logService.addLog(
         message: 'Lỗi tải lô sản xuất: $e',
         level: LogLevel.error,
@@ -177,11 +177,11 @@ class ApiService implements ApiRepository {
   @override
   Future<List<Device>> fetchDevices(String batchId) async {
     try {
-      DebugLogger.d(
-        'Fetching devices for batch ID: $batchId',
-        className: 'ApiService',
-        methodName: 'fetchDevices',
-      );
+      // // DebugLogger.d(
+      //   'Fetching devices for batch ID: $batchId',
+      //   className: 'ApiService',
+      //   methodName: 'fetchDevices',
+      // );
 
       _logService.addLog(
         message: 'Đang tải danh sách thiết bị cho l�� $batchId...',
@@ -195,7 +195,7 @@ class ApiService implements ApiRepository {
         headers: _headers,
       );
 
-      DebugLogger.http('GET', '/tracking/null/$batchId', response: response.body);
+      // // DebugLogger.http('GET', '/tracking/null/$batchId', response: response.body);
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final responseData = jsonDecode(response.body);
@@ -216,17 +216,17 @@ class ApiService implements ApiRepository {
             origin: 'system',
           );
 
-          DebugLogger.d(
-            'Successfully fetched ${uniqueDevices.length} devices for batch $batchId',
-            className: 'ApiService',
-            methodName: 'fetchDevices',
-          );
+          // // DebugLogger.d(
+          //   'Successfully fetched ${uniqueDevices.length} devices for batch $batchId',
+          //   className: 'ApiService',
+          //   methodName: 'fetchDevices',
+          // );
 
           return uniqueDevices.values.toList();
         }
 
         final errorMessage = responseData['message'] ?? 'Unknown error occurred';
-        DebugLogger.e('Error fetching devices: $errorMessage');
+        // DebugLogger.e('Error fetching devices: $errorMessage');
         _logService.addLog(
           message: 'Lỗi khi tải danh sách thiết bị: $errorMessage',
           level: LogLevel.error,
@@ -236,7 +236,7 @@ class ApiService implements ApiRepository {
         return [];
       } else {
         final errorMessage = 'HTTP Error: ${response.statusCode}';
-        DebugLogger.e('Error fetching devices: $errorMessage');
+        // DebugLogger.e('Error fetching devices: $errorMessage');
         _logService.addLog(
           message: 'Lỗi khi tải danh sách thiết bị: $errorMessage',
           level: LogLevel.error,
@@ -246,11 +246,11 @@ class ApiService implements ApiRepository {
         return [];
       }
     } catch (e, stackTrace) {
-      DebugLogger.e(
-        'Exception in fetchDevices',
-        error: e,
-        stackTrace: stackTrace,
-      );
+      // DebugLogger.e(
+      //   'Exception in fetchDevices',
+      //   error: e,
+      //   stackTrace: stackTrace,
+      // );
       _logService.addLog(
         message: 'Lỗi khi tải danh sách thiết bị: $e',
         level: LogLevel.error,
@@ -268,11 +268,11 @@ class ApiService implements ApiRepository {
     }
 
     try {
-      DebugLogger.d(
-        'Fetching firmwares for template $templateId...',
-        className: 'ApiService',
-        methodName: 'fetchFirmwares',
-      );
+      // DebugLogger.d(
+      //   'Fetching firmwares for template $templateId...',
+      //   className: 'ApiService',
+      //   methodName: 'fetchFirmwares',
+      // );
 
       _logService.addLog(
         message: 'Đang tải danh sách firmware cho template $templateId...',
@@ -287,7 +287,7 @@ class ApiService implements ApiRepository {
         headers: _headers,
       );
 
-      DebugLogger.http('GET', endpoint, response: response.body);
+      // DebugLogger.http('GET', endpoint, response: response.body);
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final responseData = jsonDecode(response.body);
@@ -322,11 +322,11 @@ class ApiService implements ApiRepository {
       );
       return [];
     } catch (e, stackTrace) {
-      DebugLogger.e(
-        'Exception in fetchFirmwares',
-        error: e,
-        stackTrace: stackTrace,
-      );
+      // DebugLogger.e(
+      //   'Exception in fetchFirmwares',
+      //   error: e,
+      //   stackTrace: stackTrace,
+      // );
       _logService.addLog(
         message: 'Lỗi tải firmware: $e',
         level: LogLevel.error,
@@ -363,11 +363,11 @@ class ApiService implements ApiRepository {
   @override
   Future<String?> fetchFirmwareFile(String firmwareId) async {
     try {
-      DebugLogger.d(
-        'Fetching firmware file for ID: $firmwareId',
-        className: 'ApiService',
-        methodName: 'fetchFirmwareFile',
-      );
+      // DebugLogger.d(
+      //   'Fetching firmware file for ID: $firmwareId',
+      //   className: 'ApiService',
+      //   methodName: 'fetchFirmwareFile',
+      // );
 
       _logService.addLog(
         message: 'Đang tải file firmware $firmwareId...',
@@ -382,7 +382,7 @@ class ApiService implements ApiRepository {
         headers: _headers,
       );
 
-      DebugLogger.http('GET', endpoint, response: response.body);
+      // DebugLogger.http('GET', endpoint, response: response.body);
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final responseData = jsonDecode(response.body);
@@ -391,7 +391,7 @@ class ApiService implements ApiRepository {
 
         if (sourceCode == null || sourceCode.isEmpty) {
           const errorMessage = 'Firmware file path is empty';
-          DebugLogger.e(errorMessage);
+          // DebugLogger.e(errorMessage);
           _logService.addLog(
             message: 'Lỗi: $errorMessage',
             level: LogLevel.error,
@@ -408,16 +408,16 @@ class ApiService implements ApiRepository {
           origin: 'system',
         );
 
-        DebugLogger.d(
-          'Successfully fetched firmware file for ID $firmwareId',
-          className: 'ApiService',
-          methodName: 'fetchFirmwareFile',
-        );
+        // DebugLogger.d(
+        //   'Successfully fetched firmware file for ID $firmwareId',
+        //   className: 'ApiService',
+        //   methodName: 'fetchFirmwareFile',
+        // );
 
         return sourceCode;
       } else {
         final errorMessage = 'HTTP Error: ${response.statusCode}';
-        DebugLogger.e('Error fetching firmware file: $errorMessage');
+        // DebugLogger.e('Error fetching firmware file: $errorMessage');
         _logService.addLog(
           message: 'Lỗi tải file firmware: $errorMessage',
           level: LogLevel.error,
@@ -427,11 +427,11 @@ class ApiService implements ApiRepository {
         return null;
       }
     } catch (e, stackTrace) {
-      DebugLogger.e(
-        'Exception in fetchFirmwareFile',
-        error: e,
-        stackTrace: stackTrace,
-      );
+      // DebugLogger.e(
+      //   'Exception in fetchFirmwareFile',
+      //   error: e,
+      //   stackTrace: stackTrace,
+      // );
       _logService.addLog(
         message: 'Lỗi tải file firmware: $e',
         level: LogLevel.error,

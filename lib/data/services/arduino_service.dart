@@ -717,7 +717,7 @@ class ArduinoService implements ArduinoRepository {
       }
 
       // Normalize the device type to match our FQBN mapping
-      deviceType = GetIt.instance<TemplateService>().normalizeDeviceType(deviceType!);
+      deviceType = GetIt.instance<TemplateService>().normalizeDeviceType(deviceType);
       print('DEBUG: Normalized device type: $deviceType');
 
       // Get FQBN for the device type
@@ -1201,33 +1201,5 @@ class ArduinoService implements ArduinoRepository {
     return LogLevel.info;
   }
 
-  void _logProcessOutput(String output, LogLevel level, ProcessStep step, String deviceId) {
-    if (output.trim().isEmpty) return;
 
-    final lines = output.split('\n');
-    for (var line in lines) {
-      if (line.trim().isEmpty) continue;
-
-      _logService.addLog(
-        message: line.trim(),
-        level: _getLogLevelFromOutput(line),
-        step: step,
-        deviceId: deviceId,
-        origin: 'arduino-cli',
-        rawOutput: line,
-      );
-    }
-  }
-
-  String _formatSize(String output) {
-    // Định dạng thông tin kích thước sketch để dễ đọc hơn
-    final sketchMatch = RegExp(r'Sketch uses (\d+) bytes.*Maximum is (\d+)').firstMatch(output);
-    if (sketchMatch != null) {
-      final used = int.parse(sketchMatch.group(1)!);
-      final total = int.parse(sketchMatch.group(2)!);
-      final percent = (used / total * 100).toStringAsFixed(1);
-      return '📊 Sketch sử dụng $used bytes ($percent%) trên tổng $total bytes';
-    }
-    return output;
-  }
 }

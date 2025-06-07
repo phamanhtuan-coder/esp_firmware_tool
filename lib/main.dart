@@ -17,14 +17,18 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void setupServiceLocator() {
   final getIt = GetIt.instance;
+
+  // Services
   getIt.registerSingleton<LogService>(LogService());
   getIt.registerSingleton<ApiService>(ApiService());
   getIt.registerSingleton<ArduinoService>(ArduinoService());
   getIt.registerSingleton<BluetoothService>(BluetoothService());
   getIt.registerSingleton<SerialMonitorService>(SerialMonitorService());
   getIt.registerSingleton<TemplateService>(TemplateService(logService: GetIt.instance<LogService>()));
+
+  // Blocs
+  getIt.registerSingleton<LoggingBloc>(LoggingBloc()); // Changed from Factory to Singleton
   getIt.registerFactory<HomeBloc>(() => HomeBloc());
-  getIt.registerFactory<LoggingBloc>(() => LoggingBloc());
 }
 
 Future<void> setupWindow() async {

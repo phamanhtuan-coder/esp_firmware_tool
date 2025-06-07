@@ -1,13 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:cli_util/cli_logging.dart';
 import 'package:get_it/get_it.dart';
 import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
-import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
-import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 import 'package:smart_net_firmware_loader/data/services/serial_monitor_service.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:smart_net_firmware_loader/domain/blocs/logging_bloc.dart';
 
 class LineDisplay {
   final String timestamp;
@@ -265,7 +260,7 @@ class _SerialMonitorTerminalWidgetState
                         child: SelectableText.rich(
                           TextSpan(
                             children: _lines.map((line) {
-                              final timestamp = DateTime.now().toString().split('.')[0];
+                              final _ = DateTime.now().toString().split('.')[0];
                               return TextSpan(
                                 text: '$line\n',
                                 style: TextStyle(

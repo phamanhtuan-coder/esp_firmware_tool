@@ -82,7 +82,6 @@ class ConsoleTerminalWidget extends StatefulWidget {
 }
 
 class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> with AutomaticKeepAliveClientMixin {
-  final List<ConsoleLineDisplay> _displayLines = [];
   bool _isAutoScrollEnabled = true;
   final ScrollController _scrollController = ScrollController();
   static const maxLines = 1000; // Giới hạn số dòng để tránh memory leak

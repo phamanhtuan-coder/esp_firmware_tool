@@ -1,4 +1,6 @@
-import 'package:flutter/foundation.dart';
+import 'package:get_it/get_it.dart';
+import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
+import 'package:smart_net_firmware_loader/domain/blocs/logging_bloc.dart';
 
 /// Utility class for debugging with print statements
 /// This class provides methods to print debug information with customized format
@@ -11,11 +13,13 @@ class DebugLogger {
     _debugMode = enabled;
   }
 
+  static LoggingBloc get _loggingBloc => GetIt.instance<LoggingBloc>();
+
   /// Print debug message with class name and method name
   static void d(String message, {String? className, String? methodName}) {
     if (_debugMode) {
       final now = DateTime.now();
-      final timeStr =
+      final _ =
           "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}.${now.millisecond.toString().padLeft(3, '0')}";
 
       String location = '';
@@ -26,33 +30,95 @@ class DebugLogger {
         location += '.$methodName()';
       }
 
-      debugPrint('⚡ DEBUG $timeStr $location: $message');
+      _loggingBloc.add(
+        AddLogEvent(
+          LogEntry(
+            message: '$location: $message',
+            timestamp: DateTime.now(),
+            level: LogLevel.verbose,
+            step: ProcessStep.other,
+            origin: 'debug',
+          ),
+        ),
+      );
     }
   }
 
   /// Print info message
   static void i(String message) {
     if (_debugMode) {
-      debugPrint('📘 INFO: $message');
+      _loggingBloc.add(
+        AddLogEvent(
+          LogEntry(
+            message: message,
+            timestamp: DateTime.now(),
+            level: LogLevel.info,
+            step: ProcessStep.other,
+            origin: 'debug',
+          ),
+        ),
+      );
     }
   }
 
   /// Print warning message
   static void w(String message) {
     if (_debugMode) {
-      debugPrint('⚠️ WARNING: $message');
+      _loggingBloc.add(
+        AddLogEvent(
+          LogEntry(
+            message: message,
+            timestamp: DateTime.now(),
+            level: LogLevel.warning,
+            step: ProcessStep.other,
+            origin: 'debug',
+          ),
+        ),
+      );
     }
   }
 
   /// Print error message
   static void e(String message, {dynamic error, StackTrace? stackTrace}) {
     if (_debugMode) {
-      debugPrint('🔴 ERROR: $message');
+      _loggingBloc.add(
+        AddLogEvent(
+          LogEntry(
+            message: message,
+            timestamp: DateTime.now(),
+            level: LogLevel.error,
+            step: ProcessStep.other,
+            origin: 'debug',
+          ),
+        ),
+      );
+
       if (error != null) {
-        debugPrint('🔴 $error');
+        _loggingBloc.add(
+          AddLogEvent(
+            LogEntry(
+              message: error.toString(),
+              timestamp: DateTime.now(),
+              level: LogLevel.error,
+              step: ProcessStep.other,
+              origin: 'debug',
+            ),
+          ),
+        );
       }
+
       if (stackTrace != null) {
-        debugPrint('🔴 $stackTrace');
+        _loggingBloc.add(
+          AddLogEvent(
+            LogEntry(
+              message: stackTrace.toString(),
+              timestamp: DateTime.now(),
+              level: LogLevel.error,
+              step: ProcessStep.other,
+              origin: 'debug',
+            ),
+          ),
+        );
       }
     }
   }
@@ -65,12 +131,44 @@ class DebugLogger {
     dynamic response,
   }) {
     if (_debugMode) {
-      debugPrint('📡 HTTP $method: $url');
+      _loggingBloc.add(
+        AddLogEvent(
+          LogEntry(
+            message: 'HTTP $method: $url',
+            timestamp: DateTime.now(),
+            level: LogLevel.verbose,
+            step: ProcessStep.other,
+            origin: 'network',
+          ),
+        ),
+      );
+
       if (body != null) {
-        debugPrint('📡 Request: $body');
+        _loggingBloc.add(
+          AddLogEvent(
+            LogEntry(
+              message: 'Request: $body',
+              timestamp: DateTime.now(),
+              level: LogLevel.verbose,
+              step: ProcessStep.other,
+              origin: 'network',
+            ),
+          ),
+        );
       }
+
       if (response != null) {
-        debugPrint('📡 Response: $response');
+        _loggingBloc.add(
+          AddLogEvent(
+            LogEntry(
+              message: 'Response: $response',
+              timestamp: DateTime.now(),
+              level: LogLevel.verbose,
+              step: ProcessStep.other,
+              origin: 'network',
+            ),
+          ),
+        );
       }
     }
   }
@@ -78,14 +176,34 @@ class DebugLogger {
   /// Print lifecycle events
   static void lifecycle(String message) {
     if (_debugMode) {
-      debugPrint('🔄 LIFECYCLE: $message');
+      _loggingBloc.add(
+        AddLogEvent(
+          LogEntry(
+            message: message,
+            timestamp: DateTime.now(),
+            level: LogLevel.info,
+            step: ProcessStep.other,
+            origin: 'lifecycle',
+          ),
+        ),
+      );
     }
   }
 
   /// Print server events
   static void server(String message) {
     if (_debugMode) {
-      debugPrint('🖧 SERVER: $message');
+      _loggingBloc.add(
+        AddLogEvent(
+          LogEntry(
+            message: message,
+            timestamp: DateTime.now(),
+            level: LogLevel.info,
+            step: ProcessStep.other,
+            origin: 'server',
+          ),
+        ),
+      );
     }
   }
 }
