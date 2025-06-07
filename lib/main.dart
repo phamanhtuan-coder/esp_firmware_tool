@@ -52,10 +52,7 @@ Future<void> setupWindow() async {
   await windowManager.ensureInitialized();
   await windowManager.waitUntilReadyToShow();
 
-  const minSize = Size(1280, 800);
-
   await Future.wait([
-    windowManager.setMinimumSize(minSize),
     windowManager.center(),
     windowManager.setPreventClose(true),
     windowManager.setSkipTaskbar(false),
@@ -114,23 +111,40 @@ class CloseWindowListener extends WindowListener {
       if (shouldClose) {
         _isClosing = true;
 
-        // Show loading overlay
+        // Hide window first to improve perceived performance
+        await windowManager.hide();
+
         if (navigatorKey.currentContext != null) {
-          showDialog(
-            context: navigatorKey.currentContext!,
-            barrierDismissible: false,
-            builder: (context) => const LoadingOverlay(
-              isLoading: true,
-              message: 'Đang đóng ứng dụng...',
-              child: SizedBox.shrink(),
+          // Clean up resources and show loading
+          Navigator.of(navigatorKey.currentContext!).pushAndRemoveUntil(
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: const LoadingOverlay(
+                    isLoading: true,
+                    message: 'Đang đóng ứng dụng...',
+                    child: SizedBox.shrink(),
+                  ),
+                );
+              },
+              transitionDuration: const Duration(milliseconds: 200),
+              reverseTransitionDuration: const Duration(milliseconds: 200),
             ),
+            (route) => false,
           );
         }
 
-        // Delay a bit to show loading overlay
-        await Future.delayed(const Duration(milliseconds: 500));
+        // Cleanup tasks
+        await Future.wait([
+          // Give time for the UI to update
+          Future.delayed(const Duration(milliseconds: 100)),
+          // Clean up any resources, close connections, etc
+          GetIt.instance.reset(),
+          // Add any other cleanup tasks here
+        ]);
 
-        // Close the window
+        // Finally destroy the window
         await windowManager.destroy();
       }
     }
