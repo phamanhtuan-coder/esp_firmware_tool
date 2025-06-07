@@ -7,6 +7,7 @@ import 'package:smart_net_firmware_loader/data/services/arduino_service.dart';
 import 'package:smart_net_firmware_loader/data/services/bluetooth_service.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 import 'package:smart_net_firmware_loader/data/services/serial_monitor_service.dart';
+import 'package:smart_net_firmware_loader/data/services/template_service.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/logging_bloc.dart';
 import 'package:get_it/get_it.dart';
@@ -21,6 +22,7 @@ void setupServiceLocator() {
   getIt.registerSingleton<ArduinoService>(ArduinoService());
   getIt.registerSingleton<BluetoothService>(BluetoothService());
   getIt.registerSingleton<SerialMonitorService>(SerialMonitorService());
+  getIt.registerSingleton<TemplateService>(TemplateService(logService: GetIt.instance<LogService>()));
   getIt.registerFactory<HomeBloc>(() => HomeBloc());
   getIt.registerFactory<LoggingBloc>(() => LoggingBloc());
 }
@@ -126,8 +128,3 @@ class MyApp extends StatelessWidget {
 
 
 }
-
-
-
-
-

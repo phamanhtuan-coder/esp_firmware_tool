@@ -897,27 +897,35 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                                 ? state.localFilePath != null
                                 : widget.selectedFirmwareVersion != null);
 
-                        return ElevatedButton.icon(
-                          onPressed:
-                              canFlash
-                                  ? () {
-                                    if (widget.isLocalFileMode &&
-                                        state.localFilePath == null) {
-                                      widget.onWarningRequested(
-                                        'select_local_file',
-                                      );
-                                      return;
-                                    }
-
-                                    widget.onWarningRequested('flash_firmware');
-                                  }
-                                  : null,
-                          icon: const Icon(Icons.flash_on),
-                          label: const Text('Nạp Firmware'),
+                        return ElevatedButton(
+                          onPressed: !canFlash
+                            ? null
+                            : () {
+                                widget.onWarningRequested?.call('flash_firmware');
+                              },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.flash,
-                            foregroundColor: Colors.white,
-                            disabledBackgroundColor: Colors.grey[400],
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.flash_on,
+                                color: canFlash ? Colors.white : Colors.grey[400],
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Nạp Firmware',
+                                style: TextStyle(
+                                  color: canFlash ? Colors.white : Colors.grey[400],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
                         );
                       },

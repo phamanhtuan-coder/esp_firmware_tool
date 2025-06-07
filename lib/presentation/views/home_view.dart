@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
 import 'package:smart_net_firmware_loader/core/utils/string_extensions.dart';
 import 'package:smart_net_firmware_loader/data/models/device.dart';
@@ -23,6 +25,8 @@ import 'package:get_it/get_it.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/batch_devices_list_view.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/loading_overlay.dart';
 
+import '../../data/services/api_client.dart';
+
 class HomeView extends StatefulWidget {
   const HomeView({super.key});
 
@@ -42,6 +46,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   final ArduinoService _arduinoService = GetIt.instance<ArduinoService>();
   final BluetoothService _bluetoothService = GetIt.instance<BluetoothService>();
   final SerialMonitorService _serialMonitorService = GetIt.instance<SerialMonitorService>();
+  final ApiService _apiService = GetIt.instance<ApiService>();
   final TemplateService _templateService;
 
   _HomeViewState() : _templateService = TemplateService(logService: GetIt.instance<LogService>());
@@ -55,8 +60,12 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    context.read<HomeBloc>().add(LoadInitialDataEvent());
-    _initializeServices();
+
+    _initializeServices().then((_) {
+      if (mounted) {
+        context.read<HomeBloc>().add(LoadInitialDataEvent());
+      }
+    });
     _tabController.addListener(_handleTabChange);
   }
 
@@ -83,19 +92,45 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   }
 
   Future<void> _initializeServices() async {
-    await _logService.initialize();
-    await _bluetoothService.start(
-      onSerialReceived: (serial) {
-        _serialController.text = serial;
-        context.read<HomeBloc>().add(SubmitSerialEvent(serial));
-      },
-    );
-    _logService.addLog(
-      message: 'Services initialized',
-      level: LogLevel.info,
-      step: ProcessStep.systemEvent,
-      origin: 'system',
-    );
+    try {
+      print('DEBUG: Initializing services...');
+      // Initialize LogService first since other services depend on it
+      await _logService.initialize();
+      print('DEBUG: LogService initialized');
+
+      // Initialize ArduinoService
+      final cliInitialized = await _arduinoService.initialize();
+      print('DEBUG: ArduinoService initialized: $cliInitialized');
+
+      // Initialize BluetoothService
+      await _bluetoothService.start(
+        onSerialReceived: (serial) {
+          if (mounted) {
+            setState(() {
+              _serialController.text = serial;
+            });
+            context.read<HomeBloc>().add(SubmitSerialEvent(serial));
+          }
+        },
+      );
+      print('DEBUG: BluetoothService started');
+
+      _logService.addLog(
+        message: 'All services initialized successfully',
+        level: LogLevel.info,
+        step: ProcessStep.systemStart,
+        origin: 'system',
+      );
+    } catch (e, stack) {
+      print('DEBUG: Error initializing services: $e');
+      print('DEBUG: Stack trace: $stack');
+      _logService.addLog(
+        message: 'Error initializing services: $e\n$stack',
+        level: LogLevel.error,
+        step: ProcessStep.systemStart,
+        origin: 'system',
+      );
+    }
   }
 
   @override
@@ -177,6 +212,13 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       String deviceType,
       String? localFilePath,
   ) async {
+    print('DEBUG: Starting _flashFirmware');
+    print('DEBUG: deviceId: $deviceId');
+    print('DEBUG: deviceSerial: $deviceSerial');
+    print('DEBUG: deviceType: $deviceType');
+    print('DEBUG: localFilePath: $localFilePath');
+    print('DEBUG: selectedPort: $_selectedPort');
+
     if (_selectedPort == null || _selectedPort!.isEmpty) {
       _logService.addLog(
         message: 'No COM port selected',
@@ -187,112 +229,142 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       return;
     }
 
+    // Validate required parameters
+    if (deviceSerial.isEmpty) {
+      _logService.addLog(
+        message: 'Serial number is required',
+        level: LogLevel.error,
+        step: ProcessStep.flash,
+        origin: 'system',
+      );
+      return;
+    }
+
     setState(() => _isFlashing = true);
 
     try {
       String? sketchPath;
-      String boardType = deviceType.toLowerCase(); // Default to provided device type
+      print('DEBUG: Starting template preparation');
 
-      _logService.addLog(
-        message: 'Starting firmware flash process for device $deviceSerial',
-        level: LogLevel.info,
-        step: ProcessStep.flash,
-        deviceId: deviceSerial,
-        origin: 'system',
-      );
+      final effectiveDeviceId = deviceId.isEmpty ? deviceSerial : deviceId;
+
+      String boardType;
+      String content;
 
       if (!localFilePath.isNullOrEmpty) {
-        // Log template source
-        final templateContent = await File(localFilePath!).readAsString();
-        _logService.addLog(
-          message: 'Processing local template file:\n$templateContent',
-          level: LogLevel.info,
-          step: ProcessStep.templatePreparation,
-          deviceId: deviceSerial,
-          origin: 'system',
-        );
+        print('DEBUG: Processing local file: $localFilePath');
+        final localFile = File(localFilePath!);
+        if (!await localFile.exists()) {
+          throw Exception('Local file not found: $localFilePath');
+        }
 
-        // Xử lý template cho local file
+        // First read the file content to detect board type
+        content = await localFile.readAsString();
+        boardType = _templateService.extractBoardType(content).toLowerCase();
+        print('DEBUG: Detected board type from local file: $boardType');
+
+        // Install core before processing template
+        print('DEBUG: Installing core for board type: $boardType');
+        final coreInstalled = await _arduinoService.installCore(boardType);
+        if (!coreInstalled) {
+          throw Exception('Failed to install core for board type: $boardType');
+        }
+
         sketchPath = await _templateService.prepareFirmwareTemplate(
           localFilePath,
           deviceSerial,
-          deviceId,
-          useQuotesForDefines: true
+          effectiveDeviceId,
+          useQuotesForDefines: true,
         );
 
-        if (sketchPath == null) throw Exception('Failed to prepare firmware template');
-
-        // Read processed template to detect board type
-        final processedContent = await File(sketchPath).readAsString();
-        boardType = _templateService.extractBoardType(processedContent);
       } else {
-        // Lấy firmware source code và xử lý template
+        print('DEBUG: Processing firmware from state');
         final firmware = context.read<HomeBloc>().state.firmwares.firstWhere(
           (f) => f.firmwareId.toString() == context.read<HomeBloc>().state.selectedFirmwareId,
           orElse: () => throw Exception('Selected firmware not found'),
         );
 
-        _logService.addLog(
-          message: 'Selected firmware: ${firmware.firmwareId}',
-          level: LogLevel.info,
-          step: ProcessStep.templatePreparation,
-          deviceId: deviceSerial,
-          origin: 'system',
-        );
+        print('DEBUG: Found firmware: ${firmware.firmwareId}');
+        content = firmware.filePath;
 
-        // Xử lý template
+        // Detect board type from firmware content
+        boardType = _templateService.extractBoardType(content).toLowerCase();
+        print('DEBUG: Detected board type from firmware: $boardType');
+
+        // Install core before saving to temp file
+        print('DEBUG: Installing core for board type: $boardType');
+        final coreInstalled = await _arduinoService.installCore(boardType);
+        if (!coreInstalled) {
+          throw Exception('Failed to install core for board type: $boardType');
+        }
+
+        // Save to temp file and process template
+        final tempDir = await getTemporaryDirectory();
+        final tempFile = File(path.join(tempDir.path, 'firmware_${firmware.firmwareId}.ino'));
+        await tempFile.writeAsString(content);
+        print('DEBUG: Saved firmware to temp file: ${tempFile.path}');
+
         sketchPath = await _templateService.prepareFirmwareTemplate(
-          firmware.filePath,
+          tempFile.path,
           deviceSerial,
-          deviceId,
-          useQuotesForDefines: true
+          effectiveDeviceId,
+          useQuotesForDefines: true,
         );
-
-        if (sketchPath == null) throw Exception('Failed to prepare firmware template');
-
-        // Read processed template to detect board type
-        final processedContent = await File(sketchPath).readAsString();
-        boardType = _templateService.extractBoardType(processedContent);
       }
 
-      _logService.addLog(
-        message: 'Template prepared successfully, detected board type: $boardType',
-        level: LogLevel.success,
-        step: ProcessStep.templatePreparation,
-        deviceId: deviceSerial,
-        origin: 'system',
-      );
+      if (sketchPath == null) {
+        throw Exception('Failed to prepare firmware template');
+      }
 
-      // Proceed with compile and flash
+      // Try compiling and flashing with the detected board type
+      print('DEBUG: Starting compile and flash');
+      print('DEBUG: Sketch path: $sketchPath');
+      print('DEBUG: Port: $_selectedPort');
+      print('DEBUG: Device ID: $deviceSerial');
+      print('DEBUG: Board type: $boardType');
+
       final success = await _arduinoService.compileAndFlash(
-        sketchPath: sketchPath!,
+        sketchPath: sketchPath,
         port: _selectedPort!,
         deviceId: deviceSerial,
         deviceType: boardType,
       );
 
+      print('DEBUG: Compile and flash result: $success');
+
       if (success) {
+        _logService.addLog(
+          message: '✅ Firmware flash completed successfully!',
+          level: LogLevel.success,
+          step: ProcessStep.flash,
+          deviceId: deviceSerial,
+          origin: 'system',
+        );
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Nạp firmware thành công!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
+          SnackBar(
+            content: const Text('Nạp firmware thành công!'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            duration: const Duration(seconds: 3),
           ),
         );
 
-        // Cập nhật trạng thái thiết bị
-        context.read<HomeBloc>().add(
-          StatusUpdateEvent(deviceSerial, true),
-        );
-
-        // Khởi động serial monitor
+        // Start serial monitor
         _startSerialMonitor(deviceSerial);
       } else {
-        throw Exception('Flashing failed');
+        throw Exception('Flashing failed - check Arduino CLI output in console');
       }
-    } catch (e) {
+    } catch (e, stack) {
+      print('DEBUG: Error in _flashFirmware: $e');
+      print('DEBUG: Stack trace: $stack');
+
       _logService.addLog(
-        message: 'Error during firmware flash: $e',
+        message: 'Error during firmware flash: $e\nStack trace: $stack',
         level: LogLevel.error,
         step: ProcessStep.flash,
         deviceId: deviceSerial,
@@ -302,16 +374,17 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Lỗi nạp firmware: ${e.toString()}'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
           duration: const Duration(seconds: 5),
         ),
       );
-
-      // Cập nhật trạng thái thiết bị thành thất bại
-      context.read<HomeBloc>().add(
-        StatusUpdateEvent(deviceSerial, false),
-      );
     } finally {
+      print('DEBUG: Flash firmware completed');
       if (mounted) {
         setState(() => _isFlashing = false);
       }
@@ -331,6 +404,33 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   }
 
   void _handleWarningAction(String type, {String? value}) {
+    print('DEBUG: Handling warning action: $type');
+    print('DEBUG: Value: $value');
+    print('DEBUG: Can flash: $_canFlash');
+
+    // Nếu là action flash firmware, thực hiện ngay không cần hiện warning
+    if (type == 'flash_firmware') {
+      if (_canFlash) {
+        final state = context.read<HomeBloc>().state;
+        print('DEBUG: Starting flash firmware with:');
+        print('DEBUG: Device ID: ${state.selectedDeviceId}');
+        print('DEBUG: Serial: ${_serialController.text}');
+        print('DEBUG: Device Type: ${state.selectedDeviceType}');
+        print('DEBUG: Local File: ${state.localFilePath}');
+
+        _flashFirmware(
+          state.selectedDeviceId ?? '',
+          _serialController.text,
+          state.selectedDeviceType ?? '',
+          state.localFilePath,
+        );
+      } else {
+        print('DEBUG: Cannot flash - conditions not met');
+      }
+      return;
+    }
+
+    // For other warning types, show warning dialog
     setState(() {
       _showWarningDialog = true;
       _warningType = type;
@@ -385,13 +485,13 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   String _getWarningMessage() {
     switch (_warningType) {
       case 'switch_to_local':
-        return 'Bạn đang chuyển sang chế độ upload file firmware cục b��. Việc này có thể gây ra rủi ro nếu file không được kiểm tra. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
+        return 'Bạn đang chuyển sang chế độ upload file firmware cục b��. Việc này có thể g��y ra rủi ro nếu file không đư���c kiểm tra. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       case 'switch_to_version':
         return 'Bạn đang chuyển sang chế độ chọn version từ server. Mọi file firmware cục bộ sẽ được xóa bỏ. Tiếp tục?';
       case 'select_local_file':
-        return 'Bạn đang sử d���ng file firmware cục bộ. Việc này có thể gây ra rủi ro nếu file không được kiểm tra. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
+        return 'Bạn đang sử d���ng file firmware cục bộ. Vi��c này có thể gây ra rủi ro nếu file không được kiểm tra. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       case 'version_change':
-        return 'Bạn đang thay đổi phiên b��n firmware so với mặc định. Việc này có thể gây ra rủi ro nếu phiên bản không tương thích. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
+        return 'Bạn đang thay đổi phiên b��n firmware so với mặc định. Việc này có thể gây ra rủi ro nếu phiên bản không tương thích. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp t���c?';
       case 'manual_serial':
         return 'Bạn đang nhập serial thủ công thay vì quét QR code. Việc này có thể gây ra rủi ro nếu serial không chính xác. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       default:

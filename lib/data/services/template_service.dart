@@ -25,6 +25,22 @@ class TemplateService {
     }
   }
 
+  /// Normalize board type to a standard format
+  String normalizeDeviceType(String deviceType) {
+    // Convert to lowercase for consistency
+    final type = deviceType.toLowerCase();
+
+    // Mapping of variant names to standard names
+    final Map<String, String> boardAliases = {
+      'arduino_uno_r3': 'arduino_uno',
+      'uno': 'arduino_uno',
+      'mega': 'arduino_mega',
+      'nano': 'arduino_nano',
+    };
+
+    return boardAliases[type] ?? type;
+  }
+
   /// Extract board type from template file content
   String extractBoardType(String content) {
     // Default to ESP32 if we can't determine
@@ -37,7 +53,7 @@ class TemplateService {
     if (activeMatches.isNotEmpty) {
       final foundType = activeMatches.first.group(1)?.toLowerCase();
       if (foundType != null) {
-        boardType = foundType;
+        boardType = normalizeDeviceType(foundType);
         print('DEBUG: Found board type marked as ACTIVE: $boardType');
         return boardType;
       }
@@ -54,7 +70,7 @@ class TemplateService {
         if (line != null && !line.trim().startsWith('//')) {
           final foundType = match.group(1)?.toLowerCase();
           if (foundType != null) {
-            boardType = foundType;
+            boardType = normalizeDeviceType(foundType);
             print('DEBUG: Found active board type: $boardType');
             break;
           }
@@ -80,6 +96,11 @@ class TemplateService {
       bool useQuotesForDefines = true,
       }) async {
     try {
+      print('DEBUG: Starting template preparation');
+      print('DEBUG: Template path: $templatePath');
+      print('DEBUG: Serial number: $serialNumber');
+      print('DEBUG: Device ID: $deviceId');
+
       _logService.addLog(
         message: 'Starting template preparation for $serialNumber',
         level: LogLevel.info,
@@ -89,64 +110,32 @@ class TemplateService {
       );
 
       if (serialNumber.isEmpty) {
-        _logService.addLog(
-          message: 'Warning: Empty serial number passed for template replacement',
-          level: LogLevel.warning,
-          step: ProcessStep.templatePreparation,
-          deviceId: serialNumber,
-          origin: 'system',
-        );
-        serialNumber = 'DEFAULT_SERIAL';
+        throw Exception('Serial number cannot be empty');
       }
 
-      print('DEBUG: Processing template at path: $templatePath');
-      print('DEBUG: Serial Number: $serialNumber');
-      print('DEBUG: Device ID: $deviceId');
-      print('DEBUG: Use quotes for defines: $useQuotesForDefines');
-
+      // Validate template file
       final templateFile = File(templatePath);
+      print('DEBUG: Checking template file existence');
       if (!await templateFile.exists()) {
-        _logService.addLog(
-          message: 'Template file not found: $templatePath',
-          level: LogLevel.error,
-          step: ProcessStep.templatePreparation,
-          deviceId: serialNumber,
-          origin: 'system',
-        );
-        return null;
+        throw Exception('Template file not found: $templatePath');
       }
+      print('DEBUG: Template file exists');
 
+      // Read template content
+      print('DEBUG: Reading template content');
       String content = await templateFile.readAsString();
+      print('DEBUG: Template content length: ${content.length}');
 
-      // Extract board type from template
-      final boardType = extractBoardType(content);
-      print('DEBUG: Detected board type: $boardType');
-
-      _logService.addLog(
-        message: 'Template file content length: ${content.length} bytes, Board: $boardType',
-        level: LogLevel.info,
-        step: ProcessStep.templatePreparation,
-        deviceId: serialNumber,
-        origin: 'system',
-      );
-
-      // Get temporary directory for our work
+      // Get temporary directory for processed template
+      print('DEBUG: Creating temp directory');
       final tempDir = await getTemporaryDirectory();
-
-      // Create a filename for our sketch
       final sketchName = 'firmware_${serialNumber}_${DateTime.now().millisecondsSinceEpoch}';
-
-      // Create a directory with the same name as the sketch file (required by Arduino CLI)
       final sketchDir = Directory(path.join(tempDir.path, sketchName));
-      if (!await sketchDir.exists()) {
-        await sketchDir.create(recursive: true);
-      }
+      await sketchDir.create(recursive: true);
+      print('DEBUG: Temp directory created at: ${sketchDir.path}');
 
-      // Set up the complete path including filename
-      final compilePath = path.join(sketchDir.path, '$sketchName.ino');
-
-      print('DEBUG: Output file path: $compilePath');
-
+      // Process template with replacements
+      print('DEBUG: Processing replacements');
       final replacements = {
         'SERIAL_NUMBER': serialNumber,
         'serial_number': serialNumber.toLowerCase(),
@@ -160,159 +149,50 @@ class TemplateService {
         'AP_SSID': 'AP_$serialNumber',
         'ap_ssid': 'ap_${serialNumber.toLowerCase()}',
         'ApSsid': 'AP_$serialNumber',
-        'BOARD_TYPE': boardType,
       };
 
-      // First handle #define replacements
-      final definePattern = RegExp(r'#define\s+(\w+)\s+"{{([^}]+)}}"');
-      content = content.replaceAllMapped(definePattern, (match) {
-        final defineName = match.group(1);
-        final placeholderName = match.group(2);
-        final replaceValue = replacements[placeholderName];
-        if (replaceValue != null) {
-          print('DEBUG: Replacing #define $defineName with value: $replaceValue');
+      // Process special defines
+      content = _processDefines(content, serialNumber, deviceId);
+      print('DEBUG: Defines processed');
 
-          // Always use quotes for SERIAL_NUMBER and DEVICE_ID to avoid compile errors
-          final shouldQuote = useQuotesForDefines || defineName == 'SERIAL_NUMBER' || defineName == 'DEVICE_ID' || defineName == 'DEVICE_UUID';
-          final formattedValue = shouldQuote ? '"$replaceValue"' : replaceValue;
-
-          _logService.addLog(
-            message: 'Replaced #define $defineName with value: $formattedValue',
-            level: LogLevel.info,
-            step: ProcessStep.templatePreparation,
-            deviceId: serialNumber,
-            origin: 'system',
-          );
-
-          return '#define $defineName $formattedValue';
+      // Process remaining placeholders
+      for (final entry in replacements.entries) {
+        final placeholder = '{{${entry.key}}}';
+        if (content.contains(placeholder)) {
+          content = content.replaceAll(placeholder, entry.value);
+          print('DEBUG: Replaced $placeholder with ${entry.value}');
         }
-        return match.group(0)!;
-      });
-
-      // Special handling for SERIAL_NUMBER and DEVICE_ID without quotes or with placeholders
-      final specialDefinePattern = RegExp(r'#define\s+(SERIAL_NUMBER|DEVICE_ID|DEVICE_UUID)\s+([^"\n\r]+)');
-      content = content.replaceAllMapped(specialDefinePattern, (match) {
-        final defineName = match.group(1);
-        final currentValue = match.group(2);
-
-        // Skip if the current value is already properly quoted
-        if (currentValue!.startsWith('"') && currentValue.endsWith('"')) {
-          return match.group(0)!;
-        }
-
-        // Choose the right replacement value based on the define name
-        final replaceValue = defineName == 'DEVICE_ID' ? deviceId : serialNumber;
-
-        print('DEBUG: Adding quotes to #define $defineName with value: $replaceValue');
-
-        // Always add quotes for these special defines
-        final formattedValue = '"$replaceValue"';
-
-        _logService.addLog(
-          message: 'Fixed quoting for #define $defineName with value: $formattedValue',
-          level: LogLevel.info,
-          step: ProcessStep.templatePreparation,
-          deviceId: serialNumber,
-          origin: 'system',
-        );
-
-        return '#define $defineName $formattedValue';
-      });
-
-      // Also handle direct #define SERIAL_NUMBER "SN00001101" format (without placeholders)
-      final directDefinePattern = RegExp(r'#define\s+(\w+)\s+"?([^"\n\r]+)"?');
-      content = content.replaceAllMapped(directDefinePattern, (match) {
-        final defineName = match.group(1);
-        final _ = match.group(2);
-
-        // Only replace if it matches certain keywords we want to handle specially
-        if (defineName == 'SERIAL_NUMBER' || defineName == 'DEVICE_ID' || defineName == 'DEVICE_UUID') {
-          final replaceValue = defineName == 'SERIAL_NUMBER' || defineName == 'DEVICE_UUID'
-              ? serialNumber
-              : deviceId;
-
-          print('DEBUG: Replacing direct #define $defineName with value: $replaceValue');
-
-          // Always add quotes for these special defines, regardless of useQuotesForDefines setting
-          final formattedValue = '"$replaceValue"';
-
-          _logService.addLog(
-            message: 'Replaced direct #define $defineName with value: $formattedValue',
-            level: LogLevel.info,
-            step: ProcessStep.templatePreparation,
-            deviceId: serialNumber,
-            origin: 'system',
-          );
-
-          return '#define $defineName $formattedValue';
-        }
-
-        // Don't modify other #define statements
-        return match.group(0)!;
-      });
-
-      // Then handle inline replacements
-      replacements.forEach((key, value) {
-        final before = content;
-        content = content.replaceAll('{{$key}}', value);
-        if (before != content) {
-          print('DEBUG: Replaced {{$key}} with: $value');
-          _logService.addLog(
-            message: 'Replaced placeholder {{$key}} with value: $value',
-            level: LogLevel.info,
-            step: ProcessStep.templatePreparation,
-            deviceId: serialNumber,
-            origin: 'system',
-          );
-        }
-      });
-
-      // Update the board type directive in the template - uncomment the active one
-      content = _updateBoardTypeDirectives(content, boardType);
-
-      // Validate that all placeholders were replaced
-      final remainingPlaceholders = RegExp(r'{{[^}]+}}').allMatches(content);
-      if (remainingPlaceholders.isNotEmpty) {
-        print('DEBUG: Found unreplaced placeholders:');
-        for (final match in remainingPlaceholders) {
-          print('  - ${match.group(0)}');
-        }
-
-        _logService.addLog(
-          message: 'Warning: Found ${remainingPlaceholders.length} unreplaced placeholders',
-          level: LogLevel.warning,
-          step: ProcessStep.templatePreparation,
-          deviceId: serialNumber,
-          origin: 'system',
-        );
       }
 
-      // Write processed content to file
-      final compileFile = File(compilePath);
-      await compileFile.writeAsString(content);
+      // Extract and validate board type
+      final boardType = extractBoardType(content);
+      print('DEBUG: Detected board type: $boardType');
 
-      print('DEBUG: Template processed successfully');
-      print('DEBUG: Final content written to: $compilePath');
+      // Write processed content
+      final outputPath = path.join(sketchDir.path, '$sketchName.ino');
+      print('DEBUG: Writing processed content to: $outputPath');
+      await File(outputPath).writeAsString(content);
 
-      // Store board type in a metadata file to be used during compilation
+      // Save metadata
       await _saveBoardTypeMetadata(sketchDir.path, boardType);
 
+      print('DEBUG: Template preparation completed successfully');
       _logService.addLog(
-        message: 'Template processed successfully. Output file: $compilePath, Board: $boardType',
+        message: 'Template prepared successfully at: $outputPath',
         level: LogLevel.success,
         step: ProcessStep.templatePreparation,
         deviceId: serialNumber,
         origin: 'system',
       );
 
-      return compilePath;
-    } catch (e, stackTrace) {
+      return outputPath;
+    } catch (e, stack) {
       print('DEBUG: Error in prepareFirmwareTemplate:');
       print('Error: $e');
-      print('Stack trace: $stackTrace');
+      print('Stack trace: $stack');
 
       _logService.addLog(
-        message: 'Error preparing template: $e\n$stackTrace',
+        message: 'Error preparing template: $e\n$stack',
         level: LogLevel.error,
         step: ProcessStep.templatePreparation,
         deviceId: serialNumber,
@@ -355,6 +235,56 @@ class TemplateService {
     );
 
     print('DEBUG: Set ${selectedBoardType.toLowerCase()} as active board type');
+    return content;
+  }
+
+  String _processDefines(String content, String serialNumber, String deviceId, {bool useQuotesForDefines = true}) {
+
+    // Check if the defines already exist in the content, including template placeholders
+    bool hasSerialNumberDefine = content.contains('#define SERIAL_NUMBER') ||
+                                 content.contains('#define serial_number');
+    bool hasDeviceIdDefine = content.contains('#define DEVICE_ID') ||
+                             content.contains('#define device_id');
+
+    // Replace template placeholders first
+    content = content.replaceAll('{{SERIAL_NUMBER}}', serialNumber);
+    content = content.replaceAll('{{DEVICE_ID}}', deviceId);
+
+    // Define patterns for quoted and unquoted defines
+    final definePlaceholderPattern = RegExp(r'#define\s+(SERIAL_NUMBER|DEVICE_ID)\s+"(\{\{[A-Z_]+\}\})"');
+    final defineQuotePattern = RegExp(r'#define\s+(SERIAL_NUMBER|DEVICE_ID)\s+"([^"\n\r]*)"');
+    final defineUnquotePattern = RegExp(r'#define\s+(SERIAL_NUMBER|DEVICE_ID)\s+([^"\n\r]*)');
+
+    // Replace placeholder defines with actual values
+    content = content.replaceAllMapped(definePlaceholderPattern, (match) {
+      final defineName = match.group(1)!;
+      final value = defineName == 'SERIAL_NUMBER' ? serialNumber : deviceId;
+      return '#define $defineName "$value"';
+    });
+
+    // Replace quoted defines
+    content = content.replaceAllMapped(defineQuotePattern, (match) {
+      final defineName = match.group(1)!;
+      final value = defineName == 'SERIAL_NUMBER' ? serialNumber : deviceId;
+      return '#define $defineName "$value"';
+    });
+
+    // Replace unquoted defines
+    content = content.replaceAllMapped(defineUnquotePattern, (match) {
+      final defineName = match.group(1)!;
+      final value = defineName == 'SERIAL_NUMBER' ? serialNumber : deviceId;
+      return '#define $defineName "$value"';
+    });
+
+    // If defines don't exist, add them at the beginning of the file
+    if (!hasSerialNumberDefine) {
+      content = '#define SERIAL_NUMBER "$serialNumber"\n' + content;
+    }
+
+    if (!hasDeviceIdDefine) {
+      content = '#define DEVICE_ID "$deviceId"\n' + content;
+    }
+
     return content;
   }
 
