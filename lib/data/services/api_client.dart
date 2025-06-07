@@ -511,7 +511,7 @@ class ApiService implements ApiRepository {
     try {
       final response = await _httpClient.post(
         Uri.parse('$baseUrl/auth/employee/login'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _headers,
         body: jsonEncode({
           'username': username,
           'password': password,
@@ -522,9 +522,11 @@ class ApiService implements ApiRepository {
 
       if (response.statusCode == 200 && responseData['accessToken'] != null) {
         await _authService.saveToken(responseData['accessToken']);
+        await _authService.saveUsername(username); // Lưu username
         return {
           'success': true,
           'data': responseData,
+          'username': username,
         };
       }
 

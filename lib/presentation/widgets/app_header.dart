@@ -8,16 +8,17 @@ import 'package:window_manager/window_manager.dart';
 class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   final bool isDarkTheme;
   final VoidCallback onThemeToggled;
-  final String? username;
-  final String? userRole;
 
   const AppHeader({
     super.key,
     required this.isDarkTheme,
     required this.onThemeToggled,
-    this.username = 'Lãng tữ lang thang',
-    this.userRole = 'Chủ tịch',
   });
+
+  String? _getCurrentUsername() {
+    final authService = GetIt.instance<AuthService>();
+    return authService.getUsername();
+  }
 
   Future<void> _handleLogout(BuildContext context) async {
     final confirmed = await showDialog<bool>(
@@ -61,6 +62,8 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final username = _getCurrentUsername();
+
     return Container(
       decoration: BoxDecoration(
         color: isDarkTheme ? AppColors.darkHeaderBackground : AppColors.accent,
@@ -132,16 +135,6 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
-                          if (userRole != null)
-                            Text(
-                              userRole!,
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.85),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w400,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
                         ],
                       ),
                       const SizedBox(width: 8),
