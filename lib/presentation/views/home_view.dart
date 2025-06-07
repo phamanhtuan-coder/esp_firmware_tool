@@ -428,29 +428,30 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   }
 
   void _handleWarningAction(String type, {String? value}) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+    if (!mounted) return;
 
-      final state = context.read<HomeBloc>().state;
+    final state = context.read<HomeBloc>().state;
 
-      // Handle flash firmware action
-      if (type == 'flash_firmware') {
-        if (_canFlash && !_isFlashing) {
-          _flashFirmware(
-            state.selectedDeviceId ?? '',
-            _serialController.text,
-            state.selectedDeviceType ?? '',
-            state.localFilePath,
-          );
-        }
+    if (type == 'flash_firmware') {
+      print('DEBUG: Flash firmware requested');
+      if (_canFlash && !_isFlashing) {
+        print('DEBUG: Starting flash firmware process');
+        _flashFirmware(
+          state.selectedDeviceId ?? '',
+          _serialController.text,
+          state.selectedDeviceType ?? '',
+          state.localFilePath,
+        );
         return;
+      } else {
+        print('DEBUG: Cannot flash - canFlash: $_canFlash, isFlashing: $_isFlashing');
       }
+      return;
+    }
 
-      // For other warning types, show warning dialog
-      setState(() {
-        _showWarningDialog = true;
-        _warningType = type;
-      });
+    setState(() {
+      _showWarningDialog = true;
+      _warningType = type;
     });
   }
 

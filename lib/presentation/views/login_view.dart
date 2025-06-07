@@ -258,7 +258,7 @@ class _LoginViewState extends State<LoginView> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Phiên bản 1.0.0',
+                'Phiên bản 2.0.0',
                 style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
               ),
             ],

@@ -9,7 +9,6 @@ import 'package:smart_net_firmware_loader/data/models/planning.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 import 'package:smart_net_firmware_loader/domain/repositories/api_repository.dart';
 import 'package:get_it/get_it.dart';
-import 'package:smart_net_firmware_loader/core/utils/debug_logger.dart';
 
 class ApiService implements ApiRepository {
   final String baseUrl =
@@ -86,7 +85,7 @@ class ApiService implements ApiRepository {
         );
       }
       return [];
-    } catch (e, stackTrace) {
+    } catch (e) {
       // DebugLogger.e('Exception in fetchPlannings', error: e, stackTrace: stackTrace);
       _logService.addLog(
         message: 'Lỗi tải kế hoạch: $e',
@@ -162,7 +161,7 @@ class ApiService implements ApiRepository {
         );
         return [];
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       // DebugLogger.e('Exception in fetchBatches', error: e, stackTrace: stackTrace);
       _logService.addLog(
         message: 'Lỗi tải lô sản xuất: $e',
@@ -245,7 +244,7 @@ class ApiService implements ApiRepository {
         );
         return [];
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       // DebugLogger.e(
       //   'Exception in fetchDevices',
       //   error: e,
@@ -321,7 +320,7 @@ class ApiService implements ApiRepository {
         origin: 'system',
       );
       return [];
-    } catch (e, stackTrace) {
+    } catch (e) {
       // DebugLogger.e(
       //   'Exception in fetchFirmwares',
       //   error: e,
@@ -426,7 +425,7 @@ class ApiService implements ApiRepository {
         );
         return null;
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       // DebugLogger.e(
       //   'Exception in fetchFirmwareFile',
       //   error: e,

@@ -57,12 +57,14 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
   String? _serialErrorText;
   String? _serialSuccessText;
   bool _isSerialValid = false;
+  bool _canFlash = false;
 
   final List<bool> _selections = [true, false]; // [Version mode, File mode]
 
 
   Timer? _portCheckTimer;
   final Set<String> _previousPorts = {};
+  String? _pendingPort;
 
   void _handleModeToggle(int index) {
     setState(() {
@@ -246,19 +248,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     });
   }
 
-  @override
-  void didUpdateWidget(FirmwareControlPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    // Force recalculate flash status when relevant props change
-    if (oldWidget.isLocalFileMode != widget.isLocalFileMode ||
-        oldWidget.selectedPort != widget.selectedPort ||
-        oldWidget.selectedFirmwareVersion != widget.selectedFirmwareVersion ||
-        oldWidget.serialController.text != widget.serialController.text) {
-      _recalculateFlashStatus();
-    }
-  }
-
   void _recalculateFlashStatus() {
     if (!mounted) return;
 
@@ -273,12 +262,14 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     }
   }
 
-  void _handlePortSelection(String? port) {
-    if (port != null) {
-      // Chỉ kiểm tra xem cổng COM có tồn tại và truy cập được không
-      _validateAndSelectPort(port);
+  void _handlePortSelection(String? value) {
+    if (value == _pendingPort) return;
+
+    _pendingPort = value;
+    if (value != null) {
+      _validateAndSelectPort(value);
     }
-    widget.onUsbPortSelected(port);
+    widget.onUsbPortSelected(value);
   }
 
   void _validateAndSelectPort(String port) {
@@ -352,6 +343,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     super.initState();
     _startPortChecking();
     _previousPorts.addAll(widget.availablePorts);
+    _pendingPort = widget.selectedPort;
   }
 
   void _startPortChecking() {
@@ -889,20 +881,28 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                             ((widget.isLocalFileMode && state.localFilePath != null) ||
                              (!widget.isLocalFileMode && widget.selectedFirmwareVersion != null));
 
+                        if (canFlash != _canFlash) {
+                          // Notify parent of flash status change
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) {
+                              widget.onFlashStatusChanged(canFlash);
+                            }
+                          });
+                        }
+
                         return Stack(
                           children: [
                             ElevatedButton(
                               key: ValueKey<bool>(canFlash),
-                              onPressed: canFlash ? () {
-                                widget.onWarningRequested('flash_firmware');
-                              } : null,
+                              onPressed: canFlash
+                                ? () => widget.onWarningRequested('flash_firmware')
+                                : null,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.flash,
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 24,
                                   vertical: 12,
                                 ),
-                                // Add disabled style
                                 disabledBackgroundColor: Colors.grey[300],
                                 disabledForegroundColor: Colors.grey[600],
                               ),
@@ -974,7 +974,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     ];
 
     return DropdownButtonFormField<String>(
-      value: widget.availablePorts.contains(widget.selectedPort) ? widget.selectedPort : null,
+      value: widget.availablePorts.contains(_pendingPort) ? _pendingPort : null,
       decoration: InputDecoration(
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
@@ -1014,13 +1014,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
         fontWeight: FontWeight.w500,
       ),
       items: items,
-      onChanged: (value) {
-        if (mounted) {
-          setState(() {
-            _handlePortSelection(value);
-          });
-        }
-      },
+      onChanged: _handlePortSelection,
     );
   }
 

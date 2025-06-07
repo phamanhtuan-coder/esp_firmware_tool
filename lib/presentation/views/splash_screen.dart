@@ -22,7 +22,7 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    DebugLogger.lifecycle('SplashScreen initialized');
+    // DebugLogger.lifecycle('SplashScreen initialized');
 
     _controller = AnimationController(
       vsync: this,
@@ -59,19 +59,19 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   void _checkNavigationToLogin() {
-    DebugLogger.lifecycle('Checking navigation from splash to login');
+    // DebugLogger.lifecycle('Checking navigation from splash to login');
     if (mounted && !_navigated) {
       setState(() {
         _navigated = true;
       });
-      DebugLogger.lifecycle('Navigating from splash to login');
+      // DebugLogger.lifecycle('Navigating from splash to login');
       Navigator.of(context).pushReplacementNamed(AppRoutes.login);
     }
   }
 
   @override
   void dispose() {
-    DebugLogger.lifecycle('SplashScreen disposed');
+    // DebugLogger.lifecycle('SplashScreen disposed');
     _controller.dispose();
     super.dispose();
   }
