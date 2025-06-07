@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:get_it/get_it.dart';
 import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
 import 'package:smart_net_firmware_loader/core/config/app_routes.dart';
+import 'package:smart_net_firmware_loader/data/services/theme_service.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
 
 class LoginView extends StatefulWidget {
@@ -16,6 +18,34 @@ class _LoginViewState extends State<LoginView> {
   final TextEditingController _passwordController = TextEditingController();
   bool _showPassword = false;
   bool _isLoading = false;
+  bool _isDarkMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    final themeService = GetIt.instance<ThemeService>();
+    final isDark = await themeService.isDarkMode();
+    if (mounted) {
+      setState(() {
+        _isDarkMode = isDark;
+      });
+    }
+  }
+
+  Future<void> _toggleTheme() async {
+    final themeService = GetIt.instance<ThemeService>();
+    final newMode = !_isDarkMode;
+    await themeService.setDarkMode(newMode);
+    if (mounted) {
+      setState(() {
+        _isDarkMode = newMode;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -42,8 +72,30 @@ class _LoginViewState extends State<LoginView> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = isDark ? AppColors.darkBackground : AppColors.background;
+    final cardColor = isDark ? AppColors.darkCardBackground : Colors.white;
+    final textColor = isDark ? AppColors.darkTextPrimary : AppColors.text;
+    final secondaryTextColor = isDark ? AppColors.darkTextSecondary : AppColors.textSecondary;
+    final inputFillColor = isDark ? AppColors.darkPanelBackground : AppColors.componentBackground;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: backgroundColor,
+      appBar: AppBar(
+        backgroundColor: backgroundColor,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: Icon(
+              _isDarkMode ? Icons.wb_sunny_rounded : Icons.nights_stay_rounded,
+              color: _isDarkMode ? AppColors.warning : AppColors.primary,
+            ),
+            onPressed: _toggleTheme,
+            tooltip: _isDarkMode ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối',
+          ),
+          const SizedBox(width: 16),
+        ],
+      ),
       body: Center(
         child: Container(
           constraints: const BoxConstraints(maxWidth: 480),
@@ -53,11 +105,11 @@ class _LoginViewState extends State<LoginView> {
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: cardColor,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.shadowColor.withOpacity(0.1),
+                      color: (isDark ? Colors.black : AppColors.shadowColor).withOpacity(0.1),
                       blurRadius: 20,
                       offset: const Offset(0, 10),
                     ),
@@ -70,28 +122,28 @@ class _LoginViewState extends State<LoginView> {
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'SmartNet Firmware Loader',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
+                  color: isDark ? AppColors.accent : AppColors.primary,
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Đăng nhập để tiếp tục',
-                style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
+                style: TextStyle(fontSize: 16, color: secondaryTextColor),
               ),
               const SizedBox(height: 32),
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: cardColor,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.shadowColor.withOpacity(0.1),
+                      color: (isDark ? Colors.black : AppColors.shadowColor).withOpacity(0.1),
                       blurRadius: 20,
                     ),
                   ],
@@ -126,45 +178,47 @@ class _LoginViewState extends State<LoginView> {
                     TextField(
                       controller: _usernameController,
                       onChanged: (_) => setState(() {}),
-                      style: const TextStyle(color: AppColors.text),
+                      style: TextStyle(color: textColor),
                       decoration: InputDecoration(
                         labelText: 'Tên đăng nhập',
                         hintText: 'Nhập tên đăng nhập của bạn',
-                        prefixIcon: const Icon(
+                        prefixIcon: Icon(
                           Icons.person_outline,
-                          color: AppColors.primary,
+                          color: isDark ? AppColors.accent : AppColors.primary,
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: AppColors.borderColor)
+                          borderSide: BorderSide(
+                            color: isDark ? AppColors.darkDivider : AppColors.borderColor,
+                          ),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: AppColors.borderColor)
+                          borderSide: BorderSide(
+                            color: isDark ? AppColors.darkDivider : AppColors.borderColor,
+                          ),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: AppColors.primary,
+                          borderSide: BorderSide(
+                            color: isDark ? AppColors.accent : AppColors.primary,
                             width: 2,
                           ),
                         ),
                         filled: true,
-                        fillColor: AppColors.componentBackground,
+                        fillColor: inputFillColor,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 16,
                         ),
-                          labelStyle: TextStyle(
-                            color: _usernameController.text.isNotEmpty
-                                ? AppColors.primary
-                                : Colors.grey.shade700,
-                          ),
-                          hintStyle: TextStyle(
-                            color: _usernameController.text.isNotEmpty
-                                ? AppColors.primary.withOpacity(0.7)
-                                : Colors.grey.shade500,
-                          )
+                        labelStyle: TextStyle(
+                          color: _usernameController.text.isNotEmpty
+                              ? (isDark ? AppColors.accent : AppColors.primary)
+                              : secondaryTextColor,
+                        ),
+                        hintStyle: TextStyle(
+                          color: secondaryTextColor.withOpacity(0.7),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -172,51 +226,53 @@ class _LoginViewState extends State<LoginView> {
                       controller: _passwordController,
                       onChanged: (_) => setState(() {}),
                       obscureText: !_showPassword,
-                      style: const TextStyle(color: AppColors.text),
+                      style: TextStyle(color: textColor),
                       decoration: InputDecoration(
                         labelText: 'Mật khẩu',
                         hintText: 'Nhập mật khẩu của bạn',
-                        prefixIcon: const Icon(
+                        prefixIcon: Icon(
                           Icons.lock_outline,
-                          color: AppColors.primary,
+                          color: isDark ? AppColors.accent : AppColors.primary,
                         ),
                         suffixIcon: IconButton(
                           icon: Icon(
                             _showPassword ? Icons.visibility_off : Icons.visibility,
-                            color: AppColors.primary,
+                            color: isDark ? AppColors.accent : AppColors.primary,
                           ),
                           onPressed: () => setState(() => _showPassword = !_showPassword),
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide:const BorderSide(color: AppColors.borderColor)
+                          borderSide: BorderSide(
+                            color: isDark ? AppColors.darkDivider : AppColors.borderColor,
+                          ),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: AppColors.borderColor),
+                          borderSide: BorderSide(
+                            color: isDark ? AppColors.darkDivider : AppColors.borderColor,
+                          ),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: AppColors.primary,
+                          borderSide: BorderSide(
+                            color: isDark ? AppColors.accent : AppColors.primary,
                             width: 2,
                           ),
                         ),
                         filled: true,
-                        fillColor: AppColors.componentBackground,
+                        fillColor: inputFillColor,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 16,
                         ),
                         labelStyle: TextStyle(
                           color: _passwordController.text.isNotEmpty
-                              ? AppColors.primary
-                              : Colors.grey.shade700,
+                              ? (isDark ? AppColors.accent : AppColors.primary)
+                              : secondaryTextColor,
                         ),
                         hintStyle: TextStyle(
-                          color: _passwordController.text.isNotEmpty
-                              ? AppColors.primary.withOpacity(0.7)
-                              : Colors.grey.shade500,
+                          color: secondaryTextColor.withOpacity(0.7),
                         ),
                       ),
                     ),
@@ -226,40 +282,39 @@ class _LoginViewState extends State<LoginView> {
                       child: ElevatedButton(
                         onPressed: _isLoading ? null : () => _login(context),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor:AppColors.background,
+                          backgroundColor: isDark ? AppColors.accent : AppColors.primary,
+                          foregroundColor: isDark ? Colors.black : Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                           elevation: 2,
                         ),
-                        child:
-                            _isLoading
-                                ? const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    color:AppColors.background,
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                                : const Text(
-                                  'Đăng nhập',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                        child: _isLoading
+                            ? SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  color: isDark ? Colors.black : Colors.white,
+                                  strokeWidth: 2,
                                 ),
+                              )
+                            : const Text(
+                                'Đăng nhập',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                       ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'Phiên bản 2.0.0',
-                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                style: TextStyle(fontSize: 14, color: secondaryTextColor),
               ),
             ],
           ),
