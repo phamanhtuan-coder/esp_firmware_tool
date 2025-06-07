@@ -1,6 +1,7 @@
 import 'dart:collection';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:smart_net_firmware_loader/core/utils/debug_logger.dart';
 import 'package:smart_net_firmware_loader/data/models/batch.dart';
 import 'package:smart_net_firmware_loader/data/models/device.dart';
 import 'package:smart_net_firmware_loader/data/models/firmware.dart';
@@ -26,7 +27,7 @@ class ApiService implements ApiRepository {
   @override
   Future<List<Planning>> fetchPlannings() async {
     try {
-      // DebugLogger.d('Fetching plannings list', className: 'ApiService', methodName: 'fetchPlannings');
+      DebugLogger.d('🔄 Đang tải danh sách kế hoạch...', className: 'ApiService', methodName: 'fetchPlannings');
 
       _logService.addLog(
         message: 'Đang tải danh sách kế hoạch...',
@@ -52,47 +53,26 @@ class ApiService implements ApiRepository {
             value: (planning) => planning as Planning,
           );
 
-          _logService.addLog(
-            message: 'Đã tải ${uniquePlannings.length} kế hoạch',
-            level: LogLevel.success,
-            step: ProcessStep.productBatch,
-            origin: 'system',
+          DebugLogger.d(
+            '✅ Đã tải thành công ${uniquePlannings.length} kế hoạch',
+            className: 'ApiService',
+            methodName: 'fetchPlannings',
           );
-
-          // DebugLogger.d(
-          //   'Successfully fetched ${uniquePlannings.length} plannings',
-          //   className: 'ApiService',
-          //   methodName: 'fetchPlannings',
-          // );
 
           return uniquePlannings.values.toList();
         }
 
         final errorMessage = responseData['message'] ?? 'Unknown error occurred';
-        _logService.addLog(
-          message: 'Lỗi tải kế hoạch: $errorMessage',
-          level: LogLevel.error,
-          step: ProcessStep.other,
-          origin: 'system',
-        );
+        DebugLogger.e('❌ Lỗi tải kế hoạch: $errorMessage', className: 'ApiService', methodName: 'fetchPlannings');
       } else {
         final errorMessage = 'HTTP Error: ${response.statusCode}';
-        _logService.addLog(
-          message: 'Lỗi tải kế hoạch: $errorMessage',
-          level: LogLevel.error,
-          step: ProcessStep.other,
-          origin: 'system',
-        );
+        DebugLogger.e('❌ Lỗi tải kế hoạch: $errorMessage', className: 'ApiService', methodName: 'fetchPlannings');
       }
       return [];
     } catch (e) {
-      // DebugLogger.e('Exception in fetchPlannings', error: e, stackTrace: stackTrace);
-      _logService.addLog(
-        message: 'Lỗi tải kế hoạch: $e',
-        level: LogLevel.error,
-        step: ProcessStep.other,
-        origin: 'system',
-      );
+      DebugLogger.e('❌ Lỗi ngoại lệ trong fetchPlannings: $e',
+        className: 'ApiService',
+        methodName: 'fetchPlannings');
       return [];
     }
   }
@@ -100,7 +80,11 @@ class ApiService implements ApiRepository {
   @override
   Future<List<Batch>> fetchBatches(String? planningId) async {
     try {
-      // DebugLogger.d('Fetching batches for planning $planningId...', className: 'ApiService');
+      DebugLogger.d(
+        '🔄 Đang tải danh sách lô cho kế hoạch $planningId...',
+        className: 'ApiService',
+        methodName: 'fetchBatches'
+      );
 
       _logService.addLog(
         message: 'Đang tải danh sách lô sản xuất...',
@@ -133,42 +117,27 @@ class ApiService implements ApiRepository {
             value: (batch) => batch as Batch,
           );
 
-          _logService.addLog(
-            message: 'Đã tải ${uniqueBatches.length} lô sản xuất cho kế hoạch $planningId',
-            level: LogLevel.success,
-            step: ProcessStep.productBatch,
-            origin: 'system',
+          DebugLogger.d(
+            '✅ Đã tải ${uniqueBatches.length} lô cho kế hoạch $planningId',
+            className: 'ApiService',
+            methodName: 'fetchBatches',
           );
 
           return uniqueBatches.values.toList();
         }
 
         final errorMessage = responseData['message'] ?? 'Unknown error occurred';
-        _logService.addLog(
-          message: 'Lỗi tải lô sản xuất: $errorMessage',
-          level: LogLevel.error,
-          step: ProcessStep.productBatch,
-          origin: 'system',
-        );
+        DebugLogger.e('❌ Lỗi tải lô: $errorMessage', className: 'ApiService', methodName: 'fetchBatches');
         return [];
       } else {
         final errorMessage = 'HTTP Error: ${response.statusCode}';
-        _logService.addLog(
-          message: 'Lỗi tải lô sản xuất: $errorMessage',
-          level: LogLevel.error,
-          step: ProcessStep.productBatch,
-          origin: 'system',
-        );
+        DebugLogger.e('❌ Lỗi tải lô: $errorMessage', className: 'ApiService', methodName: 'fetchBatches');
         return [];
       }
     } catch (e) {
-      // DebugLogger.e('Exception in fetchBatches', error: e, stackTrace: stackTrace);
-      _logService.addLog(
-        message: 'Lỗi tải lô sản xuất: $e',
-        level: LogLevel.error,
-        step: ProcessStep.productBatch,
-        origin: 'system',
-      );
+      DebugLogger.e('❌ Lỗi ngoại lệ trong fetchBatches: $e',
+        className: 'ApiService',
+        methodName: 'fetchBatches');
       return [];
     }
   }
@@ -183,7 +152,7 @@ class ApiService implements ApiRepository {
       // );
 
       _logService.addLog(
-        message: 'Đang tải danh sách thiết bị cho l�� $batchId...',
+        message: 'Đang tải danh sách thiết bị cho l��� $batchId...',
         level: LogLevel.info,
         step: ProcessStep.deviceRefresh,
         origin: 'system',
@@ -227,7 +196,7 @@ class ApiService implements ApiRepository {
         final errorMessage = responseData['message'] ?? 'Unknown error occurred';
         // DebugLogger.e('Error fetching devices: $errorMessage');
         _logService.addLog(
-          message: 'Lỗi khi tải danh sách thiết bị: $errorMessage',
+          message: 'Lỗi khi tải danh s��ch thiết bị: $errorMessage',
           level: LogLevel.error,
           step: ProcessStep.deviceRefresh,
           origin: 'system',
@@ -321,17 +290,9 @@ class ApiService implements ApiRepository {
       );
       return [];
     } catch (e) {
-      // DebugLogger.e(
-      //   'Exception in fetchFirmwares',
-      //   error: e,
-      //   stackTrace: stackTrace,
-      // );
-      _logService.addLog(
-        message: 'Lỗi tải firmware: $e',
-        level: LogLevel.error,
-        step: ProcessStep.firmwareDownload,
-        origin: 'system',
-      );
+      DebugLogger.e('❌ Lỗi ngoại lệ trong fetchFirmwares: $e',
+        className: 'ApiService',
+        methodName: 'fetchFirmwares');
       return [];
     }
   }
@@ -426,17 +387,9 @@ class ApiService implements ApiRepository {
         return null;
       }
     } catch (e) {
-      // DebugLogger.e(
-      //   'Exception in fetchFirmwareFile',
-      //   error: e,
-      //   stackTrace: stackTrace,
-      // );
-      _logService.addLog(
-        message: 'Lỗi tải file firmware: $e',
-        level: LogLevel.error,
-        step: ProcessStep.firmwareDownload,
-        origin: 'system',
-      );
+      DebugLogger.e('❌ Lỗi ngoại lệ trong fetchFirmwareFile: $e',
+        className: 'ApiService',
+        methodName: 'fetchFirmwareFile');
       return null;
     }
   }

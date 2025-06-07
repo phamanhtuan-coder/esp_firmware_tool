@@ -174,7 +174,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
           const SizedBox(width: 16),
           Expanded(
             child: Text(
-              'Đ���� bật chế độ nhận thông tin. Hãy dùng app mobile và quét mã sản phẩm muốn nạp firmware trong lô ${state.selectedBatchId}',
+              'Đã bật chế độ nhận thông tin. Hãy dùng app mobile và quét mã sản phẩm muốn nạp firmware trong lô ${state.selectedBatchId}',
               style: const TextStyle(color: Colors.white),
             ),
           ),
@@ -248,19 +248,6 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     });
   }
 
-  void _recalculateFlashStatus() {
-    if (!mounted) return;
-
-    final state = context.read<HomeBloc>().state;
-    final canFlash = widget.selectedPort != null &&
-        _isSerialValid &&
-        ((widget.isLocalFileMode && state.localFilePath != null) ||
-         (!widget.isLocalFileMode && widget.selectedFirmwareVersion != null));
-
-    if (mounted) {
-      widget.onFlashStatusChanged(canFlash);
-    }
-  }
 
   void _handlePortSelection(String? value) {
     if (value == _pendingPort) return;

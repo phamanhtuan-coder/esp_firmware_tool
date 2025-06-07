@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_libserialport/flutter_libserialport.dart';
-import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
+import 'package:smart_net_firmware_loader/core/utils/debug_logger.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 import 'package:get_it/get_it.dart';
 
 class SerialMonitorService {
-  final LogService _logService = GetIt.instance<LogService>();
   SerialPort? _serialPort;
   StreamController<String>? _outputController;
   StreamController<bool>? _statusController;
@@ -43,11 +42,10 @@ class SerialMonitorService {
 
       stopMonitor();
 
-      _logService.addLog(
-        message: 'Starting serial monitor on $port at $baudRate baud',
-        level: LogLevel.info,
-        step: ProcessStep.serialMonitor,
-        origin: 'serial-monitor',
+      DebugLogger.d(
+        '🔄 Khởi động Serial Monitor trên cổng $port tốc độ $baudRate',
+        className: 'SerialMonitorService',
+        methodName: 'startMonitor'
       );
 
       // Try to open the port
@@ -66,7 +64,7 @@ class SerialMonitorService {
         _serialPort!.config = config;
 
         if (!_serialPort!.openReadWrite()) {
-          throw Exception('Failed to open port: ${SerialPort.lastError}');
+          throw Exception('❌ Không thể mở cổng COM: ${SerialPort.lastError}');
         }
 
         // Set up reader with buffering
@@ -78,12 +76,7 @@ class SerialMonitorService {
             }
           },
           onError: (error) {
-            _logService.addLog(
-              message: 'Serial read error: $error',
-              level: LogLevel.error,
-              step: ProcessStep.serialMonitor,
-              origin: 'serial-monitor',
-            );
+            DebugLogger.e('❌ Lỗi đọc dữ liệu Serial: $error', className: 'SerialMonitorService', methodName: 'startMonitor');
             _attemptRecovery();
           },
           cancelOnError: false,
@@ -94,23 +87,13 @@ class SerialMonitorService {
         return true;
 
       } catch (e) {
-        _logService.addLog(
-          message: 'Failed to open serial port: $e',
-          level: LogLevel.error,
-          step: ProcessStep.serialMonitor,
-          origin: 'serial-monitor',
-        );
+        DebugLogger.e('❌ Lỗi mở cổng Serial: $e', className: 'SerialMonitorService', methodName: 'startMonitor');
         _scheduleReconnect();
         return false;
       }
 
     } catch (e) {
-      _logService.addLog(
-        message: 'Error in startMonitor: $e',
-        level: LogLevel.error,
-        step: ProcessStep.serialMonitor,
-        origin: 'serial-monitor',
-      );
+      DebugLogger.e('❌ Lỗi trong startMonitor: $e', className: 'SerialMonitorService', methodName: 'startMonitor');
       return false;
     }
   }
@@ -132,7 +115,9 @@ class SerialMonitorService {
       });
 
     } catch (e) {
-      print('Error processing serial data: $e');
+      DebugLogger.e('❌ Lỗi xử lý dữ liệu Serial: $e',
+        className: 'SerialMonitorService',
+        methodName: '_processSerialData');
     }
   }
 
@@ -165,7 +150,7 @@ class SerialMonitorService {
       }
 
     } catch (e) {
-      print('Error flushing buffer: $e');
+      DebugLogger.e('❌ Lỗi khi làm sạch bộ đệm: $e', className: 'SerialMonitorService', methodName: '_flushBuffer');
       _dataBuffer.clear(); // Clear buffer on error
     }
   }
@@ -175,12 +160,9 @@ class SerialMonitorService {
       try {
         _serialPort!.write(utf8.encode('$command\r\n'));
       } catch (e) {
-        _logService.addLog(
-          message: 'Error sending command: $e',
-          level: LogLevel.error,
-          step: ProcessStep.serialMonitor,
-          origin: 'serial-monitor',
-        );
+        DebugLogger.e('❌ Lỗi khi gửi lệnh: $e',
+          className: 'SerialMonitorService',
+          methodName: 'sendCommand');
       }
     }
   }
@@ -198,23 +180,13 @@ class SerialMonitorService {
 
     _statusController?.add(false);
 
-    _logService.addLog(
-      message: 'Serial monitor stopped',
-      level: LogLevel.info,
-      step: ProcessStep.serialMonitor,
-      origin: 'serial-monitor',
-    );
+    DebugLogger.d('🛑 Đã dừng Serial Monitor', className: 'SerialMonitorService', methodName: 'stopMonitor');
   }
 
   void _attemptRecovery() {
     if (_currentPort == null || _currentBaudRate == null) return;
 
-    _logService.addLog(
-      message: 'Attempting to recover serial connection...',
-      level: LogLevel.warning,
-      step: ProcessStep.serialMonitor,
-      origin: 'serial-monitor',
-    );
+    DebugLogger.w('⚠️ Đang thử kết nối lại Serial...');
 
     stopMonitor();
     _scheduleReconnect(immediateAttempt: true);
@@ -237,11 +209,10 @@ class SerialMonitorService {
       if (ports.contains(_currentPort)) {
         final success = await startMonitor(_currentPort!, _currentBaudRate!);
         if (success) {
-          _logService.addLog(
-            message: 'Successfully reconnected to $_currentPort',
-            level: LogLevel.success,
-            step: ProcessStep.serialMonitor,
-            origin: 'serial-monitor',
+          DebugLogger.d(
+            '✅ Đã kết nối lại thành công với $_currentPort',
+            className: 'SerialMonitorService',
+            methodName: '_attemptReconnect'
           );
           _isReconnecting = false;
           return;
@@ -251,11 +222,10 @@ class SerialMonitorService {
       // Schedule another attempt if unsuccessful
       _reconnectTimer = Timer(const Duration(seconds: 3), _attemptReconnect);
     } catch (e) {
-      _logService.addLog(
-        message: 'Error during reconnection: $e',
-        level: LogLevel.error,
-        step: ProcessStep.serialMonitor,
-        origin: 'serial-monitor',
+      DebugLogger.e(
+        '❌ Lỗi trong quá trình kết nối lại: $e',
+        className: 'SerialMonitorService',
+        methodName: '_attemptReconnect'
       );
       _reconnectTimer = Timer(const Duration(seconds: 3), _attemptReconnect);
     } finally {

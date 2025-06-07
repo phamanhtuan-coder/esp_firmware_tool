@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
+import 'package:smart_net_firmware_loader/core/utils/debug_logger.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 import 'package:smart_net_firmware_loader/data/services/template_service.dart';
@@ -44,20 +45,10 @@ class ArduinoService implements ArduinoRepository {
   @override
   Future<bool> initialize() async {
     try {
-      _logService.addLog(
-        message: 'Initializing Arduino CLI service...',
-        level: LogLevel.info,
-        step: ProcessStep.systemStart,
-        origin: 'arduino-cli',
-      );
+      DebugLogger.d('🔄 Khởi tạo dịch vụ Arduino CLI...', className: 'ArduinoService', methodName: 'initialize');
 
       if (_arduinoCliPath != null) {
-        _logService.addLog(
-          message: 'Arduino CLI already initialized at: $_arduinoCliPath',
-          level: LogLevel.info,
-          step: ProcessStep.systemStart,
-          origin: 'arduino-cli',
-        );
+        DebugLogger.d('✅ Arduino CLI đã được khởi tạo tại: $_arduinoCliPath', className: 'ArduinoService', methodName: 'initialize');
         return await _verifyArduinoCli();
       }
 
@@ -69,34 +60,19 @@ class ArduinoService implements ArduinoRepository {
               : 'arduino-cli-linux';
       String executableName = Platform.isWindows ? 'arduino-cli.exe' : 'arduino-cli';
 
-      _logService.addLog(
-        message: 'Setting up Arduino CLI for platform: $appName',
-        level: LogLevel.info,
-        step: ProcessStep.systemStart,
-        origin: 'arduino-cli',
-      );
+      DebugLogger.d('⚙️ Cài đặt Arduino CLI cho nền tảng: $appName', className: 'ArduinoService', methodName: 'initialize');
 
       final arduinoDir = Directory(path.join(appDir.path, appName));
       if (!await arduinoDir.exists()) {
         await arduinoDir.create(recursive: true);
-        _logService.addLog(
-          message: 'Created Arduino CLI directory at: ${arduinoDir.path}',
-          level: LogLevel.info,
-          step: ProcessStep.systemStart,
-          origin: 'arduino-cli',
-        );
+        DebugLogger.d('✅ Đã tạo thư mục Arduino CLI tại: ${arduinoDir.path}', className: 'ArduinoService', methodName: 'initialize');
       }
 
       _arduinoCliPath = path.join(arduinoDir.path, executableName);
       final cliFile = File(_arduinoCliPath!);
 
       if (!await cliFile.exists()) {
-        _logService.addLog(
-          message: 'Arduino CLI not found, extracting from assets...',
-          level: LogLevel.info,
-          step: ProcessStep.systemStart,
-          origin: 'arduino-cli',
-        );
+        DebugLogger.d('🔍 Không tìm thấy Arduino CLI, đang giải nén từ assets...', className: 'ArduinoService', methodName: 'initialize');
 
         try {
           final byteData = await rootBundle.load('assets/$appName/$executableName');
@@ -109,19 +85,9 @@ class ArduinoService implements ArduinoRepository {
             await Process.run('chmod', ['+x', _arduinoCliPath!]);
           }
 
-          _logService.addLog(
-            message: 'Arduino CLI extracted successfully',
-            level: LogLevel.success,
-            step: ProcessStep.systemStart,
-            origin: 'arduino-cli',
-          );
+          DebugLogger.d('✅ Giải nén Arduino CLI thành công', className: 'ArduinoService', methodName: 'initialize');
         } catch (e) {
-          _logService.addLog(
-            message: 'Failed to extract Arduino CLI: $e',
-            level: LogLevel.error,
-            step: ProcessStep.systemStart,
-            origin: 'arduino-cli',
-          );
+          DebugLogger.e('❌ Lỗi giải nén Arduino CLI: $e', className: 'ArduinoService', methodName: 'initialize');
           return false;
         }
       }
@@ -136,22 +102,11 @@ class ArduinoService implements ArduinoRepository {
         return false;
       }
 
-      // Update package index
-      _logService.addLog(
-        message: 'Updating Arduino CLI package index...',
-        level: LogLevel.info,
-        step: ProcessStep.systemStart,
-        origin: 'arduino-cli',
-      );
+      DebugLogger.d('🔄 Đang cập nhật Arduino CLI package index...', className: 'ArduinoService', methodName: 'initialize');
 
       final updateResult = await Process.run(_arduinoCliPath!, ['core', 'update-index', '--verbose']);
       if (updateResult.exitCode != 0) {
-        _logService.addLog(
-          message: 'Failed to update package index: ${updateResult.stderr}',
-          level: LogLevel.error,
-          step: ProcessStep.systemStart,
-          origin: 'arduino-cli',
-        );
+        DebugLogger.e('❌ Lỗi cập nhật package index: ${updateResult.stderr}', className: 'ArduinoService', methodName: 'initialize');
         return false;
       }
 
@@ -159,12 +114,7 @@ class ArduinoService implements ArduinoRepository {
       for (final type in _boardFqbns.keys) {
         final core = _getCoreForDeviceType(type);
         if (core != null) {
-          _logService.addLog(
-            message: 'Installing core for $type: $core',
-            level: LogLevel.info,
-            step: ProcessStep.systemStart,
-            origin: 'arduino-cli',
-          );
+          DebugLogger.d('⬇️ Đang cài đặt core cho $type: $core', className: 'ArduinoService', methodName: 'initialize');
 
           final installResult = await Process.run(_arduinoCliPath!, [
             'core',
@@ -174,38 +124,18 @@ class ArduinoService implements ArduinoRepository {
           ]);
 
           if (installResult.exitCode != 0) {
-            _logService.addLog(
-              message: 'Failed to install core $core: ${installResult.stderr}',
-              level: LogLevel.error,
-              step: ProcessStep.systemStart,
-              origin: 'arduino-cli',
-            );
+            DebugLogger.e('❌ Lỗi cài đặt core $core: ${installResult.stderr}', className: 'ArduinoService', methodName: 'initialize');
           } else {
-            _logService.addLog(
-              message: 'Successfully installed core $core',
-              level: LogLevel.success,
-              step: ProcessStep.systemStart,
-              origin: 'arduino-cli',
-            );
+            DebugLogger.d('✅ Đã cài đặt thành công core $core', className: 'ArduinoService', methodName: 'initialize');
           }
         }
       }
 
-      _logService.addLog(
-        message: 'Arduino CLI initialized successfully',
-        level: LogLevel.success,
-        step: ProcessStep.systemStart,
-        origin: 'arduino-cli',
-      );
-
+      DebugLogger.d('✅ Khởi tạo Arduino CLI thành công', className: 'ArduinoService', methodName: 'initialize');
       return true;
+
     } catch (e) {
-      _logService.addLog(
-        message: 'Failed to initialize Arduino CLI: $e',
-        level: LogLevel.error,
-        step: ProcessStep.systemStart,
-        origin: 'arduino-cli',
-      );
+      DebugLogger.e('❌ Lỗi khởi tạo Arduino CLI: $e', className: 'ArduinoService', methodName: 'initialize');
       return false;
     }
   }
@@ -215,29 +145,14 @@ class ArduinoService implements ArduinoRepository {
       final result = await Process.run(_arduinoCliPath!, ['version', '--verbose']);
 
       if (result.exitCode != 0) {
-        _logService.addLog(
-          message: 'Arduino CLI verification failed: ${result.stderr}',
-          level: LogLevel.error,
-          step: ProcessStep.systemStart,
-          origin: 'arduino-cli',
-        );
+        DebugLogger.e('❌ Xác thực Arduino CLI thất bại: ${result.stderr}', className: 'ArduinoService', methodName: '_verifyArduinoCli');
         return false;
       }
 
-      _logService.addLog(
-        message: 'Arduino CLI verified: ${result.stdout}',
-        level: LogLevel.success,
-        step: ProcessStep.systemStart,
-        origin: 'arduino-cli',
-      );
+      DebugLogger.d('✅ Xác thực Arduino CLI thành công: ${result.stdout}', className: 'ArduinoService', methodName: '_verifyArduinoCli');
       return true;
     } catch (e) {
-      _logService.addLog(
-        message: 'Error verifying Arduino CLI: $e',
-        level: LogLevel.error,
-        step: ProcessStep.systemStart,
-        origin: 'arduino-cli',
-      );
+      DebugLogger.e('❌ Lỗi xác thực Arduino CLI: $e', className: 'ArduinoService', methodName: '_verifyArduinoCli');
       return false;
     }
   }
@@ -261,30 +176,15 @@ class ArduinoService implements ArduinoRepository {
         ]);
 
         if (initResult.exitCode != 0) {
-          _logService.addLog(
-            message: 'Failed to initialize config: ${initResult.stderr}',
-            level: LogLevel.error,
-            step: ProcessStep.systemStart,
-            origin: 'arduino-cli',
-          );
+          DebugLogger.e('❌ Lỗi khởi tạo config: ${initResult.stderr}', className: 'ArduinoService', methodName: '_initializeConfig');
           return false;
         }
 
-        _logService.addLog(
-          message: 'Arduino CLI config initialized at: $configPath',
-          level: LogLevel.success,
-          step: ProcessStep.systemStart,
-          origin: 'arduino-cli',
-        );
+        DebugLogger.d('✅ Đã khởi tạo config Arduino CLI tại: $configPath', className: 'ArduinoService', methodName: '_initializeConfig');
       }
       return true;
     } catch (e) {
-      _logService.addLog(
-        message: 'Error initializing config: $e',
-        level: LogLevel.error,
-        step: ProcessStep.systemStart,
-        origin: 'arduino-cli',
-      );
+      DebugLogger.e('❌ Lỗi khởi tạo config: $e', className: 'ArduinoService', methodName: '_initializeConfig');
       return false;
     }
   }
@@ -528,12 +428,7 @@ class ArduinoService implements ArduinoRepository {
         throw Exception(error);
       }
     } catch (e) {
-      _logService.addLog(
-        message: 'Error during compilation: $e',
-        level: LogLevel.error,
-        step: ProcessStep.firmwareCompile,
-        origin: 'arduino-cli',
-      );
+      DebugLogger.e('❌ Lỗi biên dịch sketch: $e', className: 'ArduinoService', methodName: 'compileSketch');
       return false;
     }
   }
@@ -686,13 +581,7 @@ class ArduinoService implements ArduinoRepository {
         throw Exception(error);
       }
     } catch (e) {
-      final errorMessage = e.toString();
-      _logService.addLog(
-        message: 'Error during upload: $errorMessage',
-        level: LogLevel.error,
-        step: ProcessStep.flash,
-        origin: 'arduino-cli',
-      );
+      DebugLogger.e('❌ Lỗi tải lên sketch: $e', className: 'ArduinoService', methodName: 'uploadSketch');
       return false;
     }
   }
@@ -706,26 +595,26 @@ class ArduinoService implements ArduinoRepository {
     Map<String, String>? placeholders,
   }) async {
     try {
-      print('DEBUG: Starting compile and flash process');
-      print('DEBUG: Device type detected: $deviceType');
+      DebugLogger.d('🔄 Bắt đầu quá trình biên dịch và tải lên');
+      DebugLogger.d('🔍 Phát hiện loại thiết bị: $deviceType');
 
       // If no device type specified, try to detect from sketch content
       if (deviceType == null || deviceType.isEmpty) {
         final sketchContent = await File(sketchPath).readAsString();
         deviceType = GetIt.instance<TemplateService>().extractBoardType(sketchContent);
-        print('DEBUG: Device type extracted from sketch: $deviceType');
+        DebugLogger.d('🔍 Loại thiết bị được trích xuất từ nội dung sketch: $deviceType');
       }
 
       // Normalize the device type to match our FQBN mapping
       deviceType = GetIt.instance<TemplateService>().normalizeDeviceType(deviceType);
-      print('DEBUG: Normalized device type: $deviceType');
+      DebugLogger.d('✅ Loại thiết bị đã chuẩn hóa: $deviceType');
 
       // Get FQBN for the device type
       final fqbn = _boardFqbns[deviceType];
       if (fqbn == null) {
         throw Exception('Unsupported board type: $deviceType');
       }
-      print('DEBUG: Using FQBN: $fqbn');
+      DebugLogger.d('✅ Sử dụng FQBN: $fqbn');
 
       // First verify Arduino CLI is accessible
       if (_arduinoCliPath == null || !await File(_arduinoCliPath!).exists()) {
@@ -735,15 +624,15 @@ class ArduinoService implements ArduinoRepository {
       // Verify Arduino CLI binary can be executed
       try {
         final testResult = await Process.run(_arduinoCliPath!, ['version']);
-        print('DEBUG: Arduino CLI test result: ${testResult.exitCode}');
-        print('DEBUG: Arduino CLI stdout: ${testResult.stdout}');
-        print('DEBUG: Arduino CLI stderr: ${testResult.stderr}');
+        DebugLogger.d('✅ Kết quả kiểm tra Arduino CLI: ${testResult.exitCode}');
+        DebugLogger.d('📦 Arduino CLI stdout: ${testResult.stdout}');
+        DebugLogger.d('🚨 Arduino CLI stderr: ${testResult.stderr}');
 
         if (testResult.exitCode != 0) {
           throw Exception('Arduino CLI cannot be executed: ${testResult.stderr}');
         }
       } catch (e) {
-        print('DEBUG: Failed to execute Arduino CLI: $e');
+        DebugLogger.e('❌ Lỗi khi thực thi Arduino CLI: $e');
         throw Exception('Arduino CLI execution failed: $e');
       }
 
@@ -751,7 +640,7 @@ class ArduinoService implements ArduinoRepository {
       final boardCore = fqbn.split(':').take(2).join(':');
       final coreResult = await Process.run(_arduinoCliPath!, ['core', 'list']);
       if (!coreResult.stdout.toString().contains(boardCore)) {
-        print('DEBUG: Installing required board core: $boardCore');
+        DebugLogger.d('⬇️ Đang cài đặt core yêu cầu: $boardCore');
         final installResult = await Process.run(_arduinoCliPath!, ['core', 'install', boardCore]);
         if (installResult.exitCode != 0) {
           throw Exception('Failed to install board core: ${installResult.stderr}');
@@ -759,7 +648,7 @@ class ArduinoService implements ArduinoRepository {
       }
 
       // Then run direct command for compiling to see direct output
-      print('DEBUG: Starting direct compilation...');
+      DebugLogger.d('🔄 Bắt đầu biên dịch trực tiếp...');
       final directCompileResult = await Process.run(_arduinoCliPath!, [
         'compile',
         '--fqbn', fqbn,
@@ -768,9 +657,9 @@ class ArduinoService implements ArduinoRepository {
       ]);
 
       // Log direct output from the process
-      print('DEBUG: Compile exit code: ${directCompileResult.exitCode}');
-      print('DEBUG: Compile stdout: ${directCompileResult.stdout}');
-      print('DEBUG: Compile stderr: ${directCompileResult.stderr}');
+      DebugLogger.d('✅ Kết quả biên dịch trực tiếp: ${directCompileResult.exitCode}');
+      DebugLogger.d('📦 Biên dịch stdout: ${directCompileResult.stdout}');
+      DebugLogger.d('🚨 Biên dịch stderr: ${directCompileResult.stderr}');
 
       // If direct compile fails, stop here
       if (directCompileResult.exitCode != 0) {
@@ -778,7 +667,7 @@ class ArduinoService implements ArduinoRepository {
       }
 
       // If compile succeeded, try uploading directly
-      print('DEBUG: Starting direct upload...');
+      DebugLogger.d('🔄 Bắt đầu tải lên trực tiếp...');
       final directUploadResult = await Process.run(_arduinoCliPath!, [
         'upload',
         '-p', port,
@@ -788,15 +677,15 @@ class ArduinoService implements ArduinoRepository {
       ]);
 
       // Log direct output from upload process
-      print('DEBUG: Upload exit code: ${directUploadResult.exitCode}');
-      print('DEBUG: Upload stdout: ${directUploadResult.stdout}');
-      print('DEBUG: Upload stderr: ${directUploadResult.stderr}');
+      DebugLogger.d('✅ Kết quả tải lên trực tiếp: ${directUploadResult.exitCode}');
+      DebugLogger.d('📦 Tải lên stdout: ${directUploadResult.stdout}');
+      DebugLogger.d('🚨 Tải lên stderr: ${directUploadResult.stderr}');
 
       if (directUploadResult.exitCode != 0) {
         throw Exception('Direct upload failed: ${directUploadResult.stderr}');
       }
 
-      print('DEBUG: Direct compile and upload successful!');
+      DebugLogger.d('✅ Quá trình biên dịch và tải lên trực tiếp thành công!');
 
       // Log success
       _logService.addLog(
@@ -807,17 +696,10 @@ class ArduinoService implements ArduinoRepository {
         origin: 'arduino-cli',
       );
 
-      print('DEBUG: Compile and flash completed successfully');
+      DebugLogger.d('✅ Quá trình biên dịch và tải lên hoàn tất thành công');
       return true;
     } catch (e) {
-      print('DEBUG: Error in compileAndFlash: $e');
-      _logService.addLog(
-        message: 'Error during compile and flash: $e',
-        level: LogLevel.error,
-        step: ProcessStep.flash,
-        deviceId: deviceId,
-        origin: 'arduino-cli',
-      );
+      DebugLogger.e('❌ Lỗi trong quá trình biên dịch và tải lên: $e', className: 'ArduinoService', methodName: 'compileAndFlash');
       return false;
     }
   }
@@ -882,13 +764,7 @@ class ArduinoService implements ArduinoRepository {
 
       return tempPath;
     } catch (e, stackTrace) {
-      _logService.addLog(
-        message: 'Error preparing template: $e\n$stackTrace',
-        level: LogLevel.error,
-        step: ProcessStep.templatePreparation,
-        deviceId: deviceId,
-        origin: 'system',
-      );
+      DebugLogger.e('❌ Lỗi chuẩn bị template: $e', className: 'ArduinoService', methodName: 'prepareFirmwareTemplate', error: e, stackTrace: stackTrace);
       return null;
     }
   }

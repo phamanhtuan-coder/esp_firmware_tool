@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:crypto/crypto.dart'; // Thêm để tính hash
+import 'package:smart_net_firmware_loader/core/utils/debug_logger.dart';
 import 'dart:convert';
 
 import '../models/log_entry.dart';
@@ -23,6 +24,7 @@ class TemplateService {
     final dir = Directory(_templatesDir!);
     if (!await dir.exists()) {
       await dir.create(recursive: true);
+      DebugLogger.d('📁 Đã tạo thư mục templates tại: ${dir.path}', className: 'TemplateService', methodName: '_initTemplatesDir');
     }
   }
 
@@ -44,10 +46,8 @@ class TemplateService {
 
   /// Extract board type from template file content
   String extractBoardType(String content) {
-    // Default to ESP32 if we can't determine
     String boardType = 'esp32';
 
-    // First, look for a board type marked as ACTIVE in comments
     final activeCommentPattern = RegExp(r'\/\/\s*BOARD_TYPE:\s*(\w+)\s*\(ACTIVE\)', multiLine: true);
     final activeMatches = activeCommentPattern.allMatches(content);
 
@@ -55,35 +55,32 @@ class TemplateService {
       final foundType = activeMatches.first.group(1)?.toLowerCase();
       if (foundType != null) {
         boardType = normalizeDeviceType(foundType);
-        print('DEBUG: Found board type marked as ACTIVE: $boardType');
+        DebugLogger.d('🔍 Đã tìm thấy loại board được đánh dấu ACTIVE: $boardType', className: 'TemplateService', methodName: 'extractBoardType');
         return boardType;
       }
     }
 
-    // Look for any BOARD_TYPE directive (active or commented)
     final boardTypePattern = RegExp(r'(?:\/\/\s*)?BOARD_TYPE:\s*(\w+)', multiLine: true);
     final matches = boardTypePattern.allMatches(content);
 
     if (matches.isNotEmpty) {
-      // If we find an uncommented BOARD_TYPE, use that
       for (final match in matches) {
         final line = match.group(0);
         if (line != null && !line.trim().startsWith('//')) {
           final foundType = match.group(1)?.toLowerCase();
           if (foundType != null) {
             boardType = normalizeDeviceType(foundType);
-            print('DEBUG: Found active board type: $boardType');
+            DebugLogger.d('🔍 Đã tìm thấy loại board đang hoạt động: $boardType', className: 'TemplateService', methodName: 'extractBoardType');
             break;
           }
         }
       }
     }
 
-    // If no active board type found, log all found types for debugging
     if (boardType == 'esp32') {
-      print('DEBUG: No active board type found, all found types:');
+      DebugLogger.d('⚠️ Không tìm thấy loại board đang hoạt động, các loại board đã tìm thấy:', className: 'TemplateService', methodName: 'extractBoardType');
       for (final match in matches) {
-        print('DEBUG: - ${match.group(1)}');
+        DebugLogger.d('  - ${match.group(1)}', className: 'TemplateService', methodName: 'extractBoardType');
       }
     }
 
@@ -97,21 +94,12 @@ class TemplateService {
       bool useQuotesForDefines = true,
       }) async {
     try {
-      // Clean up old temp files first
       await _cleanupTempFiles();
 
-      print('DEBUG: Starting template preparation');
-      print('DEBUG: Template path: $templatePath');
-      print('DEBUG: Serial number: $serialNumber');
-      print('DEBUG: Device ID: $deviceId');
-
-      _logService.addLog(
-        message: 'Starting template preparation for $serialNumber',
-        level: LogLevel.info,
-        step: ProcessStep.templatePreparation,
-        deviceId: serialNumber,
-        origin: 'system',
-      );
+      DebugLogger.d('🔄 Bắt đầu chuẩn bị template', className: 'TemplateService', methodName: 'prepareFirmwareTemplate');
+      DebugLogger.d('📄 Đường dẫn template: $templatePath', className: 'TemplateService', methodName: 'prepareFirmwareTemplate');
+      DebugLogger.d('📱 Serial number: $serialNumber', className: 'TemplateService', methodName: 'prepareFirmwareTemplate');
+      DebugLogger.d('🆔 Device ID: $deviceId', className: 'TemplateService', methodName: 'prepareFirmwareTemplate');
 
       if (serialNumber.isEmpty) {
         throw Exception('Serial number cannot be empty');
@@ -119,19 +107,19 @@ class TemplateService {
 
       // Validate template file
       final templateFile = File(templatePath);
-      print('DEBUG: Checking template file existence');
+      DebugLogger.d('🔍 Kiểm tra tồn tại của file template', className: 'TemplateService', methodName: 'prepareFirmwareTemplate');
       if (!await templateFile.exists()) {
-        throw Exception('Template file not found: $templatePath');
+        throw Exception('Không tìm thấy file template: $templatePath');
       }
-      print('DEBUG: Template file exists');
+      DebugLogger.d('✅ File template tồn tại', className: 'TemplateService', methodName: 'prepareFirmwareTemplate');
 
       // Read template content
-      print('DEBUG: Reading template content');
+      DebugLogger.d('📖 Đọc nội dung template', className: 'TemplateService', methodName: 'prepareFirmwareTemplate');
       String content = await templateFile.readAsString();
-      print('DEBUG: Template content length: ${content.length}');
+      DebugLogger.d('📝 Độ dài nội dung template: ${content.length}', className: 'TemplateService', methodName: 'prepareFirmwareTemplate');
 
       // Get temporary directory for processed template
-      print('DEBUG: Creating temp directory');
+      DebugLogger.d('📁 Tạo thư mục tạm', className: 'TemplateService', methodName: 'prepareFirmwareTemplate');
       final tempDir = await getTemporaryDirectory();
       final baseDir = Directory(path.join(tempDir.path, 'esp_firmware_tool'));
       if (!await baseDir.exists()) {
@@ -143,10 +131,10 @@ class TemplateService {
       if (!await sketchDir.exists()) {
         await sketchDir.create(recursive: true);
       }
-      print('DEBUG: Temp directory created at: ${sketchDir.path}');
+      DebugLogger.d('✅ Thư mục tạm đã được tạo tại: ${sketchDir.path}', className: 'TemplateService', methodName: 'prepareFirmwareTemplate');
 
       // Process template with replacements
-      print('DEBUG: Processing replacements');
+      DebugLogger.d('🔄 Xử lý các thay thế', className: 'TemplateService', methodName: 'prepareFirmwareTemplate');
       final replacements = {
         'SERIAL_NUMBER': serialNumber,
         'serial_number': serialNumber.toLowerCase(),
@@ -164,56 +152,43 @@ class TemplateService {
 
       // Process special defines
       content = _processDefines(content, serialNumber, deviceId);
-      print('DEBUG: Defines processed');
+      DebugLogger.d('✅ Đã xử lý các định nghĩa', className: 'TemplateService', methodName: 'prepareFirmwareTemplate');
 
       // Process remaining placeholders
       for (final entry in replacements.entries) {
         final placeholder = '{{${entry.key}}}';
         if (content.contains(placeholder)) {
           content = content.replaceAll(placeholder, entry.value);
-          print('DEBUG: Replaced $placeholder with ${entry.value}');
+          DebugLogger.d('🔄 Đã thay thế $placeholder bằng ${entry.value}', className: 'TemplateService', methodName: 'prepareFirmwareTemplate');
         }
       }
 
       // Extract and validate board type
       final boardType = extractBoardType(content);
-      print('DEBUG: Detected board type: $boardType');
+      DebugLogger.d('🔍 Đã phát hiện loại board: $boardType', className: 'TemplateService', methodName: 'prepareFirmwareTemplate');
 
       // Write processed content
       final outputPath = path.join(sketchDir.path, '$sketchName.ino');
-      print('DEBUG: Writing processed content to: $outputPath');
+      DebugLogger.d('💾 Đang ghi nội dung đã xử lý vào: $outputPath', className: 'TemplateService', methodName: 'prepareFirmwareTemplate');
       await File(outputPath).writeAsString(content);
 
       // Save metadata
       await _saveBoardTypeMetadata(sketchDir.path, boardType);
 
-      print('DEBUG: Template preparation completed successfully');
-      _logService.addLog(
-        message: 'Template prepared successfully at: $outputPath',
-        level: LogLevel.success,
-        step: ProcessStep.templatePreparation,
-        deviceId: serialNumber,
-        origin: 'system',
-      );
+      DebugLogger.d('✅ Hoàn thành chuẩn bị template', className: 'TemplateService', methodName: 'prepareFirmwareTemplate');
+      DebugLogger.d('📝 File template đã được lưu tại: $outputPath', className: 'TemplateService', methodName: 'prepareFirmwareTemplate');
 
       return outputPath;
     } catch (e, stack) {
-      print('DEBUG: Error in prepareFirmwareTemplate:');
-      print('Error: $e');
-      print('Stack trace: $stack');
-
-      _logService.addLog(
-        message: 'Error preparing template: $e\n$stack',
-        level: LogLevel.error,
-        step: ProcessStep.templatePreparation,
-        deviceId: serialNumber,
-        origin: 'system',
-      );
+      DebugLogger.e('❌ Lỗi trong prepareFirmwareTemplate:',
+        className: 'TemplateService',
+        methodName: 'prepareFirmwareTemplate',
+        error: e,
+        stackTrace: stack);
       return null;
     }
   }
 
-  /// Save board type metadata in a file next to the sketch
   Future<void> _saveBoardTypeMetadata(String sketchDir, String boardType) async {
     try {
       final metadataFile = File(path.join(sketchDir, 'board_metadata.json'));
@@ -222,9 +197,11 @@ class TemplateService {
         'timestamp': DateTime.now().toIso8601String(),
       };
       await metadataFile.writeAsString(json.encode(metadata));
-      print('DEBUG: Saved board metadata: $boardType');
+      DebugLogger.d('✅ Đã lưu metadata board: $boardType', className: 'TemplateService', methodName: '_saveBoardTypeMetadata');
     } catch (e) {
-      print('DEBUG: Failed to save board metadata: $e');
+      DebugLogger.e('❌ Lỗi lưu metadata board: $e',
+        className: 'TemplateService',
+        methodName: '_saveBoardTypeMetadata');
     }
   }
 
@@ -368,8 +345,8 @@ class TemplateService {
       // Validate hash if provided
       if (expectedHash != null) {
         final contentHash = md5.convert(utf8.encode(sourceCode)).toString();
-        print('DEBUG: Content hash: $contentHash');
-        print('DEBUG: Expected hash: $expectedHash');
+        DebugLogger.d('🔍 Content hash: $contentHash', className: 'TemplateService', methodName: 'saveFirmwareTemplate');
+        DebugLogger.d('🔍 Expected hash: $expectedHash', className: 'TemplateService', methodName: 'saveFirmwareTemplate');
 
         if (contentHash != expectedHash) {
           _logService.addLog(
@@ -385,11 +362,11 @@ class TemplateService {
       // Save the firmware file
       final file = File(filePath);
       await file.writeAsString(sourceCode);
-      print('DEBUG: Source code written to file: $filePath');
+      DebugLogger.d('💾 Source code written to file: $filePath', className: 'TemplateService', methodName: 'saveFirmwareTemplate');
 
       // Save metadata in the same directory structure
       await _saveMetadata(firmwareVersion, deviceType, filePath);
-      print('DEBUG: Metadata saved');
+      DebugLogger.d('✅ Metadata saved', className: 'TemplateService', methodName: 'saveFirmwareTemplate');
 
       _logService.addLog(
         message: 'Firmware template saved successfully',
@@ -400,16 +377,11 @@ class TemplateService {
 
       return filePath;
     } catch (e, stackTrace) {
-      print('DEBUG: Error in saveFirmwareTemplate:');
-      print('Error: $e');
-      print('Stack trace: $stackTrace');
-
-      _logService.addLog(
-        message: 'Error saving template: $e\n$stackTrace',
-        level: LogLevel.error,
-        step: ProcessStep.firmwareDownload,
-        origin: 'system',
-      );
+      DebugLogger.e('❌ Error in saveFirmwareTemplate:',
+        className: 'TemplateService',
+        methodName: 'saveFirmwareTemplate',
+        error: e,
+        stackTrace: stackTrace);
       return null;
     }
   }
@@ -434,71 +406,13 @@ class TemplateService {
       };
 
       await metadataFile.writeAsString(json.encode(metadata));
-      print('DEBUG: Metadata saved to: ${metadataFile.path}');
+      DebugLogger.d('✅ Metadata saved to: ${metadataFile.path}', className: 'TemplateService', methodName: '_saveMetadata');
     } catch (e) {
-      print('DEBUG: Error saving metadata: $e');
-      rethrow; // Re-throw to be handled by the caller
+      DebugLogger.e('❌ Error saving metadata: $e',
+        className: 'TemplateService',
+        methodName: '_saveMetadata');
+      rethrow;
     }
-  }
-
-  Future<String?> _getLocalTemplatePath(String firmwareVersion, String deviceType) async {
-    if (_templatesDir == null) {
-      await _initTemplatesDir();
-    }
-    final deviceTemplateDir = path.join(_templatesDir!, '${deviceType}_template');
-    final directoryExists = await Directory(deviceTemplateDir).exists();
-    if (!directoryExists) {
-      return null;
-    }
-
-    final firmwareFolderName = firmwareVersion.replaceAll('.', '_');
-    final firmwareFolderPath = path.join(deviceTemplateDir, firmwareFolderName);
-    final fileName = '$firmwareFolderName.ino';
-    final filePath = path.join(firmwareFolderPath, fileName);
-
-    final file = File(filePath);
-    if (await file.exists()) {
-      return filePath;
-    }
-    return null;
-  }
-
-  Future<List<String>> listAvailableFirmwareVersions(String deviceType) async {
-    final result = <String>[];
-    if (_templatesDir == null) {
-      await _initTemplatesDir();
-    }
-    final deviceTypeDir = path.join(_templatesDir!, deviceType);
-    final directory = Directory(deviceTypeDir);
-    if (await directory.exists()) {
-      await for (final file in directory.list()) {
-        if (file is File && file.path.endsWith('.ino')) {
-          final fileName = path.basename(file.path);
-          final version = fileName.replaceAll('_', '.').replaceAll('.ino', '');
-          result.add(version);
-        }
-      }
-    }
-    if (result.isEmpty) {
-      result.addAll(['Không có firmware nào được lưu trữ']);
-    }
-    return result;
-  }
-
-  Future<bool> deleteTemplate(String firmwareVersion, String deviceType) async {
-    final templatePath = await _getLocalTemplatePath(firmwareVersion, deviceType);
-    if (templatePath != null) {
-      final file = File(templatePath);
-      if (await file.exists()) {
-        await file.delete();
-        final metadataFile = File(path.join(_templatesDir!, deviceType, 'metadata', '${firmwareVersion.replaceAll('.', '_')}.json'));
-        if (await metadataFile.exists()) {
-          await metadataFile.delete();
-        }
-        return true;
-      }
-    }
-    return false;
   }
 
   Future<void> _cleanupTempFiles() async {
@@ -509,21 +423,19 @@ class TemplateService {
       await for (var entity in systemTemp.list()) {
         try {
           if (entity is Directory && pattern.hasMatch(path.basename(entity.path))) {
-            print('DEBUG: Attempting to clean up temp directory: ${entity.path}');
+            DebugLogger.d('🗑️ Attempting to clean up temp directory: ${entity.path}', className: 'TemplateService', methodName: '_cleanupTempFiles');
 
             // Try to make files writable before deletion using platform-specific approach
             await for (var file in entity.list(recursive: true)) {
               try {
                 if (file is File) {
-                  // Update last modified time to help release file locks
                   await file.setLastModified(DateTime.now());
-
-                  // On Windows, we'll use dart:io's setLastModified which helps release file locks
-                  // This is often enough to allow deletion
                   await Future.delayed(const Duration(milliseconds: 100));
                 }
               } catch (e) {
-                print('DEBUG: Failed to prepare file for deletion: $e');
+                DebugLogger.e('❌ Failed to prepare file for deletion: $e',
+                  className: 'TemplateService',
+                  methodName: '_cleanupTempFiles');
               }
             }
 
@@ -534,14 +446,15 @@ class TemplateService {
               try {
                 await entity.delete(recursive: true);
                 deleted = true;
-                print('DEBUG: Successfully cleaned up: ${entity.path}');
+                DebugLogger.d('✅ Successfully cleaned up: ${entity.path}', className: 'TemplateService', methodName: '_cleanupTempFiles');
               } catch (e) {
                 attempts++;
                 if (attempts < 3) {
-                  // Increase delay time with each attempt
                   await Future.delayed(Duration(milliseconds: 500 * attempts));
                 } else {
-                  print('DEBUG: Failed to delete after 3 attempts: ${entity.path}');
+                  DebugLogger.e('❌ Failed to delete after 3 attempts: ${entity.path}',
+                    className: 'TemplateService',
+                    methodName: '_cleanupTempFiles');
                   _logService.addLog(
                     message: 'Warning: Could not clean up temporary directory: ${entity.path}. Error: $e',
                     level: LogLevel.warning,
@@ -553,19 +466,21 @@ class TemplateService {
             }
           }
         } catch (e) {
-          print('DEBUG: Error processing temp directory ${entity.path}: $e');
-          // Continue with next directory even if one fails
+          DebugLogger.e('❌ Error processing temp directory ${entity.path}: $e',
+            className: 'TemplateService',
+            methodName: '_cleanupTempFiles');
         }
       }
     } catch (e) {
-      print('DEBUG: Non-critical error during temp cleanup: $e');
+      DebugLogger.e('❌ Non-critical error during temp cleanup: $e',
+        className: 'TemplateService',
+        methodName: '_cleanupTempFiles');
       _logService.addLog(
         message: 'Warning: Error during temporary file cleanup: $e',
         level: LogLevel.warning,
         step: ProcessStep.templatePreparation,
         origin: 'system',
       );
-      // Don't throw - allow the main process to continue
     }
   }
 }

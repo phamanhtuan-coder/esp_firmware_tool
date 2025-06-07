@@ -79,12 +79,20 @@ class DebugLogger {
   }
 
   /// Print error message
-  static void e(String message, {dynamic error, StackTrace? stackTrace}) {
+  static void e(String message, {String? className, String? methodName, dynamic error, StackTrace? stackTrace}) {
     if (_debugMode) {
+      String location = '';
+      if (className != null) {
+        location += '[$className]';
+      }
+      if (methodName != null) {
+        location += '.$methodName()';
+      }
+
       _loggingBloc.add(
         AddLogEvent(
           LogEntry(
-            message: message,
+            message: location.isNotEmpty ? '$location: $message' : message,
             timestamp: DateTime.now(),
             level: LogLevel.error,
             step: ProcessStep.other,

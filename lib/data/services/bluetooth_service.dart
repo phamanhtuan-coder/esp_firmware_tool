@@ -2,12 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
-import 'package:smart_net_firmware_loader/data/services/log_service.dart';
-import 'package:get_it/get_it.dart';
+import 'package:smart_net_firmware_loader/core/utils/debug_logger.dart';
+
 
 class BluetoothService {
-  final LogService _logService = GetIt.instance<LogService>();
   ServerSocket? _tcpServer;
   RawDatagramSocket? _udpSocket;
   StreamSubscription? _tcpSubscription;
@@ -17,33 +15,18 @@ class BluetoothService {
   Future<void> start({required Function(String) onSerialReceived}) async {
     _onSerialReceived = onSerialReceived;
 
-    _logService.addLog(
-      message: '🔄 Khởi động dịch vụ nhận QR code...',
-      level: LogLevel.info,
-      step: ProcessStep.scanQrCode,
-      origin: 'bluetooth',
-    );
+    DebugLogger.d('🔄 Khởi động dịch vụ nhận QR code...', className: 'BluetoothService', methodName: 'start');
 
     await _startTcpServer();
     await _startUdpServer();
 
-    _logService.addLog(
-      message: '✅ Đã sẵn sàng nhận dữ liệu từ QR code',
-      level: LogLevel.success,
-      step: ProcessStep.scanQrCode,
-      origin: 'bluetooth',
-    );
+    DebugLogger.d('✅ Đã sẵn sàng nhận dữ liệu từ QR code', className: 'BluetoothService', methodName: 'start');
   }
 
   Future<void> _startTcpServer() async {
     try {
       _tcpServer = await ServerSocket.bind(InternetAddress.anyIPv4, 12345);
-      _logService.addLog(
-        message: '» TCP server đang chạy trên cổng 12345',
-        level: LogLevel.success,
-        step: ProcessStep.scanQrCode,
-        origin: 'bluetooth',
-      );
+      DebugLogger.d('✅ TCP server đang chạy trên cổng 12345', className: 'BluetoothService', methodName: '_startTcpServer');
 
       _tcpSubscription = _tcpServer!.listen((socket) {
         socket
@@ -52,44 +35,26 @@ class BluetoothService {
               (data) {
                 final serial = data.trim();
                 if (serial.isNotEmpty) {
-                  _logService.addLog(
-                    message: '📱 Đã nhận serial qua TCP: $serial',
-                    level: LogLevel.info,
-                    step: ProcessStep.scanQrCode,
-                    origin: 'bluetooth',
-                  );
+                  DebugLogger.d('📱 Đã nhận serial qua TCP: $serial', className: 'BluetoothService', methodName: '_startTcpServer');
                   _onSerialReceived?.call(serial);
                 }
               },
               onError: (e) {
-                _logService.addLog(
-                  message: '❌ Lỗi TCP: $e',
-                  level: LogLevel.error,
-                  step: ProcessStep.scanQrCode,
-                  origin: 'bluetooth',
-                );
+                DebugLogger.e('❌ Lỗi TCP: $e', className: 'BluetoothService', methodName: '_startTcpServer');
               },
             );
       });
     } catch (e) {
-      _logService.addLog(
-        message: '❌ Không thể khởi động TCP server: $e',
-        level: LogLevel.error,
-        step: ProcessStep.scanQrCode,
-        origin: 'bluetooth',
-      );
+      DebugLogger.e('❌ Không thể khởi động TCP server: $e',
+        className: 'BluetoothService',
+        methodName: '_startTcpServer');
     }
   }
 
   Future<void> _startUdpServer() async {
     try {
       _udpSocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 12345);
-      _logService.addLog(
-        message: '» UDP server đang chạy trên cổng 12345',
-        level: LogLevel.success,
-        step: ProcessStep.scanQrCode,
-        origin: 'bluetooth',
-      );
+      DebugLogger.d('✅ UDP server đang chạy trên cổng 12345', className: 'BluetoothService', methodName: '_startUdpServer');
 
       _udpSubscription = _udpSocket!.listen((event) {
         if (event == RawSocketEvent.read) {
@@ -97,24 +62,16 @@ class BluetoothService {
           if (datagram != null) {
             final serial = utf8.decode(datagram.data).trim();
             if (serial.isNotEmpty) {
-              _logService.addLog(
-                message: '📱 Đã nhận serial qua UDP: $serial',
-                level: LogLevel.info,
-                step: ProcessStep.scanQrCode,
-                origin: 'bluetooth',
-              );
+              DebugLogger.d('📱 Đã nhận serial qua UDP: $serial', className: 'BluetoothService', methodName: '_startUdpServer');
               _onSerialReceived?.call(serial);
             }
           }
         }
       });
     } catch (e) {
-      _logService.addLog(
-        message: '❌ Không thể khởi động UDP server: $e',
-        level: LogLevel.error,
-        step: ProcessStep.scanQrCode,
-        origin: 'bluetooth',
-      );
+      DebugLogger.e('❌ Không thể khởi động UDP server: $e',
+        className: 'BluetoothService',
+        methodName: '_startUdpServer');
     }
   }
 
@@ -128,11 +85,6 @@ class BluetoothService {
     _tcpSubscription = null;
     _udpSubscription = null;
 
-    _logService.addLog(
-      message: '🛑 Đã dừng dịch vụ nhận QR code',
-      level: LogLevel.info,
-      step: ProcessStep.scanQrCode,
-      origin: 'bluetooth',
-    );
+    DebugLogger.d('🛑 Đã dừng dịch vụ nhận QR code', className: 'BluetoothService', methodName: 'stop');
   }
 }

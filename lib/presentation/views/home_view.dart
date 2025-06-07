@@ -498,7 +498,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       case 'select_local_file':
         return 'Cảnh báo: Sử dụng File Cục Bộ';
       case 'version_change':
-        return 'Cảnh báo: Thay đổi Phi����n bản Firmware';
+        return 'Cảnh báo: Thay đổi Phiên bản Firmware';
       case 'manual_serial':
         return 'Cảnh báo: Nhập Serial Thủ Công';
       default:
@@ -509,15 +509,15 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   String _getWarningMessage() {
     switch (_warningType) {
       case 'switch_to_local':
-        return 'Bạn đang chuyển sang chế độ upload file firmware cục b��. Việc này có thể g��y ra rủi ro nếu file không đư���c kiểm tra. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
+        return 'Bạn đang chuyển sang chế độ upload file firmware cục bộ. Việc này có thể gây ra rủi ro nếu file không được kiểm tra. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       case 'switch_to_version':
         return 'Bạn đang chuyển sang chế độ chọn version từ server. Mọi file firmware cục bộ sẽ được xóa bỏ. Tiếp tục?';
       case 'select_local_file':
-        return 'Bạn đang sử d���ng file firmware cục bộ. Vi��c này có thể gây ra rủi ro nếu file không được kiểm tra. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
+        return 'Bạn đang sử dụng file firmware cục bộ. Việc này có thể gây ra rủi ro nếu file không được kiểm tra. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       case 'version_change':
-        return 'Bạn đang thay đổi phiên b��n firmware so với mặc định. Việc này có thể gây ra rủi ro nếu phiên bản không tương thích. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp t���c?';
+        return 'Bạn đang thay đổi phiên bản firmware so với mặc định. Việc này có thể gây ra rủi ro nếu phiên bản không tương thích. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       case 'manual_serial':
-        return 'Bạn đang nhập serial thủ c��ng thay vì quét QR code. Việc này có thể gây ra rủi ro nếu serial không chính xác. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
+        return 'Bạn đang nhập serial thủ công thay vì quét QR code. Việc này có thể gây ra rủi ro nếu serial không chính xác. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       default:
         return 'Hành động này có thể gây ra rủi ro. Bạn có chắc muốn tiếp tục?';
     }
