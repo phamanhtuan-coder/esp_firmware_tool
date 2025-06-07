@@ -4,6 +4,10 @@ import 'package:smart_net_firmware_loader/data/models/firmware.dart';
 import 'package:smart_net_firmware_loader/data/models/planning.dart';
 
 abstract class ApiRepository {
+  Future<Map<String, dynamic>> login({
+    required String username,
+    required String password,
+  });
   Future<List<Planning>> fetchPlannings();
   Future<List<Batch>> fetchBatches(String? planningId);
   Future<List<Device>> fetchDevices(String batchId);

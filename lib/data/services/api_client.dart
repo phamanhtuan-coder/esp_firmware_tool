@@ -7,6 +7,7 @@ import 'package:smart_net_firmware_loader/data/models/device.dart';
 import 'package:smart_net_firmware_loader/data/models/firmware.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/data/models/planning.dart';
+import 'package:smart_net_firmware_loader/data/services/auth_service.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 import 'package:smart_net_firmware_loader/domain/repositories/api_repository.dart';
 import 'package:get_it/get_it.dart';
@@ -16,10 +17,12 @@ class ApiService implements ApiRepository {
       'https://iothomeconnectapiv2-production.up.railway.app/api';
   final http.Client _httpClient = http.Client();
   final LogService _logService = GetIt.instance<LogService>();
+  final AuthService _authService = GetIt.instance<AuthService>();
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'Authorization': 'Bearer ${_authService.getToken() ?? ''}',
       };
 
   final Map<int, List<Firmware>> _firmwareCache = {};
@@ -496,6 +499,49 @@ class ApiService implements ApiRepository {
         'success': false,
         'message': errorMessage,
         'errorCode': 'exception',
+      };
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> login({
+    required String username,
+    required String password,
+  }) async {
+    try {
+      final response = await _httpClient.post(
+        Uri.parse('$baseUrl/auth/employee/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'username': username,
+          'password': password,
+        }),
+      );
+
+      final responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && responseData['accessToken'] != null) {
+        await _authService.saveToken(responseData['accessToken']);
+        return {
+          'success': true,
+          'data': responseData,
+        };
+      }
+
+      return {
+        'success': false,
+        'message': responseData['message'] ?? 'Đăng nhập thất bại',
+        'data': responseData,
+      };
+    } catch (e) {
+      DebugLogger.e(
+        '❌ Lỗi trong quá trình đăng nhập: $e',
+        className: 'ApiService',
+        methodName: 'login',
+      );
+      return {
+        'success': false,
+        'message': 'Lỗi kết nối: $e',
       };
     }
   }

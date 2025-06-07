@@ -17,6 +17,9 @@ import 'package:smart_net_firmware_loader/presentation/widgets/loading_overlay.d
 import 'package:smart_net_firmware_loader/presentation/widgets/warning_dialog.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'data/services/auth_guard_service.dart';
+import 'data/services/auth_service.dart';
+
 
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -29,11 +32,15 @@ Future<void> setupServiceLocator() async {
   final prefs = await SharedPreferences.getInstance();
   getIt.registerSingleton<SharedPreferences>(prefs);
 
-  // Register ThemeService immediately after SharedPreferences
-  getIt.registerSingleton<ThemeService>(ThemeService(prefs));
-
-  // Register other services
+  // Register core services first
   getIt.registerSingleton<LogService>(LogService());
+  getIt.registerSingleton<ThemeService>(ThemeService(prefs));
+  getIt.registerSingleton<AuthService>(AuthService(prefs));
+
+  // Register blocs that other services might depend on
+  getIt.registerSingleton<LoggingBloc>(LoggingBloc());
+
+  // Register API and communication services
   getIt.registerSingleton<ApiService>(ApiService());
   getIt.registerSingleton<ArduinoService>(ArduinoService());
   getIt.registerSingleton<BluetoothService>(BluetoothService());
@@ -44,9 +51,20 @@ Future<void> setupServiceLocator() async {
     TemplateService(logService: getIt<LogService>()),
   );
 
-  // Register blocs
-  getIt.registerSingleton<LoggingBloc>(LoggingBloc());
+  // Register other blocs
   getIt.registerFactory<HomeBloc>(() => HomeBloc());
+
+  // Initialize AuthGuardService last since it depends on AuthService
+  getIt.registerSingleton<AuthGuardService>(
+    AuthGuardService(getIt<AuthService>()),
+  );
+}
+
+void setupDependencies() {
+  // Add AuthGuardService
+  final authService = GetIt.instance<AuthService>();
+  final authGuard = AuthGuardService(authService);
+  GetIt.instance.registerSingleton<AuthGuardService>(authGuard);
 }
 
 Future<void> setupWindow() async {
@@ -340,6 +358,3 @@ class CloseWindowListener extends WindowListener {
     }
   }
 }
-
-
-

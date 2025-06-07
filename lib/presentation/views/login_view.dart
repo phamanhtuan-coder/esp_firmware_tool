@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
+import 'package:http/http.dart' as http;
 import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
 import 'package:smart_net_firmware_loader/core/config/app_routes.dart';
-import 'package:smart_net_firmware_loader/core/config/app_theme.dart';
+import 'package:smart_net_firmware_loader/data/services/api_client.dart';
 import 'package:smart_net_firmware_loader/data/services/theme_service.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
 import 'package:smart_net_firmware_loader/main.dart';
@@ -59,7 +61,7 @@ class _LoginViewState extends State<LoginView> {
     super.dispose();
   }
 
-  void _login(BuildContext context) {
+  Future<void> _login(BuildContext context) async {
     if (_usernameController.text.isEmpty || _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -69,10 +71,45 @@ class _LoginViewState extends State<LoginView> {
       );
       return;
     }
+
     setState(() => _isLoading = true);
-    context.read<HomeBloc>().add(LoadInitialDataEvent());
-    Navigator.pushReplacementNamed(context, AppRoutes.home);
-    setState(() => _isLoading = false);
+
+    try {
+      final apiService = GetIt.instance<ApiService>();
+      final result = await apiService.login(
+        username: _usernameController.text,
+        password: _passwordController.text,
+      );
+
+      if (result['success'] == true) {
+        if (mounted) {
+          context.read<HomeBloc>().add(LoadInitialDataEvent());
+          Navigator.pushReplacementNamed(context, AppRoutes.home);
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? 'Đăng nhập thất bại'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi không mong muốn: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override
@@ -155,33 +192,10 @@ class _LoginViewState extends State<LoginView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (_isLoading) ...[
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.error.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(
-                              Icons.error_outline,
-                              size: 20,
-                              color: AppColors.error,
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Vui lòng điền đầy đủ thông tin đăng nhập',
-                              style: TextStyle(color: AppColors.error),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
                     TextField(
                       controller: _usernameController,
                       onChanged: (_) => setState(() {}),
+                      onSubmitted: (_) => _login(context),  // Thêm submit handler
                       style: TextStyle(color: textColor),
                       decoration: InputDecoration(
                         labelText: 'Tên đăng nhập',
@@ -229,6 +243,7 @@ class _LoginViewState extends State<LoginView> {
                     TextField(
                       controller: _passwordController,
                       onChanged: (_) => setState(() {}),
+                      onSubmitted: (_) => _login(context),  // Thêm submit handler
                       obscureText: !_showPassword,
                       style: TextStyle(color: textColor),
                       decoration: InputDecoration(
