@@ -354,8 +354,10 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
           ),
         );
 
-        // Start serial monitor
-        _startSerialMonitor(deviceSerial);
+        // Start serial monitor after a small delay to let the device initialize
+        Future.delayed(const Duration(milliseconds: 800), () {
+          _startSerialMonitor(deviceSerial);
+        });
       } else {
         throw Exception('Flashing failed - check Arduino CLI output in console');
       }
@@ -385,8 +387,22 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       );
     } finally {
       print('DEBUG: Flash firmware completed');
+      // Ensure the flash button state is reset regardless of success or failure
       if (mounted) {
-        setState(() => _isFlashing = false);
+        // Reset flash button state with a small delay to ensure UI updates correctly
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) {
+            setState(() {
+              _isFlashing = false;
+              // Make sure _canFlash is updated to reflect current state
+              _canFlash = _serialController.text.isNotEmpty &&
+                  _selectedPort != null &&
+                  (context.read<HomeBloc>().state.isLocalFileMode ?
+                      context.read<HomeBloc>().state.localFilePath != null :
+                      context.read<HomeBloc>().state.selectedFirmwareId != null);
+            });
+          }
+        });
       }
     }
   }
@@ -493,7 +509,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       case 'version_change':
         return 'Bạn đang thay đổi phiên b��n firmware so với mặc định. Việc này có thể gây ra rủi ro nếu phiên bản không tương thích. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp t���c?';
       case 'manual_serial':
-        return 'Bạn đang nhập serial thủ công thay vì quét QR code. Việc này có thể gây ra rủi ro nếu serial không chính xác. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
+        return 'Bạn đang nhập serial thủ c��ng thay vì quét QR code. Việc này có thể gây ra rủi ro nếu serial không chính xác. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       default:
         return 'Hành động này có thể gây ra rủi ro. Bạn có chắc muốn tiếp tục?';
     }

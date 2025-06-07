@@ -1180,4 +1180,53 @@ class ArduinoService implements ArduinoRepository {
     }
     return LogLevel.info;
   }
+
+  Stream<String> startSerialMonitor(String port, int baudRate) {
+    final controller = StreamController<String>();
+
+    // Command to start monitor
+    final command = '$_arduinoCliPath monitor -p $port -c baudrate=$baudRate';
+
+    // Start process and pipe output
+    Process.start(command, [], runInShell: true).then((process) {
+      _activeProcess = process;
+
+      process.stdout.transform(utf8.decoder).listen((data) {
+        if (!controller.isClosed) {
+          controller.add(data);
+        }
+      });
+
+      process.stderr.transform(utf8.decoder).listen((data) {
+        if (!controller.isClosed) {
+          controller.addError(data);
+        }
+      });
+
+      process.exitCode.then((code) {
+        if (!controller.isClosed) {
+          if (code != 0) {
+            controller.addError('Monitor process exited with code $code');
+          }
+          controller.close();
+        }
+      });
+    }).catchError((error) {
+      controller.addError(error);
+      controller.close();
+    });
+
+    return controller.stream;
+  }
+
+  void stopSerialMonitor() {
+    _activeProcess?.kill();
+    _activeProcess = null;
+  }
+
+  void sendSerialCommand(String command) {
+    if (_activeProcess != null) {
+      _activeProcess!.stdin.writeln(command);
+    }
+  }
 }

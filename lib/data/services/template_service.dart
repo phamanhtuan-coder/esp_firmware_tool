@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
@@ -239,12 +240,15 @@ class TemplateService {
   }
 
   String _processDefines(String content, String serialNumber, String deviceId, {bool useQuotesForDefines = true}) {
+    // Clean up serial number and device ID - remove any duplicates
+    serialNumber = _cleanupIdentifier(serialNumber);
+    deviceId = _cleanupIdentifier(deviceId);
 
-    // Check if the defines already exist in the content, including template placeholders
+    // Check if the defines already exist in the content
     bool hasSerialNumberDefine = content.contains('#define SERIAL_NUMBER') ||
-                                 content.contains('#define serial_number');
+                                content.contains('#define serial_number');
     bool hasDeviceIdDefine = content.contains('#define DEVICE_ID') ||
-                             content.contains('#define device_id');
+                            content.contains('#define device_id');
 
     // Replace template placeholders first
     content = content.replaceAll('{{SERIAL_NUMBER}}', serialNumber);
@@ -278,14 +282,22 @@ class TemplateService {
 
     // If defines don't exist, add them at the beginning of the file
     if (!hasSerialNumberDefine) {
-      content = '#define SERIAL_NUMBER "$serialNumber"\n' + content;
+      content = '#define SERIAL_NUMBER "$serialNumber"\n$content';
     }
 
     if (!hasDeviceIdDefine) {
-      content = '#define DEVICE_ID "$deviceId"\n' + content;
+      content = '#define DEVICE_ID "$deviceId"\n $content';
     }
 
     return content;
+  }
+
+  // Helper method to clean up identifiers by removing duplicates
+  String _cleanupIdentifier(String identifier) {
+    // Remove any non-alphanumeric characters and split
+    final parts = identifier.replaceAll(RegExp(r'[^a-zA-Z0-9]'), ' ').split(' ');
+    // Filter out empty parts and duplicates while preserving order
+    return LinkedHashSet<String>.from(parts.where((p) => p.isNotEmpty)).join('');
   }
 
   Future<String?> saveFirmwareTemplate(

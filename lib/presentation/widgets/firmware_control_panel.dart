@@ -100,7 +100,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
 
       final state = context.read<HomeBloc>().state;
       if (state.selectedBatchId == null) {
-        _serialErrorText = 'Cần chọn lô sản xuất để xác th��c serial';
+        _serialErrorText = 'Cần chọn lô sản xuất để xác thực serial';
         _serialSuccessText = null;
         _isSerialValid = false;
         return;
@@ -138,7 +138,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     final state = context.read<HomeBloc>().state;
     if (state.selectedBatchId == null) {
       setState(() {
-        _serialErrorText = 'Vui lòng ch���n lô sản xuất trước khi quét QR';
+        _serialErrorText = 'Vui lòng chọn lô sản xuất trước khi quét QR';
         _serialSuccessText = null;
         _isSerialValid = false;
       });
@@ -252,30 +252,27 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
   @override
   void didUpdateWidget(FirmwareControlPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    // Force recalculate flash status when relevant props change
     if (oldWidget.isLocalFileMode != widget.isLocalFileMode ||
         oldWidget.selectedPort != widget.selectedPort ||
-        oldWidget.selectedFirmwareVersion != widget.selectedFirmwareVersion) {
-      _canFlash();
-      setState(() {});
+        oldWidget.selectedFirmwareVersion != widget.selectedFirmwareVersion ||
+        oldWidget.serialController.text != widget.serialController.text) {
+      _recalculateFlashStatus();
     }
   }
 
-  bool _canFlash() {
-    if (widget.isLocalFileMode) {
-      final state = context.read<HomeBloc>().state;
-      final canFlash =
-          state.localFilePath != null &&
-          widget.selectedPort != null &&
-          _isSerialValid;
+  void _recalculateFlashStatus() {
+    if (!mounted) return;
+
+    final state = context.read<HomeBloc>().state;
+    final canFlash = widget.selectedPort != null &&
+        _isSerialValid &&
+        ((widget.isLocalFileMode && state.localFilePath != null) ||
+         (!widget.isLocalFileMode && widget.selectedFirmwareVersion != null));
+
+    if (mounted) {
       widget.onFlashStatusChanged(canFlash);
-      return canFlash;
-    } else {
-      final canFlash =
-          widget.selectedFirmwareVersion != null &&
-          widget.selectedPort != null &&
-          _isSerialValid;
-      widget.onFlashStatusChanged(canFlash);
-      return canFlash;
     }
   }
 
@@ -365,7 +362,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     _portCheckTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
 
-      // Kiểm tra port có bị ngắt kết nối không
+      // Kiểm tra port c��� bị ngắt kết nối không
       final currentPorts = Set<String>.from(widget.availablePorts);
       final disconnectedPorts = _previousPorts.difference(currentPorts);
       final newPorts = currentPorts.difference(_previousPorts);
@@ -890,43 +887,57 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                   children: [
                     Builder(
                       builder: (context) {
-                        final canFlash =
+                        final canFlash = widget.selectedPort != null &&
                             _isSerialValid &&
-                            widget.selectedPort != null &&
-                            (widget.isLocalFileMode
-                                ? state.localFilePath != null
-                                : widget.selectedFirmwareVersion != null);
+                            ((widget.isLocalFileMode && state.localFilePath != null) ||
+                             (!widget.isLocalFileMode && widget.selectedFirmwareVersion != null));
 
-                        return ElevatedButton(
-                          onPressed: !canFlash
-                            ? null
-                            : () {
-                                widget.onWarningRequested?.call('flash_firmware');
-                              },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.flash,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 12,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.flash_on,
-                                color: canFlash ? Colors.white : Colors.grey[400],
+                        return Stack(
+                          children: [
+                            ElevatedButton(
+                              key: ValueKey<bool>(canFlash),
+                              onPressed: canFlash ? () {
+                                widget.onWarningRequested('flash_firmware');
+                              } : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.flash,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 12,
+                                ),
+                                // Add disabled style
+                                disabledBackgroundColor: Colors.grey[300],
+                                disabledForegroundColor: Colors.grey[600],
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Nạp Firmware',
-                                style: TextStyle(
-                                  color: canFlash ? Colors.white : Colors.grey[400],
-                                  fontWeight: FontWeight.w500,
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.flash_on),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Nạp Firmware',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (!canFlash)
+                              Positioned(
+                                right: 0,
+                                top: 0,
+                                child: Tooltip(
+                                  message: _getDisabledReason(),
+                                  child: const Icon(
+                                    Icons.info_outline,
+                                    size: 16,
+                                    color: Colors.grey,
+                                  ),
                                 ),
                               ),
-                            ],
-                          ),
+                          ],
                         );
                       },
                     ),
@@ -1014,5 +1025,22 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
         }
       },
     );
+  }
+
+  String _getDisabledReason() {
+    final state = context.read<HomeBloc>().state;
+    if (widget.selectedPort == null) {
+      return 'Cổng USB chưa được chọn';
+    }
+    if (!_isSerialValid) {
+      return 'Số serial không hợp lệ';
+    }
+    if (widget.isLocalFileMode && state.localFilePath == null) {
+      return 'Chưa chọn file firmware';
+    }
+    if (!widget.isLocalFileMode && widget.selectedFirmwareVersion == null) {
+      return 'Chưa chọn phiên bản firmware';
+    }
+    return '';
   }
 }

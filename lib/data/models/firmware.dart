@@ -5,13 +5,13 @@ class Firmware {
   final String filePath;
   final int templateId;
   final bool isMandatory;
-  final DateTime createdAt;
-  final DateTime updatedAt;
+  final DateTime? createdAt;  // Made nullable
+  final DateTime? updatedAt;  // Made nullable
   final bool isDeleted;
   final DateTime? testedAt;
   final bool isApproved;
   final String? note;
-  final List<FirmwareLog> logs;
+  final List<dynamic> logs;  // Changed to List<dynamic> to handle raw JSON
   final String templateName;
   final bool templateIsDeleted;
 
@@ -22,8 +22,8 @@ class Firmware {
     required this.filePath,
     required this.templateId,
     required this.isMandatory,
-    required this.createdAt,
-    required this.updatedAt,
+    this.createdAt,  // Made optional
+    this.updatedAt,  // Made optional
     required this.isDeleted,
     this.testedAt,
     required this.isApproved,
@@ -35,26 +35,20 @@ class Firmware {
 
   factory Firmware.fromJson(Map<String, dynamic> json) {
     return Firmware(
-      firmwareId: json['firmware_id'] as int,
-      version: json['version'] as String,
-      name: json['name'] as String,
-      filePath: json['file_path'] as String,
-      templateId: json['template_id'] as int,
+      firmwareId: json['firmware_id'] ?? 0,
+      version: json['version'] ?? '',
+      name: json['name'] ?? '',
+      filePath: json['file_path'] ?? '',
+      templateId: json['template_id'] ?? 0,
       isMandatory: json['is_mandatory'] == 1,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : null,
+      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at']) : null,
       isDeleted: json['is_deleted'] == 1,
-      testedAt:
-          json['tested_at'] != null
-              ? DateTime.parse(json['tested_at'] as String)
-              : null,
+      testedAt: json['tested_at'] != null ? DateTime.parse(json['tested_at']) : null,
       isApproved: json['is_approved'] == 1,
-      note: json['note'] as String?,
-      logs:
-          (json['logs'] as List<dynamic>)
-              .map((e) => FirmwareLog.fromJson(e))
-              .toList(),
-      templateName: json['template_name'] as String,
+      note: json['note'],
+      logs: (json['logs'] as List<dynamic>?) ?? [],
+      templateName: json['template_name'] ?? '',
       templateIsDeleted: json['template_is_deleted'] == 1,
     );
   }
