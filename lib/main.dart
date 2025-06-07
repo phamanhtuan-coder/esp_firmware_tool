@@ -20,6 +20,7 @@ import 'package:window_manager/window_manager.dart';
 
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<AppState> appKey = GlobalKey<AppState>();
 
 Future<void> setupServiceLocator() async {
   final getIt = GetIt.instance;
@@ -50,21 +51,28 @@ Future<void> setupServiceLocator() async {
 
 Future<void> setupWindow() async {
   await windowManager.ensureInitialized();
-  await windowManager.waitUntilReadyToShow();
 
+  // Set window properties first
   await Future.wait([
-    windowManager.center(),
     windowManager.setPreventClose(true),
     windowManager.setSkipTaskbar(false),
     windowManager.setTitle('SmartNet Firmware Loader'),
     windowManager.setTitleBarStyle(TitleBarStyle.normal),
     windowManager.setBackgroundColor(Colors.transparent),
     windowManager.setHasShadow(true),
+    // Set minimum size constraints
+    windowManager.setMinimumSize(const Size(1024, 768)),
   ]);
 
-  // Maximize window at startup
-  await windowManager.maximize();
+  // Wait for window to be ready
+  await windowManager.waitUntilReadyToShow();
+
+  // Center and show window
+  await windowManager.center();
   await windowManager.show();
+
+  // Maximize after showing
+  await windowManager.maximize();
   await windowManager.focus();
 }
 
@@ -81,7 +89,7 @@ void main() async {
   windowManager.addListener(CloseWindowListener());
 
   // Run app
-  runApp(const MyApp());
+  runApp(MyApp(key: appKey));
 }
 
 Future<bool> showCloseConfirmationDialog() async {
@@ -96,6 +104,63 @@ Future<bool> showCloseConfirmationDialog() async {
       type: 'warning',
     ),
   ) ?? false;
+}
+
+class MyApp extends StatefulWidget {
+  const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => AppState();
+}
+
+class AppState extends State<MyApp> {
+  bool _isDarkMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    final themeService = GetIt.instance<ThemeService>();
+    final isDark = await themeService.isDarkMode();
+    if (mounted) {
+      setState(() {
+        _isDarkMode = isDark;
+      });
+    }
+  }
+
+  void updateTheme(bool isDark) {
+    setState(() {
+      _isDarkMode = isDark;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(
+          create: (context) => GetIt.instance<LoggingBloc>(),
+        ),
+        BlocProvider(
+          create: (context) => GetIt.instance<HomeBloc>(),
+        ),
+      ],
+      child: MaterialApp(
+        navigatorKey: navigatorKey,
+        title: 'SmartNet Firmware Loader',
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
+        initialRoute: AppRoutes.login,
+        routes: AppRoutes.routes,
+        debugShowCheckedModeBanner: false,
+      ),
+    );
+  }
 }
 
 class CloseWindowListener extends WindowListener {
@@ -148,77 +213,5 @@ class CloseWindowListener extends WindowListener {
         await windowManager.destroy();
       }
     }
-  }
-}
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
-
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  bool _isDarkMode = false;
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadThemeSettings();
-  }
-
-  Future<void> _loadThemeSettings() async {
-    try {
-      final themeService = GetIt.instance<ThemeService>();
-      final isDark = await themeService.isDarkMode();
-      if (mounted) {
-        setState(() {
-          _isDarkMode = isDark;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      print('Error loading theme settings: $e');
-      if (mounted) {
-        setState(() {
-          _isDarkMode = false;
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: CircularProgressIndicator(),
-          ),
-        ),
-      );
-    }
-
-    return MultiBlocProvider(
-      providers: [
-        BlocProvider<HomeBloc>(
-          create: (context) => GetIt.instance<HomeBloc>(),
-        ),
-        BlocProvider<LoggingBloc>(
-          create: (context) => GetIt.instance<LoggingBloc>(),
-        ),
-      ],
-      child: MaterialApp(
-        navigatorKey: navigatorKey,
-        debugShowCheckedModeBanner: false,
-        title: 'SmartNet Firmware Loader',
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
-        initialRoute: AppRoutes.splash,
-        onGenerateRoute: AppRoutes.onGenerateRoute,
-      ),
-    );
   }
 }

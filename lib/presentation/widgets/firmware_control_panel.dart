@@ -595,13 +595,16 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Padding(
-                        padding: EdgeInsets.all(16),
+                      Padding(
+                        padding: const EdgeInsets.all(16),
                         child: Text(
                           'File Firmware',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
+                              color: widget.isDarkTheme
+                                  ? AppColors.darkTextPrimary
+                                  : AppColors.text
                           ),
                         ),
                       ),
@@ -698,13 +701,16 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Padding(
-                        padding: EdgeInsets.all(16),
+                      Padding(
+                        padding: const EdgeInsets.all(16),
                         child: Text(
                           'Số Serial',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
+                              color: widget.isDarkTheme
+                                  ? AppColors.darkTextPrimary
+                                  : AppColors.text
                           ),
                         ),
                       ),
@@ -818,13 +824,16 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Padding(
-                        padding: EdgeInsets.all(16),
+                      Padding(
+                        padding: const EdgeInsets.all(16),
                         child: Text(
                           'Cổng USB',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
+                            color: widget.isDarkTheme
+                                ? AppColors.darkTextPrimary
+                                : AppColors.text
                           ),
                         ),
                       ),

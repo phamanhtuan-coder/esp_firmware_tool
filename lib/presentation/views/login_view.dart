@@ -3,8 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
 import 'package:smart_net_firmware_loader/core/config/app_routes.dart';
+import 'package:smart_net_firmware_loader/core/config/app_theme.dart';
 import 'package:smart_net_firmware_loader/data/services/theme_service.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
+import 'package:smart_net_firmware_loader/main.dart';
 
 class LoginView extends StatefulWidget {
   const LoginView({super.key});
@@ -44,6 +46,9 @@ class _LoginViewState extends State<LoginView> {
       setState(() {
         _isDarkMode = newMode;
       });
+
+      // Update app-level theme state
+      appKey.currentState?.updateTheme(newMode);
     }
   }
 
@@ -72,12 +77,13 @@ class _LoginViewState extends State<LoginView> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDark ? AppColors.darkBackground : AppColors.background;
-    final cardColor = isDark ? AppColors.darkCardBackground : Colors.white;
-    final textColor = isDark ? AppColors.darkTextPrimary : AppColors.text;
-    final secondaryTextColor = isDark ? AppColors.darkTextSecondary : AppColors.textSecondary;
-    final inputFillColor = isDark ? AppColors.darkPanelBackground : AppColors.componentBackground;
+    // Instead of using local theme state, use the app's current theme
+    _isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = _isDarkMode ? AppColors.darkBackground : AppColors.background;
+    final cardColor = _isDarkMode ? AppColors.darkCardBackground : Colors.white;
+    final textColor = _isDarkMode ? AppColors.darkTextPrimary : AppColors.text;
+    final secondaryTextColor = _isDarkMode ? AppColors.darkTextSecondary : AppColors.textSecondary;
+    final inputFillColor = _isDarkMode ? AppColors.darkPanelBackground : AppColors.componentBackground;
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -109,7 +115,7 @@ class _LoginViewState extends State<LoginView> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: (isDark ? Colors.black : AppColors.shadowColor).withOpacity(0.1),
+                      color: (_isDarkMode ? Colors.black : AppColors.shadowColor).withOpacity(0.1),
                       blurRadius: 20,
                       offset: const Offset(0, 10),
                     ),
@@ -127,7 +133,7 @@ class _LoginViewState extends State<LoginView> {
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: isDark ? AppColors.accent : AppColors.primary,
+                  color: _isDarkMode ? AppColors.accent : AppColors.primary,
                 ),
               ),
               const SizedBox(height: 8),
@@ -143,7 +149,7 @@ class _LoginViewState extends State<LoginView> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: (isDark ? Colors.black : AppColors.shadowColor).withOpacity(0.1),
+                      color: (_isDarkMode ? Colors.black : AppColors.shadowColor).withOpacity(0.1),
                       blurRadius: 20,
                     ),
                   ],
@@ -184,24 +190,24 @@ class _LoginViewState extends State<LoginView> {
                         hintText: 'Nhập tên đăng nhập của bạn',
                         prefixIcon: Icon(
                           Icons.person_outline,
-                          color: isDark ? AppColors.accent : AppColors.primary,
+                          color: _isDarkMode ? AppColors.accent : AppColors.primary,
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide(
-                            color: isDark ? AppColors.darkDivider : AppColors.borderColor,
+                            color: _isDarkMode ? AppColors.darkDivider : AppColors.borderColor,
                           ),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide(
-                            color: isDark ? AppColors.darkDivider : AppColors.borderColor,
+                            color: _isDarkMode ? AppColors.darkDivider : AppColors.borderColor,
                           ),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide(
-                            color: isDark ? AppColors.accent : AppColors.primary,
+                            color: _isDarkMode ? AppColors.accent : AppColors.primary,
                             width: 2,
                           ),
                         ),
@@ -213,7 +219,7 @@ class _LoginViewState extends State<LoginView> {
                         ),
                         labelStyle: TextStyle(
                           color: _usernameController.text.isNotEmpty
-                              ? (isDark ? AppColors.accent : AppColors.primary)
+                              ? (_isDarkMode ? AppColors.accent : AppColors.primary)
                               : secondaryTextColor,
                         ),
                         hintStyle: TextStyle(
@@ -232,31 +238,31 @@ class _LoginViewState extends State<LoginView> {
                         hintText: 'Nhập mật khẩu của bạn',
                         prefixIcon: Icon(
                           Icons.lock_outline,
-                          color: isDark ? AppColors.accent : AppColors.primary,
+                          color: _isDarkMode ? AppColors.accent : AppColors.primary,
                         ),
                         suffixIcon: IconButton(
                           icon: Icon(
                             _showPassword ? Icons.visibility_off : Icons.visibility,
-                            color: isDark ? AppColors.accent : AppColors.primary,
+                            color: _isDarkMode ? AppColors.accent : AppColors.primary,
                           ),
                           onPressed: () => setState(() => _showPassword = !_showPassword),
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide(
-                            color: isDark ? AppColors.darkDivider : AppColors.borderColor,
+                            color: _isDarkMode ? AppColors.darkDivider : AppColors.borderColor,
                           ),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide(
-                            color: isDark ? AppColors.darkDivider : AppColors.borderColor,
+                            color: _isDarkMode ? AppColors.darkDivider : AppColors.borderColor,
                           ),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide(
-                            color: isDark ? AppColors.accent : AppColors.primary,
+                            color: _isDarkMode ? AppColors.accent : AppColors.primary,
                             width: 2,
                           ),
                         ),
@@ -268,7 +274,7 @@ class _LoginViewState extends State<LoginView> {
                         ),
                         labelStyle: TextStyle(
                           color: _passwordController.text.isNotEmpty
-                              ? (isDark ? AppColors.accent : AppColors.primary)
+                              ? (_isDarkMode ? AppColors.accent : AppColors.primary)
                               : secondaryTextColor,
                         ),
                         hintStyle: TextStyle(
@@ -282,8 +288,8 @@ class _LoginViewState extends State<LoginView> {
                       child: ElevatedButton(
                         onPressed: _isLoading ? null : () => _login(context),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isDark ? AppColors.accent : AppColors.primary,
-                          foregroundColor: isDark ? Colors.black : Colors.white,
+                          backgroundColor: _isDarkMode ? AppColors.accent : AppColors.primary,
+                          foregroundColor: _isDarkMode ? Colors.black : Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -295,7 +301,7 @@ class _LoginViewState extends State<LoginView> {
                                 width: 24,
                                 height: 24,
                                 child: CircularProgressIndicator(
-                                  color: isDark ? Colors.black : Colors.white,
+                                  color: _isDarkMode ? Colors.black : Colors.white,
                                   strokeWidth: 2,
                                 ),
                               )
