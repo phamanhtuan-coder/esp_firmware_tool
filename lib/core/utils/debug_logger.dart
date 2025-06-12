@@ -13,7 +13,35 @@ class DebugLogger {
     _debugMode = enabled;
   }
 
-  static LoggingBloc get _loggingBloc => GetIt.instance<LoggingBloc>();
+  /// Safely get the logging bloc if available
+  static LoggingBloc? _getLoggingBloc() {
+    try {
+      if (!GetIt.instance.isRegistered<LoggingBloc>()) {
+        return null;
+      }
+      return GetIt.instance<LoggingBloc>();
+    } catch (e) {
+      print('Error accessing LoggingBloc: $e');
+      return null;
+    }
+  }
+
+  /// Safely add a log entry to the bloc
+  static void _safeAddLog(LogEntry log) {
+    try {
+      final bloc = _getLoggingBloc();
+      if (bloc != null && !bloc.isDisposed) {
+        bloc.add(AddLogEvent(log));
+      } else {
+        // Fallback to console if bloc is not available
+        print('${log.formattedTimestamp} [${log.level}] ${log.message}');
+      }
+    } catch (e) {
+      // If anything goes wrong, just print to console
+      print('Logger error: $e');
+      print('Original log: ${log.message}');
+    }
+  }
 
   /// Print debug message with class name and method name
   static void d(String message, {String? className, String? methodName}) {
@@ -30,15 +58,13 @@ class DebugLogger {
         location += '.$methodName()';
       }
 
-      _loggingBloc.add(
-        AddLogEvent(
-          LogEntry(
-            message: '$location: $message',
-            timestamp: DateTime.now(),
-            level: LogLevel.verbose,
-            step: ProcessStep.other,
-            origin: 'debug',
-          ),
+      _safeAddLog(
+        LogEntry(
+          message: '$location: $message',
+          timestamp: DateTime.now(),
+          level: LogLevel.verbose,
+          step: ProcessStep.other,
+          origin: 'debug',
         ),
       );
     }
@@ -47,15 +73,13 @@ class DebugLogger {
   /// Print info message
   static void i(String message) {
     if (_debugMode) {
-      _loggingBloc.add(
-        AddLogEvent(
-          LogEntry(
-            message: message,
-            timestamp: DateTime.now(),
-            level: LogLevel.info,
-            step: ProcessStep.other,
-            origin: 'debug',
-          ),
+      _safeAddLog(
+        LogEntry(
+          message: message,
+          timestamp: DateTime.now(),
+          level: LogLevel.info,
+          step: ProcessStep.other,
+          origin: 'debug',
         ),
       );
     }
@@ -64,15 +88,13 @@ class DebugLogger {
   /// Print warning message
   static void w(String message) {
     if (_debugMode) {
-      _loggingBloc.add(
-        AddLogEvent(
-          LogEntry(
-            message: message,
-            timestamp: DateTime.now(),
-            level: LogLevel.warning,
-            step: ProcessStep.other,
-            origin: 'debug',
-          ),
+      _safeAddLog(
+        LogEntry(
+          message: message,
+          timestamp: DateTime.now(),
+          level: LogLevel.warning,
+          step: ProcessStep.other,
+          origin: 'debug',
         ),
       );
     }
@@ -89,44 +111,23 @@ class DebugLogger {
         location += '.$methodName()';
       }
 
-      _loggingBloc.add(
-        AddLogEvent(
-          LogEntry(
-            message: location.isNotEmpty ? '$location: $message' : message,
-            timestamp: DateTime.now(),
-            level: LogLevel.error,
-            step: ProcessStep.other,
-            origin: 'debug',
-          ),
+      _safeAddLog(
+        LogEntry(
+          message: location.isNotEmpty ? '$location: $message' : message,
+          timestamp: DateTime.now(),
+          level: LogLevel.error,
+          step: ProcessStep.other,
+          origin: 'debug',
         ),
       );
 
+      // Also print to console for critical errors
+      print('ERROR: $message');
       if (error != null) {
-        _loggingBloc.add(
-          AddLogEvent(
-            LogEntry(
-              message: error.toString(),
-              timestamp: DateTime.now(),
-              level: LogLevel.error,
-              step: ProcessStep.other,
-              origin: 'debug',
-            ),
-          ),
-        );
+        print('Exception: $error');
       }
-
       if (stackTrace != null) {
-        _loggingBloc.add(
-          AddLogEvent(
-            LogEntry(
-              message: stackTrace.toString(),
-              timestamp: DateTime.now(),
-              level: LogLevel.error,
-              step: ProcessStep.other,
-              origin: 'debug',
-            ),
-          ),
-        );
+        print('Stack trace: $stackTrace');
       }
     }
   }
@@ -139,42 +140,36 @@ class DebugLogger {
     dynamic response,
   }) {
     if (_debugMode) {
-      _loggingBloc.add(
-        AddLogEvent(
+      _safeAddLog(
+        LogEntry(
+          message: 'HTTP $method: $url',
+          timestamp: DateTime.now(),
+          level: LogLevel.verbose,
+          step: ProcessStep.other,
+          origin: 'network',
+        ),
+      );
+
+      if (body != null) {
+        _safeAddLog(
           LogEntry(
-            message: 'HTTP $method: $url',
+            message: 'Request: $body',
             timestamp: DateTime.now(),
             level: LogLevel.verbose,
             step: ProcessStep.other,
             origin: 'network',
           ),
-        ),
-      );
-
-      if (body != null) {
-        _loggingBloc.add(
-          AddLogEvent(
-            LogEntry(
-              message: 'Request: $body',
-              timestamp: DateTime.now(),
-              level: LogLevel.verbose,
-              step: ProcessStep.other,
-              origin: 'network',
-            ),
-          ),
         );
       }
 
       if (response != null) {
-        _loggingBloc.add(
-          AddLogEvent(
-            LogEntry(
-              message: 'Response: $response',
-              timestamp: DateTime.now(),
-              level: LogLevel.verbose,
-              step: ProcessStep.other,
-              origin: 'network',
-            ),
+        _safeAddLog(
+          LogEntry(
+            message: 'Response: $response',
+            timestamp: DateTime.now(),
+            level: LogLevel.verbose,
+            step: ProcessStep.other,
+            origin: 'network',
           ),
         );
       }
@@ -184,15 +179,13 @@ class DebugLogger {
   /// Print lifecycle events
   static void lifecycle(String message) {
     if (_debugMode) {
-      _loggingBloc.add(
-        AddLogEvent(
-          LogEntry(
-            message: message,
-            timestamp: DateTime.now(),
-            level: LogLevel.info,
-            step: ProcessStep.other,
-            origin: 'lifecycle',
-          ),
+      _safeAddLog(
+        LogEntry(
+          message: message,
+          timestamp: DateTime.now(),
+          level: LogLevel.info,
+          step: ProcessStep.other,
+          origin: 'lifecycle',
         ),
       );
     }
@@ -201,15 +194,13 @@ class DebugLogger {
   /// Print server events
   static void server(String message) {
     if (_debugMode) {
-      _loggingBloc.add(
-        AddLogEvent(
-          LogEntry(
-            message: message,
-            timestamp: DateTime.now(),
-            level: LogLevel.info,
-            step: ProcessStep.other,
-            origin: 'server',
-          ),
+      _safeAddLog(
+        LogEntry(
+          message: message,
+          timestamp: DateTime.now(),
+          level: LogLevel.info,
+          step: ProcessStep.other,
+          origin: 'server',
         ),
       );
     }

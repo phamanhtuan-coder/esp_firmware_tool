@@ -76,12 +76,22 @@ class LoggingState {
 class LoggingBloc extends Bloc<LoggingEvent, LoggingState> {
   bool _disposed = false;
 
+  /// Public getter to check if bloc is disposed
+  bool get isDisposed => _disposed;
+
   LoggingBloc() : super(const LoggingState()) {
     on<AddLogEvent>(_onAddLog);
     on<FilterLogEvent>(_onFilterLog);
     on<ClearLogsEvent>(_onClearLogs);
     on<AutoScrollEvent>(_onAutoScroll);
     on<TrimLogsEvent>(_onTrimLogs);
+  }
+
+  /// Reset the bloc state without disposing it - safer for logout/login cycle
+  void reset() {
+    if (!_disposed) {
+      add(ClearLogsEvent());
+    }
   }
 
   @override
@@ -137,4 +147,3 @@ class LoggingBloc extends Bloc<LoggingEvent, LoggingState> {
     }
   }
 }
-

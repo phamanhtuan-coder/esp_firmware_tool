@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
 import 'package:smart_net_firmware_loader/core/config/app_routes.dart';
+import 'package:smart_net_firmware_loader/data/services/app_lifecycle_service.dart';
 import 'package:smart_net_firmware_loader/data/services/auth_service.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -49,8 +50,11 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
     );
 
     if (confirmed == true) {
-      final authService = GetIt.instance<AuthService>();
-      await authService.clearToken();
+      // Use the AppLifecycleService to safely handle logout
+      final lifecycleService = GetIt.instance<AppLifecycleService>();
+      await lifecycleService.handleLogout();
+
+      // Navigate to login screen after safe logout
       if (context.mounted) {
         Navigator.of(context).pushNamedAndRemoveUntil(
           AppRoutes.login,

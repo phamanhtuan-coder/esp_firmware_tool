@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_net_firmware_loader/core/config/app_routes.dart';
 import 'package:smart_net_firmware_loader/core/config/app_theme.dart';
 import 'package:smart_net_firmware_loader/data/services/api_client.dart';
+import 'package:smart_net_firmware_loader/data/services/app_lifecycle_service.dart';
 import 'package:smart_net_firmware_loader/data/services/arduino_service.dart';
 import 'package:smart_net_firmware_loader/data/services/bluetooth_service.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
@@ -50,6 +51,11 @@ Future<void> setupServiceLocator() async {
 
   // Register LoggingBloc as singleton to ensure same instance throughout the app
   getIt.registerSingleton<LoggingBloc>(LoggingBloc());
+
+  // Register app lifecycle manager
+  getIt.registerSingleton<AppLifecycleService>(
+    AppLifecycleService(getIt),
+  );
 
   // Register HomeBloc as factory since it needs new instance on logout/login
   getIt.registerFactory<HomeBloc>(() => HomeBloc());
