@@ -139,27 +139,54 @@ class AppLifecycleService {
     try {
       print('Initializing services after login...');
 
-      // Reset LoggingBloc instead of recreating it
+      // Force recreate LoggingBloc instead of just resetting it
       if (_getIt.isRegistered<LoggingBloc>()) {
         try {
-          final loggingBloc = _getIt<LoggingBloc>();
-          loggingBloc.reset();
+          // Get current instance to properly close it
+          final oldBloc = _getIt.get<LoggingBloc>();
 
-          // Log successful login
+          // Unregister the old instance
+          _getIt.unregister<LoggingBloc>();
+
+          // Create and register a new instance
+          _getIt.registerSingleton<LoggingBloc>(LoggingBloc());
+
+          // Close the old instance properly
+          await oldBloc.close();
+
+          // Add initial log entry to the new bloc
           if (_getIt.isRegistered<LogService>()) {
             final logService = _getIt<LogService>();
             logService.addLog(
-              message: 'Đăng nhập thành công',
+              message: 'Đăng nhập thành công - Console log đã được khởi tạo lại',
               level: LogLevel.success,
               step: ProcessStep.systemEvent,
               origin: 'system',
             );
           }
 
-          print('Reset LoggingBloc for new session');
+          print('Recreated LoggingBloc for new session');
         } catch (e) {
-          print('Error resetting LoggingBloc after login: $e');
+          print('Error recreating LoggingBloc after login: $e');
+          // If recreation fails, try to at least reset the existing one
+          try {
+            final loggingBloc = _getIt<LoggingBloc>();
+            if (loggingBloc.isDisposed) {
+              print('WARNING: Trying to use disposed LoggingBloc');
+              // Register a new one as last resort
+              _getIt.unregister<LoggingBloc>();
+              _getIt.registerSingleton<LoggingBloc>(LoggingBloc());
+            } else {
+              loggingBloc.reset();
+            }
+          } catch (innerError) {
+            print('Critical error resetting LoggingBloc: $innerError');
+          }
         }
+      } else {
+        // If not registered for some reason, register it
+        _getIt.registerSingleton<LoggingBloc>(LoggingBloc());
+        print('Created new LoggingBloc instance (was not registered)');
       }
 
       print('Successfully initialized services after login');

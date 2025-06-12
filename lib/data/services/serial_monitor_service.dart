@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_libserialport/flutter_libserialport.dart';
 import 'package:smart_net_firmware_loader/core/utils/debug_logger.dart';
+import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 import 'package:get_it/get_it.dart';
 
@@ -11,6 +12,7 @@ class SerialMonitorService {
   StreamController<bool>? _statusController;
   Timer? _reconnectTimer;
   bool _isReconnecting = false;
+  bool _isDisposed = false;
 
   // Buffer để tích lũy dữ liệu chưa hoàn chỉnh
   StringBuffer _dataBuffer = StringBuffer();
@@ -30,8 +32,39 @@ class SerialMonitorService {
     _statusController = StreamController<bool>.broadcast();
   }
 
+  // Safe method to add data to output controller
+  void _safeAddOutput(String data) {
+    if (!_isDisposed && _outputController != null && !_outputController!.isClosed) {
+      try {
+        _outputController!.add(data);
+      } catch (e) {
+        print('Error adding to output controller: $e');
+      }
+    }
+  }
+
+  // Safe method to add data to status controller
+  void _safeAddStatus(bool status) {
+    if (!_isDisposed && _statusController != null && !_statusController!.isClosed) {
+      try {
+        _statusController!.add(status);
+      } catch (e) {
+        print('Error adding to status controller: $e');
+      }
+    }
+  }
+
   Future<bool> startMonitor(String port, int baudRate) async {
     try {
+      if (_isDisposed) {
+        DebugLogger.e(
+          '❌ Cannot start monitor: Service is disposed',
+          className: 'SerialMonitorService',
+          methodName: 'startMonitor'
+        );
+        return false;
+      }
+
       // Cancel any active reconnection attempts
       _reconnectTimer?.cancel();
       _reconnectTimer = null;
@@ -71,9 +104,7 @@ class SerialMonitorService {
         final reader = SerialPortReader(_serialPort!);
         reader.stream.listen(
           (data) {
-            if (_outputController != null && !_outputController!.isClosed) {
-              _processSerialData(data);
-            }
+            _processSerialData(data);
           },
           onError: (error) {
             DebugLogger.e('❌ Lỗi đọc dữ liệu Serial: $error', className: 'SerialMonitorService', methodName: 'startMonitor');
@@ -83,7 +114,7 @@ class SerialMonitorService {
         );
 
         // Update status
-        _statusController?.add(true);
+        _safeAddStatus(true);
         return true;
 
       } catch (e) {
@@ -99,6 +130,8 @@ class SerialMonitorService {
   }
 
   void _processSerialData(List<int> data) {
+    if (_isDisposed) return;
+
     try {
       // Decode bytes to string
       final String decodedData = _decodeBytes(data);
@@ -122,7 +155,7 @@ class SerialMonitorService {
   }
 
   void _flushBuffer() {
-    if (_dataBuffer.isEmpty) return;
+    if (_isDisposed || _dataBuffer.isEmpty) return;
 
     try {
       // Get the buffered data
@@ -145,7 +178,7 @@ class SerialMonitorService {
         // Trim carriage return and any whitespace
         line = line.trim();
         if (line.isNotEmpty) {
-          _outputController?.add(line);
+          _safeAddOutput(line);
         }
       }
 
@@ -156,6 +189,8 @@ class SerialMonitorService {
   }
 
   void sendCommand(String command) {
+    if (_isDisposed) return;
+
     if (_serialPort != null && _serialPort!.isOpen) {
       try {
         _serialPort!.write(utf8.encode('$command\r\n'));
@@ -168,32 +203,47 @@ class SerialMonitorService {
   }
 
   void stopMonitor() {
+    if (_isDisposed) return;
+
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
 
     if (_serialPort != null) {
-      if (_serialPort!.isOpen) {
-        _serialPort!.close();
+      try {
+        if (_serialPort!.isOpen) {
+          _serialPort!.close();
+        }
+      } catch (e) {
+        print('Error closing serial port: $e');
       }
       _serialPort = null;
     }
 
-    _statusController?.add(false);
+    _safeAddStatus(false);
 
-    DebugLogger.d('🛑 Đã dừng Serial Monitor', className: 'SerialMonitorService', methodName: 'stopMonitor');
+    try {
+      DebugLogger.d('🛑 Đã dừng Serial Monitor', className: 'SerialMonitorService', methodName: 'stopMonitor');
+    } catch (e) {
+      // Ignore logging errors during shutdown
+      print('Error logging during stopMonitor: $e');
+    }
   }
 
   void _attemptRecovery() {
-    if (_currentPort == null || _currentBaudRate == null) return;
+    if (_isDisposed || _currentPort == null || _currentBaudRate == null) return;
 
-    DebugLogger.w('⚠️ Đang thử kết nối lại Serial...');
+    try {
+      DebugLogger.w('⚠️ Đang thử kết nối lại Serial...');
 
-    stopMonitor();
-    _scheduleReconnect(immediateAttempt: true);
+      stopMonitor();
+      _scheduleReconnect(immediateAttempt: true);
+    } catch (e) {
+      print('Error during _attemptRecovery: $e');
+    }
   }
 
   void _scheduleReconnect({bool immediateAttempt = false}) {
-    if (_isReconnecting || _currentPort == null || _currentBaudRate == null) return;
+    if (_isDisposed || _isReconnecting || _currentPort == null || _currentBaudRate == null) return;
 
     _reconnectTimer?.cancel();
     final delay = immediateAttempt ? const Duration(milliseconds: 500) : const Duration(seconds: 2);
@@ -201,7 +251,7 @@ class SerialMonitorService {
   }
 
   Future<void> _attemptReconnect() async {
-    if (_isReconnecting || _currentPort == null || _currentBaudRate == null) return;
+    if (_isDisposed || _isReconnecting || _currentPort == null || _currentBaudRate == null) return;
 
     _isReconnecting = true;
     try {
@@ -234,11 +284,39 @@ class SerialMonitorService {
   }
 
   void dispose() {
-    stopMonitor();
+    _isDisposed = true;
+
+    // Cancel all timers first
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
     _flushTimer?.cancel();
+    _flushTimer = null;
+
+    // Close port
+    stopMonitor();
+
+    // Clear data buffer
     _dataBuffer.clear();
-    _outputController?.close();
-    _statusController?.close();
+
+    // Finally close controllers
+    try {
+      if (_outputController != null && !_outputController!.isClosed) {
+        _outputController?.close();
+      }
+    } catch (e) {
+      print('Error closing output controller: $e');
+    }
+
+    try {
+      if (_statusController != null && !_statusController!.isClosed) {
+        _statusController?.close();
+      }
+    } catch (e) {
+      print('Error closing status controller: $e');
+    }
+
+    _outputController = null;
+    _statusController = null;
   }
 
   String _decodeBytes(List<int> data) {
@@ -260,4 +338,3 @@ class SerialMonitorService {
     }
   }
 }
-

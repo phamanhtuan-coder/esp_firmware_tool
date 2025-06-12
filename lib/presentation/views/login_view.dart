@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
 import 'package:smart_net_firmware_loader/core/config/app_routes.dart';
 import 'package:smart_net_firmware_loader/data/services/api_client.dart';
+import 'package:smart_net_firmware_loader/data/services/app_lifecycle_service.dart';
 import 'package:smart_net_firmware_loader/data/services/theme_service.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
 import 'package:smart_net_firmware_loader/main.dart';
@@ -83,6 +84,11 @@ class _LoginViewState extends State<LoginView> {
 
       if (result['success'] == true) {
         if (mounted) {
+          // Khởi tạo lại hoặc reset LoggingBloc và các service khác sau khi đăng nhập
+          final appLifecycleService = GetIt.instance<AppLifecycleService>();
+          await appLifecycleService.handleAfterLogin(); // Sẽ reset LoggingBloc
+
+          // Sau đó mới load dữ liệu ban đầu
           context.read<HomeBloc>().add(LoadInitialDataEvent());
           Navigator.pushReplacementNamed(context, AppRoutes.home);
         }
