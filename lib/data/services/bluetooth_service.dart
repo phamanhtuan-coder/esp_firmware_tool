@@ -38,6 +38,7 @@ class BluetoothService {
       }
 
       onSerialReceived(serialNumber);
+      print('DEBUG: Đã nhận serial hợp lệ: $serialNumber');
       DebugLogger.d('✅ Đã nhận serial hợp lệ: $serialNumber',
         className: 'BluetoothService',
         methodName: '_handleQrData');

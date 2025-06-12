@@ -537,7 +537,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   String _getWarningMessage() {
     switch (_warningType) {
       case 'switch_to_local':
-        return 'Bạn đang chuyển sang chế độ upload file firmware cục bộ. Việc này có thể gây ra rủi ro nếu file không được kiểm tra. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
+        return 'Bạn đang chuyển sang chế độ upload file firmware cục bộ. Việc này có thể gây ra rủi ro nếu file không được kiểm tra. Bạn ch���u hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       case 'switch_to_version':
         return 'Bạn đang chuyển sang chế độ chọn version từ server. Mọi file firmware cục bộ sẽ được xóa bỏ. Tiếp tục?';
       case 'select_local_file':
@@ -742,7 +742,25 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                   onLocalFileSearch: () => _handleWarningAction('select_local_file'),
                                   onUsbPortRefresh: () => context.read<HomeBloc>().add(RefreshPortsEvent()),
                                   onSerialSubmitted: (value) => _handleWarningAction('manual_serial'),
-                                  onQrCodeScan: () => context.read<HomeBloc>().add(StartQrScanEvent()),
+                                  onQrCodeScan: () {
+                                    // Store current value for comparison to detect changes
+                                    final currentSerialValue = _serialController.text;
+
+                                    // Start QR scan via Bloc
+                                    context.read<HomeBloc>().add(
+                                      StartQrScanEvent(
+                                        onSerialReceived: (receivedSerial) {
+                                          // This callback will be called when a serial is received
+                                          if (mounted) {
+                                            setState(() {
+                                              _serialController.text = receivedSerial;
+                                              print("DEBUG: Serial controller updated in HomeView: $receivedSerial");
+                                            });
+                                          }
+                                        }
+                                      )
+                                    );
+                                  },
                                   onQrCodeAvailabilityChanged: (_) {},
                                   onWarningRequested: (type, {value}) {
                                     if (type == 'flash_firmware') {

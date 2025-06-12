@@ -49,7 +49,10 @@ class SelectPortEvent extends HomeEvent {
   SelectPortEvent(this.port);
 }
 
-class StartQrScanEvent extends HomeEvent {}
+class StartQrScanEvent extends HomeEvent {
+  final Function(String)? onSerialReceived;
+  StartQrScanEvent({this.onSerialReceived});
+}
 
 class UpdateDeviceStatusEvent extends HomeEvent {
   final String deviceId;
@@ -395,12 +398,23 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   }
 
   void _onSubmitSerial(SubmitSerialEvent event, Emitter<HomeState> emit) {
+    print("DEBUG: Validating serial: ${event.serial}");
+
     final device = state.devices.firstWhere(
       (d) => d.serial.trim().toLowerCase() == event.serial.trim().toLowerCase(),
       orElse: () => Device(id: '', batchId: '', serial: '', status: ''),
     );
+
+    print("DEBUG: Found device: ${device.toString()}");
+
     if (device.id.isNotEmpty && device.status == 'firmware_uploading') {
-      emit(state.copyWith(selectedSerial: event.serial));
+      emit(state.copyWith(
+        selectedSerial: event.serial,
+        selectedDeviceId: device.id
+      ));
+      print("DEBUG: Serial validated and state updated with: ${event.serial}");
+    } else {
+      print("DEBUG: Invalid device or status: ${device.toString()}");
     }
   }
 
@@ -442,6 +456,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       await _bluetoothService.start(
         onSerialReceived: (serial) {
           add(SubmitSerialEvent(serial));
+          event.onSerialReceived?.call(serial); // Call the provided callback
         },
       );
     }

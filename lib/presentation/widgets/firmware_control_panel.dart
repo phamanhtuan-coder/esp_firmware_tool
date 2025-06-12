@@ -58,6 +58,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
   String? _serialSuccessText;
   bool _isSerialValid = false;
   bool _canFlash = false;
+  String? _selectedFirmwareVersion;
 
   final List<bool> _selections = [true, false]; // [Version mode, File mode]
 
@@ -84,7 +85,13 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
 
   void _handleFirmwareVersionChange(String? value) {
     if (value != widget.selectedFirmwareVersion) {
+      _selectedFirmwareVersion = value;
       widget.onWarningRequested('version_change', value: value);
+      widget.onFirmwareVersionSelected(value);
+
+      if (mounted) {
+        setState(() {}); // Trigger UI update
+      }
     }
   }
 
@@ -124,7 +131,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
         _serialSuccessText =
             '✅ Serial hợp lệ - Thiết bị sẵn sàng cho nạp firmware';
         _isSerialValid = true;
-        widget.onSerialSubmitted(value);
+        widget.onWarningRequested('manual_serial');
       } else {
         _serialErrorText = 'Thiết bị không ở trạng thái cho phép nạp firmware';
         _serialSuccessText = null;
@@ -1017,4 +1024,3 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     return '';
   }
 }
-
