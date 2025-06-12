@@ -165,6 +165,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   final ApiService _apiService = GetIt.instance<ApiService>();
   final ArduinoService _arduinoService = GetIt.instance<ArduinoService>();
   final BluetoothService _bluetoothService = GetIt.instance<BluetoothService>();
+  bool _disposed = false;
 
   HomeBloc() : super(HomeState()) {
     on<LoadInitialDataEvent>(_onLoadInitialData);
@@ -179,9 +180,23 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<StartQrScanEvent>(_onStartQrScan);
     on<UpdateDeviceStatusEvent>(_onUpdateDeviceStatus);
     on<FlashFirmwareEvent>(_onFlashFirmware);
-    on<FetchBatchesEvent>(_onFetchBatches); // Thêm handler mới
+    on<FetchBatchesEvent>(_onFetchBatches);
     on<StatusUpdateEvent>(_onStatusUpdate);
     on<CloseStatusDialogEvent>(_onCloseStatusDialog);
+  }
+
+  @override
+  Future<void> close() async {
+    _disposed = true;
+    _bluetoothService.stop();
+    await super.close();
+  }
+
+  // Prevent emitting states after the bloc is closed
+  void safeEmit(Emitter<HomeState> emit, HomeState newState) {
+    if (!_disposed) {
+      emit(newState);
+    }
   }
 
   Future<void> _onFetchBatches(
@@ -288,10 +303,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   ) async {
     try {
       print('Batch selected: ${event.batchId}');
-      emit(state.copyWith(isLoading: true));
+      safeEmit(emit, state.copyWith(isLoading: true));
 
       // Reset device and firmware state
-      emit(state.copyWith(
+      safeEmit(emit, state.copyWith(
         selectedBatchId: event.batchId,
         devices: [],
         firmwares: [],
@@ -299,45 +314,64 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       ));
 
       if (event.batchId != null) {
-        final batch = state.batches.firstWhere((b) => b.id == event.batchId);
-        print('Selected batch template ID: ${batch.templateId}');
-
-        // Fetch devices and firmwares in parallel
-        print('Fetching devices and firmwares...');
-        final devicesAndFirmwaresFuture = Future.wait([
-          _apiService.fetchDevices(event.batchId as String),
-          _apiService.fetchFirmwares(int.parse(batch.templateId)),
-        ]);
-
-        final results = await devicesAndFirmwaresFuture;
-        final devices = results[0] as List<Device>;
-        final firmwares = results[1] as List<Firmware>;
-
-        // Get default firmware from batch or template rules
-        final defaultFirmware = await _apiService.getDefaultFirmware(
-          int.parse(batch.templateId),
-          batch.firmwareId
+        final batch = state.batches.firstWhere(
+          (b) => b.id == event.batchId,
+          orElse: () => throw Exception('Batch not found: ${event.batchId}'),
         );
 
-        print('Fetched ${devices.length} devices and ${firmwares.length} firmwares');
+        if (batch.templateId.isEmpty) {
+          throw Exception('Template ID is empty for batch: ${event.batchId}');
+        }
 
-        emit(state.copyWith(
-          devices: devices,
-          firmwares: firmwares,
-          selectedFirmwareId: defaultFirmware?.firmwareId.toString(),
-          isLoading: false,
-        ));
+        print('Selected batch template ID: ${batch.templateId}');
+
+        try {
+          // Fetch devices first
+          final devices = await _apiService.fetchDevices(event.batchId as String);
+
+          // Then fetch firmwares
+          final firmwares = await _apiService.fetchFirmwares(batch.templateId);
+
+          if (!_disposed) {
+            // Get default firmware from batch or template rules
+            final defaultFirmware = await _apiService.getDefaultFirmware(
+              batch.templateId,
+              batch.firmwareId
+            );
+
+            print('Fetched ${devices.length} devices and ${firmwares.length} firmwares');
+
+            safeEmit(emit, state.copyWith(
+              devices: devices,
+              firmwares: firmwares,
+              selectedFirmwareId: defaultFirmware?.firmwareId.toString(),
+              isLoading: false,
+            ));
+          }
+        } catch (e) {
+          print('Error fetching data: $e');
+          if (!_disposed) {
+            safeEmit(emit, state.copyWith(
+              devices: [],
+              firmwares: [],
+              selectedFirmwareId: null,
+              isLoading: false,
+            ));
+          }
+        }
       } else {
-        emit(state.copyWith(isLoading: false));
+        safeEmit(emit, state.copyWith(isLoading: false));
       }
     } catch (e) {
       print('Error selecting batch: $e');
-      emit(state.copyWith(
-        devices: [],
-        firmwares: [],
-        selectedFirmwareId: null,
-        isLoading: false,
-      ));
+      if (!_disposed) {
+        safeEmit(emit, state.copyWith(
+          devices: [],
+          firmwares: [],
+          selectedFirmwareId: null,
+          isLoading: false,
+        ));
+      }
     }
   }
 
@@ -363,7 +397,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   void _onSubmitSerial(SubmitSerialEvent event, Emitter<HomeState> emit) {
     final device = state.devices.firstWhere(
       (d) => d.serial.trim().toLowerCase() == event.serial.trim().toLowerCase(),
-      orElse: () => Device(id: '', batchId: '', serial: ''),
+      orElse: () => Device(id: '', batchId: '', serial: '', status: ''),
     );
     if (device.id.isNotEmpty && device.status == 'firmware_uploading') {
       emit(state.copyWith(selectedSerial: event.serial));

@@ -11,7 +11,7 @@ abstract class ApiRepository {
   Future<List<Planning>> fetchPlannings();
   Future<List<Batch>> fetchBatches(String? planningId);
   Future<List<Device>> fetchDevices(String batchId);
-  Future<List<Firmware>> fetchFirmwares(int templateId);
+  Future<List<Firmware>> fetchFirmwares(String templateId);
   Future<String?> fetchFirmwareFile(String firmwareId);
   Future<void> updateDeviceStatus(
     String deviceId,
@@ -22,5 +22,5 @@ abstract class ApiRepository {
     required String deviceSerial,
     required bool isSuccessful,
   });
-  Future<Firmware?> getDefaultFirmware(int templateId, int? batchFirmwareId);
+  Future<Firmware?> getDefaultFirmware(String templateId, String? batchFirmwareId);
 }

@@ -25,7 +25,7 @@ class ApiService implements ApiRepository {
         'Authorization': 'Bearer ${_authService.getToken() ?? ''}',
       };
 
-  final Map<int, List<Firmware>> _firmwareCache = {};
+  final Map<String, List<Firmware>> _firmwareCache = {};
 
   @override
   Future<List<Planning>> fetchPlannings() async {
@@ -155,7 +155,7 @@ class ApiService implements ApiRepository {
       // );
 
       _logService.addLog(
-        message: 'Đang tải danh sách thiết bị cho l��� $batchId...',
+        message: 'Đang tải danh sách thiết bị cho lô $batchId...',
         level: LogLevel.info,
         step: ProcessStep.deviceRefresh,
         origin: 'system',
@@ -233,18 +233,12 @@ class ApiService implements ApiRepository {
   }
 
   @override
-  Future<List<Firmware>> fetchFirmwares(int templateId) async {
+  Future<List<Firmware>> fetchFirmwares(String templateId) async {
     if (_firmwareCache.containsKey(templateId)) {
       return _firmwareCache[templateId]!;
     }
 
     try {
-      // DebugLogger.d(
-      //   'Fetching firmwares for template $templateId...',
-      //   className: 'ApiService',
-      //   methodName: 'fetchFirmwares',
-      // );
-
       _logService.addLog(
         message: 'Đang tải danh sách firmware cho template $templateId...',
         level: LogLevel.info,
@@ -257,8 +251,6 @@ class ApiService implements ApiRepository {
         Uri.parse(endpoint),
         headers: _headers,
       );
-
-      // DebugLogger.http('GET', endpoint, response: response.body);
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final responseData = jsonDecode(response.body);
@@ -301,13 +293,13 @@ class ApiService implements ApiRepository {
   }
 
   @override
-  Future<Firmware?> getDefaultFirmware(int templateId, int? batchFirmwareId) async {
+  Future<Firmware?> getDefaultFirmware(String templateId, String? batchFirmwareId) async {
     final firmwares = await fetchFirmwares(templateId);
 
     // First try to find firmware specified in batch
     if (batchFirmwareId != null) {
       final batchFirmware = firmwares.firstWhere(
-        (fw) => fw.firmwareId == batchFirmwareId,
+        (fw) => fw.firmwareId.toString() == batchFirmwareId,
         orElse: () => firmwares.first,
       );
       return batchFirmware;

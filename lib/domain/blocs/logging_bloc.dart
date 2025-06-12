@@ -74,6 +74,8 @@ class LoggingState {
 }
 
 class LoggingBloc extends Bloc<LoggingEvent, LoggingState> {
+  bool _disposed = false;
+
   LoggingBloc() : super(const LoggingState()) {
     on<AddLogEvent>(_onAddLog);
     on<FilterLogEvent>(_onFilterLog);
@@ -82,7 +84,21 @@ class LoggingBloc extends Bloc<LoggingEvent, LoggingState> {
     on<TrimLogsEvent>(_onTrimLogs);
   }
 
+  @override
+  Future<void> close() async {
+    _disposed = true;
+    await super.close();
+  }
+
+  void safeEmit(Emitter<LoggingState> emit, LoggingState newState) {
+    if (!_disposed) {
+      emit(newState);
+    }
+  }
+
   void _onAddLog(AddLogEvent event, Emitter<LoggingState> emit) {
+    if (_disposed) return;
+
     final log = LogEntry(
       message: event.log.message,
       timestamp: event.log.timestamp,
@@ -94,25 +110,30 @@ class LoggingBloc extends Bloc<LoggingEvent, LoggingState> {
     );
 
     final newLogs = List<LogEntry>.from(state.logs)..add(log);
-    emit(state.copyWith(logs: newLogs));
+    safeEmit(emit, state.copyWith(logs: newLogs));
   }
 
   void _onFilterLog(FilterLogEvent event, Emitter<LoggingState> emit) {
-    emit(state.copyWith(filter: event.filter));
+    if (_disposed) return;
+    safeEmit(emit, state.copyWith(filter: event.filter));
   }
 
   void _onClearLogs(ClearLogsEvent event, Emitter<LoggingState> emit) {
-    emit(const LoggingState()); // Reset to initial state
+    if (_disposed) return;
+    safeEmit(emit, const LoggingState()); // Reset to initial state
   }
 
   void _onAutoScroll(AutoScrollEvent event, Emitter<LoggingState> emit) {
-    emit(state.copyWith(autoScroll: true));
+    if (_disposed) return;
+    safeEmit(emit, state.copyWith(autoScroll: true));
   }
 
   void _onTrimLogs(TrimLogsEvent event, Emitter<LoggingState> emit) {
+    if (_disposed) return;
+
     if (state.logs.length > event.maxLines) {
       final trimmedLogs = state.logs.skip(state.logs.length - event.maxLines).toList();
-      emit(state.copyWith(logs: trimmedLogs));
+      safeEmit(emit, state.copyWith(logs: trimmedLogs));
     }
   }
 }

@@ -108,7 +108,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
       final matchingDevice = state.devices.firstWhere(
         (device) =>
             device.serial.trim().toLowerCase() == value.trim().toLowerCase(),
-        orElse: () => Device(id: '', batchId: '', serial: ''),
+        orElse: () => Device(id: '', batchId: '', serial: '', status: ''),
       );
 
       if (matchingDevice.id.isEmpty) {

@@ -3,7 +3,7 @@ class Batch {
   final String name;
   final String planningId;
   final String templateId;
-  final int? firmwareId;
+  final String? firmwareId;
 
   Batch({
     required this.id,
@@ -20,7 +20,7 @@ class Batch {
       name: batchId, // Using production_batch_id as the display name
       planningId: json['planning_id']?.toString() ?? '',
       templateId: json['template_id']?.toString() ?? '',
-      firmwareId: json['firmware_id'] as int?,
+      firmwareId: json['firmware_id']?.toString(),
     );
   }
 
