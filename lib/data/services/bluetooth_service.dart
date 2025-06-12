@@ -72,7 +72,8 @@ class BluetoothService {
 
       _tcpSubscription = _tcpServer!.listen((socket) {
         socket
-            .transform(utf8.decoder as StreamTransformer<Uint8List, dynamic>)
+            .cast<List<int>>()
+            .transform(utf8.decoder)
             .listen(
               (data) {
                 if (data.trim().isNotEmpty) {
