@@ -37,8 +37,8 @@ Future<void> setupServiceLocator() async {
   getIt.registerSingleton<ThemeService>(ThemeService(prefs));
   getIt.registerSingleton<AuthService>(AuthService(prefs));
 
-  // Register blocs that other services might depend on
-  getIt.registerSingleton<LoggingBloc>(LoggingBloc());
+  // Register blocs
+  getIt.registerLazySingleton<LoggingBloc>(() => LoggingBloc()); // Changed to lazySingleton and fixed registration
 
   // Register API and communication services
   getIt.registerSingleton<ApiService>(ApiService());

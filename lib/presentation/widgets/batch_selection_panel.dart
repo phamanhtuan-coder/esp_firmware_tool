@@ -143,7 +143,11 @@ class _BatchSelectionPanelState extends State<BatchSelectionPanel> {
                 items: widget.plannings.map((planning) {
                   return DropdownMenuItem<String?>(
                     value: planning.id,
-                    child: Text(planning.id),
+                    child: Text(
+                      planning.id,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
                   );
                 }).toList(),
                 onChanged: widget.isLoading ? null : _handlePlanningChange,
@@ -226,7 +230,11 @@ class _BatchSelectionPanelState extends State<BatchSelectionPanel> {
                 items: filteredBatches.map((batch) {
                   return DropdownMenuItem<String?>(
                     value: batch.id,
-                    child: Text(batch.name),
+                    child: Text(
+                      batch.name,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
                   );
                 }).toList(),
                 onChanged: (_pendingPlanningId != null && !widget.isLoading) ? _handleBatchChange : null,

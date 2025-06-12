@@ -511,7 +511,10 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                                 items: widget.firmwares.map((firmware) {
                                   return DropdownMenuItem(
                                     value: firmware.firmwareId.toString(),
-                                    child: Text(firmware.version),
+                                    child: Text(firmware.version,
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
                                   );
                                 }).toList(),
                                 decoration: InputDecoration(
