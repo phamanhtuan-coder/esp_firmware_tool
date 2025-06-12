@@ -101,43 +101,71 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
 
   Future<void> _initializeServices() async {
     try {
-      print('DEBUG: Initializing services...');
-      // Initialize LogService first since other services depend on it
-      await _logService.initialize();
-      print('DEBUG: LogService initialized');
-
-      // Initialize ArduinoService
-      final cliInitialized = await _arduinoService.initialize();
-      print('DEBUG: ArduinoService initialized: $cliInitialized');
-
-      // Initialize BluetoothService
-      await _bluetoothService.start(
-        onSerialReceived: (serial) {
-          if (mounted) {
-            setState(() {
-              _serialController.text = serial;
-            });
-            context.read<HomeBloc>().add(SubmitSerialEvent(serial));
-          }
-        },
-      );
-      print('DEBUG: BluetoothService started');
-
       _logService.addLog(
-        message: 'All services initialized successfully',
+        message: 'Starting service initialization...',
         level: LogLevel.info,
         step: ProcessStep.systemStart,
         origin: 'system',
       );
-    } catch (e, stack) {
-      print('DEBUG: Error initializing services: $e');
-      print('DEBUG: Stack trace: $stack');
+
+      // Initialize Arduino service first since it's critical
+      final cliInitialized = await _arduinoService.initialize();
+      if (!cliInitialized) {
+        throw Exception('Failed to initialize Arduino CLI');
+      }
       _logService.addLog(
-        message: 'Error initializing services: $e\n$stack',
+        message: 'Arduino CLI service initialized successfully',
+        level: LogLevel.success,
+        step: ProcessStep.systemStart,
+        origin: 'system',
+      );
+
+      // Initialize BluetoothService with proper error handling
+      try {
+        await _bluetoothService.start(
+          onSerialReceived: (serial) {
+            if (mounted) {
+              setState(() {
+                _serialController.text = serial;
+              });
+              context.read<HomeBloc>().add(SubmitSerialEvent(serial));
+            }
+          },
+        );
+        _logService.addLog(
+          message: 'Bluetooth service started successfully',
+          level: LogLevel.success,
+          step: ProcessStep.systemStart,
+          origin: 'system',
+        );
+      } catch (e) {
+        _logService.addLog(
+          message: 'Warning: Bluetooth service failed to start: $e',
+          level: LogLevel.warning,
+          step: ProcessStep.systemStart,
+          origin: 'system',
+        );
+        // Continue execution since Bluetooth is not critical
+      }
+
+      if (mounted) {
+        context.read<HomeBloc>().add(LoadInitialDataEvent());
+      }
+
+      _logService.addLog(
+        message: 'All services initialized successfully',
+        level: LogLevel.success,
+        step: ProcessStep.systemStart,
+        origin: 'system',
+      );
+    } catch (e, stack) {
+      _logService.addLog(
+        message: 'Critical error during service initialization: $e\n$stack',
         level: LogLevel.error,
         step: ProcessStep.systemStart,
         origin: 'system',
       );
+      rethrow;
     }
   }
 
@@ -819,4 +847,5 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     );
   }
 }
+
 

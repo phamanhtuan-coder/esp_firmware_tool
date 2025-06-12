@@ -143,10 +143,13 @@ class _BatchSelectionPanelState extends State<BatchSelectionPanel> {
                 items: widget.plannings.map((planning) {
                   return DropdownMenuItem<String?>(
                     value: planning.id,
-                    child: Text(
-                      planning.id,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 250), // Limit width
+                      child: Text(
+                        planning.id,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
                     ),
                   );
                 }).toList(),
@@ -230,10 +233,13 @@ class _BatchSelectionPanelState extends State<BatchSelectionPanel> {
                 items: filteredBatches.map((batch) {
                   return DropdownMenuItem<String?>(
                     value: batch.id,
-                    child: Text(
-                      batch.name,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 250), // Limit width
+                      child: Text(
+                        batch.name,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
                     ),
                   );
                 }).toList(),

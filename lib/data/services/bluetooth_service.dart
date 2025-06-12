@@ -93,12 +93,23 @@ class BluetoothService {
 
   Future<void> _startUdpServer() async {
     try {
+      // Platform-specific socket binding options
+      Map<String, dynamic> options = {
+        'reuseAddress': true, // Enable address reuse on all platforms
+      };
+
+      // Only add reusePort on non-Windows platforms
+      if (!Platform.isWindows) {
+        options['reusePort'] = true;
+      }
+
       _udpSocket = await RawDatagramSocket.bind(
         InternetAddress.anyIPv4,
         12345,
-        reuseAddress: true, // Enable port sharing
-        reusePort: true, // Enable port sharing on supported platforms
+        reuseAddress: options['reuseAddress'],
+        reusePort: options['reusePort'] ?? false, // Use null-safe access
       );
+
       DebugLogger.d('✅ UDP server đang chạy trên cổng 12345',
         className: 'BluetoothService',
         methodName: '_startUdpServer');

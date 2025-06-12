@@ -309,3 +309,4 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> with Auto
     );
   }
 }
+

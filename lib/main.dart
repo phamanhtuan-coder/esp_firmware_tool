@@ -37,9 +37,6 @@ Future<void> setupServiceLocator() async {
   getIt.registerSingleton<ThemeService>(ThemeService(prefs));
   getIt.registerSingleton<AuthService>(AuthService(prefs));
 
-  // Register blocs
-  getIt.registerLazySingleton<LoggingBloc>(() => LoggingBloc()); // Changed to lazySingleton and fixed registration
-
   // Register API and communication services
   getIt.registerSingleton<ApiService>(ApiService());
   getIt.registerSingleton<ArduinoService>(ArduinoService());
@@ -51,8 +48,9 @@ Future<void> setupServiceLocator() async {
     TemplateService(logService: getIt<LogService>()),
   );
 
-  // Register other blocs
+  // Register blocs as factories to ensure new instances on logout/login
   getIt.registerFactory<HomeBloc>(() => HomeBloc());
+  getIt.registerFactory<LoggingBloc>(() => LoggingBloc());
 
   // Initialize AuthGuardService last since it depends on AuthService
   getIt.registerSingleton<AuthGuardService>(
@@ -65,6 +63,10 @@ void setupDependencies() {
   final authService = GetIt.instance<AuthService>();
   final authGuard = AuthGuardService(authService);
   GetIt.instance.registerSingleton<AuthGuardService>(authGuard);
+
+  // Register HomeBloc and LoggingBloc as factories instead of singletons
+  GetIt.instance.registerFactory<HomeBloc>(() => HomeBloc());
+  GetIt.instance.registerFactory<LoggingBloc>(() => LoggingBloc());
 }
 
 Future<void> setupWindow() async {
@@ -358,3 +360,7 @@ class CloseWindowListener extends WindowListener {
     }
   }
 }
+
+
+
+

@@ -137,3 +137,4 @@ class LoggingBloc extends Bloc<LoggingEvent, LoggingState> {
     }
   }
 }
+
