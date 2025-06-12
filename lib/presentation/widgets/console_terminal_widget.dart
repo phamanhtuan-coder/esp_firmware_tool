@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:smart_net_firmware_loader/core/config/app_colors.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/logging_bloc.dart';
+import 'package:get_it/get_it.dart';
 
 class ConsoleLineDisplay {
   final String timestamp;
@@ -85,19 +86,36 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> with Auto
   bool _isAutoScrollEnabled = true;
   final ScrollController _scrollController = ScrollController();
   static const maxLines = 1000; // Giới hạn số dòng để tránh memory leak
+  late final LoggingBloc _loggingBloc;
 
   @override
   bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Ensure we're using the singleton LoggingBloc
+    _loggingBloc = GetIt.instance<LoggingBloc>();
+
+    // Initial scroll if widget is active
+    if (widget.isActiveTab && _isAutoScrollEnabled) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    }
+  }
 
   void _scrollToBottom() {
     if (_isAutoScrollEnabled && _scrollController.hasClients) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-          );
+          try {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+            );
+          } catch (e) {
+            print('Error scrolling console: $e');
+          }
         }
       });
     }
@@ -106,6 +124,7 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> with Auto
   @override
   void didUpdateWidget(ConsoleTerminalWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // Scroll when tab becomes active
     if (widget.isActiveTab && !oldWidget.isActiveTab) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_isAutoScrollEnabled && mounted) {
@@ -189,19 +208,18 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> with Auto
     final isDarkTheme = Theme.of(context).brightness == Brightness.dark;
 
     return BlocConsumer<LoggingBloc, LoggingState>(
+      bloc: _loggingBloc, // Use the singleton instance explicitly
       listenWhen: (previous, current) =>
         previous.logs.length != current.logs.length ||
         previous.filter != current.filter,
       listener: (context, state) {
-        if (_isAutoScrollEnabled && mounted) {
+        if (_isAutoScrollEnabled && widget.isActiveTab && mounted) {
           _scrollToBottom();
         }
 
         // Trim logs if exceeding maxLines
         if (state.logs.length > maxLines) {
-          context.read<LoggingBloc>().add(
-            TrimLogsEvent(maxLines),
-          );
+          _loggingBloc.add(TrimLogsEvent(maxLines));
         }
       },
       buildWhen: (previous, current) =>
@@ -293,7 +311,7 @@ class _ConsoleTerminalWidgetState extends State<ConsoleTerminalWidget> with Auto
                     ),
                     child: IconButton(
                       onPressed: () {
-                        context.read<LoggingBloc>().add(ClearLogsEvent());
+                        _loggingBloc.add(ClearLogsEvent());
                       },
                       icon: const Icon(Icons.clear_all),
                       tooltip: 'Clear console',

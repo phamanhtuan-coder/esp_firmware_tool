@@ -48,9 +48,11 @@ Future<void> setupServiceLocator() async {
     TemplateService(logService: getIt<LogService>()),
   );
 
-  // Register blocs as factories to ensure new instances on logout/login
+  // Register LoggingBloc as singleton to ensure same instance throughout the app
+  getIt.registerSingleton<LoggingBloc>(LoggingBloc());
+
+  // Register HomeBloc as factory since it needs new instance on logout/login
   getIt.registerFactory<HomeBloc>(() => HomeBloc());
-  getIt.registerFactory<LoggingBloc>(() => LoggingBloc());
 
   // Initialize AuthGuardService last since it depends on AuthService
   getIt.registerSingleton<AuthGuardService>(
@@ -64,9 +66,8 @@ void setupDependencies() {
   final authGuard = AuthGuardService(authService);
   GetIt.instance.registerSingleton<AuthGuardService>(authGuard);
 
-  // Register HomeBloc and LoggingBloc as factories instead of singletons
+  // Register HomeBloc as factory, but LoggingBloc is already registered as singleton
   GetIt.instance.registerFactory<HomeBloc>(() => HomeBloc());
-  GetIt.instance.registerFactory<LoggingBloc>(() => LoggingBloc());
 }
 
 Future<void> setupWindow() async {
@@ -360,7 +361,3 @@ class CloseWindowListener extends WindowListener {
     }
   }
 }
-
-
-
-

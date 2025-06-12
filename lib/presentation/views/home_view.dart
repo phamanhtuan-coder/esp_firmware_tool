@@ -800,10 +800,13 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                           controller: _tabController,
                                           children: [
                                             // Console Log Tab
-                                            BlocProvider.value(
-                                              value: context.read<LoggingBloc>(),
-                                              child: ConsoleTerminalWidget(
-                                                isActiveTab: _tabController.index == 0,
+                                            Builder(
+                                              builder: (context) => BlocProvider.value(
+                                                value: context.read<LoggingBloc>(),
+                                                child: ConsoleTerminalWidget(
+                                                  isActiveTab: _tabController.index == 0,
+                                                  key: ValueKey(_tabController.index == 0),
+                                                ),
                                               ),
                                             ),
                                             // Serial Monitor Tab
@@ -847,5 +850,4 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     );
   }
 }
-
 

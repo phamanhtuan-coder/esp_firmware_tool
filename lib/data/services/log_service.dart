@@ -1,116 +1,57 @@
-import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'dart:async';
+import 'package:get_it/get_it.dart';
+import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
+import 'package:smart_net_firmware_loader/domain/blocs/logging_bloc.dart';
 
 class LogService {
-  final StreamController<List<LogEntry>> _logStreamController =
-      StreamController.broadcast();
-  Stream<List<LogEntry>> get logStream => _logStreamController.stream;
   final List<LogEntry> _logs = [];
-  bool _isDisposed = false;
-  // Add a debouncer to batch log updates
-  Timer? _debounceTimer;
-  bool _pendingUpdate = false;
+  final _logController = StreamController<LogEntry>.broadcast();
 
-  Future<void> initialize() async {
-    _logs.clear();
-    _isDisposed = false;
-    // Cancel any existing debounce timer
-    _debounceTimer?.cancel();
-    _debounceTimer = null;
-    addLog(
-      message: 'Log service initialized',
-      level: LogLevel.info,
-      step: ProcessStep.systemEvent,
-      origin: 'system',
-    );
+  Stream<LogEntry> get logStream => _logController.stream;
+  List<LogEntry> get logs => List.unmodifiable(_logs);
+
+  LogService() {
+    // Hook up stream to add logs to LoggingBloc
+    _logController.stream.listen((log) {
+      try {
+        // Try to get LoggingBloc and add the log to it
+        if (GetIt.instance.isRegistered<LoggingBloc>()) {
+          final loggingBloc = GetIt.instance<LoggingBloc>();
+          loggingBloc.add(AddLogEvent(log));
+        }
+      } catch (e) {
+        print('Error sending log to LoggingBloc: $e');
+      }
+    });
   }
 
   void addLog({
     required String message,
-    required LogLevel level,
-    required ProcessStep step,
-    required String origin,
+    LogLevel level = LogLevel.info,
+    ProcessStep step = ProcessStep.systemEvent,
+    String origin = 'app',
     String? deviceId,
     String? rawOutput,
   }) {
-    if (_isDisposed) {
-      // Skip adding logs if the service is already disposed
-      return;
-    }
+    final log = LogEntry(
+      message: message,
+      timestamp: DateTime.now(),
+      level: level,
+      step: step,
+      origin: origin,
+      deviceId: deviceId ?? '',
+      rawOutput: rawOutput,
+    );
 
-    try {
-      final log = LogEntry(
-        message: message,
-        timestamp: DateTime.now(),
-        level: level,
-        step: step,
-        origin: origin,
-        deviceId: deviceId ?? '',
-        rawOutput: rawOutput,
-      );
-      _logs.add(log);
-      if (_logs.length > 1000) {
-        _logs.removeAt(0);
-      }
+    _logs.add(log);
 
-      // Schedule update with debouncing to avoid UI flooding
-      _scheduleLogUpdate();
-
-      // Immediately dispatch critical logs (errors, success)
-      if (level == LogLevel.error || level == LogLevel.success) {
-        _dispatchLogsNow();
-      }
-    } catch (e) {
-      // Silently catch errors during shutdown
-      print('Error adding log: $e');
-    }
-  }
-
-  void _scheduleLogUpdate() {
-    if (_isDisposed || _pendingUpdate) return;
-
-    _pendingUpdate = true;
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 100), _dispatchLogsNow);
-  }
-
-  void _dispatchLogsNow() {
-    if (_isDisposed) return;
-
-    _pendingUpdate = false;
-    _debounceTimer?.cancel();
-    _debounceTimer = null;
-
-    if (!_logStreamController.isClosed) {
-      _logStreamController.add(List<LogEntry>.from(_logs));
-    }
-  }
-
-  List<LogEntry> getFilteredLogs(String? filter) {
-    if (filter == null || filter.isEmpty) return _logs;
-    return _logs
-        .where(
-          (log) => log.message.toLowerCase().contains(filter.toLowerCase()),
-        )
-        .toList();
-  }
-
-  void stopSerialMonitor() {
-    if (!_isDisposed) {
-      addLog(
-        message: 'Serial monitor stopped by user or system',
-        level: LogLevel.info,
-        step: ProcessStep.serialMonitor,
-        origin: 'system',
-      );
+    // Only add to stream if controller is still active
+    if (!_logController.isClosed) {
+      _logController.add(log);
     }
   }
 
   void dispose() {
-    _isDisposed = true;
-    _debounceTimer?.cancel();
-    if (!_logStreamController.isClosed) {
-      _logStreamController.close();
-    }
+    _logController.close();
   }
 }
