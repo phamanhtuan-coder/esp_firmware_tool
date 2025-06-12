@@ -67,6 +67,9 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
   final Set<String> _previousPorts = {};
   String? _pendingPort;
 
+  // Thêm biến flag để theo dõi nguồn của serial (QR code hay thủ công)
+  bool _isFromQrScan = false;
+
   void _handleModeToggle(int index) {
     setState(() {
       for (int i = 0; i < _selections.length; i++) {
@@ -96,6 +99,9 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
   }
 
   void _validateSerial(String value) {
+    // Nếu đang ����ược gọi từ QR code scan, không hiển thị warning
+    final isManualInput = !_isFromQrScan;
+
     setState(() {
       if (value.isEmpty) {
         _serialErrorText = 'Số serial không được để trống';
@@ -131,12 +137,19 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
         _serialSuccessText =
             '✅ Serial hợp lệ - Thiết bị sẵn sàng cho nạp firmware';
         _isSerialValid = true;
-        widget.onWarningRequested('manual_serial');
+
+        // Chỉ hiển thị dialog cảnh báo nếu là nhập thủ công
+        if (isManualInput) {
+          widget.onWarningRequested('manual_serial');
+        }
       } else {
         _serialErrorText = 'Thiết bị không ở trạng thái cho phép nạp firmware';
         _serialSuccessText = null;
         _isSerialValid = false;
       }
+
+      // Reset flag sau khi đã xử lý
+      _isFromQrScan = false;
     });
   }
 
@@ -338,6 +351,18 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     _startPortChecking();
     _previousPorts.addAll(widget.availablePorts);
     _pendingPort = widget.selectedPort;
+
+    // Add listener to detect serial controller changes from QR code
+    widget.serialController.addListener(_onSerialControllerChanged);
+  }
+
+  void _onSerialControllerChanged() {
+    // If the serial text changes from outside (like QR scan),
+    // mark it as from QR scan and validate
+    if (mounted) {
+      _isFromQrScan = true;
+      _validateSerial(widget.serialController.text);
+    }
   }
 
   void _startPortChecking() {
@@ -386,6 +411,7 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
 
   @override
   void dispose() {
+    widget.serialController.removeListener(_onSerialControllerChanged);
     _portCheckTimer?.cancel();
     super.dispose();
   }
@@ -1024,3 +1050,4 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
     return '';
   }
 }
+

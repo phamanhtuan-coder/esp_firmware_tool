@@ -756,6 +756,19 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                               _serialController.text = receivedSerial;
                                               print("DEBUG: Serial controller updated in HomeView: $receivedSerial");
                                             });
+
+                                            // Find FirmwareControlPanel widget and set QR flag
+                                            final FirmwareControlPanel controlPanel =
+                                                context.findAncestorWidgetOfExactType<FirmwareControlPanel>()!;
+
+                                            // Instead of trying to access the private state directly,
+                                            // let's pass a flag to the validateSerial function
+                                            // This is done indirectly through our QR scan callback
+                                            Future.microtask(() {
+                                              // Add a small delay to ensure textfield update happens first
+                                              // then trigger validation with QR flag
+                                              controlPanel.serialController.notifyListeners();
+                                            });
                                           }
                                         }
                                       )
