@@ -559,6 +559,15 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         isDarkTheme: _isDarkTheme,
         selectedSerial: _serialController.text,
         onUpdateDeviceStatus: _updateDeviceStatus,
+        onRefreshDevices: () {
+          if (context.read<HomeBloc>().state.selectedBatchId != null) {
+            context.read<HomeBloc>().add(
+              RefreshBatchDevicesEvent(
+                context.read<HomeBloc>().state.selectedBatchId!,
+              ),
+            );
+          }
+        },
       ),
     );
   }

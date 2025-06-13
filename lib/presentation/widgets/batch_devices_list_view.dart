@@ -8,6 +8,7 @@ class BatchDevicesListView extends StatelessWidget {
   final bool isDarkTheme;
   final String? selectedSerial;
   final Function(String, String) onUpdateDeviceStatus;
+  final VoidCallback onRefreshDevices;
 
   const BatchDevicesListView({
     super.key,
@@ -15,6 +16,7 @@ class BatchDevicesListView extends StatelessWidget {
     required this.isDarkTheme,
     this.selectedSerial,
     required this.onUpdateDeviceStatus,
+    required this.onRefreshDevices,
   });
 
   String _getStatusText(String status) {
@@ -97,12 +99,24 @@ class BatchDevicesListView extends StatelessWidget {
                 topRight: Radius.circular(8),
               ),
             ),
-            child: const Text(
-              'Danh sách thiết bị trong lô',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Danh sách thiết bị trong lô',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                IconButton(
+                  onPressed: onRefreshDevices,
+                  icon: Icon(
+                    Icons.refresh,
+                    color: isDarkTheme ? Colors.white : Colors.black,
+                  ),
+                ),
+              ],
             ),
           ),
           Expanded(
