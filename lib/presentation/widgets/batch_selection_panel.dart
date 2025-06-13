@@ -15,6 +15,8 @@ class BatchSelectionPanel extends StatefulWidget {
   final Function(String?) onBatchSelected;
   final bool? isDarkTheme;
   final bool isLoading;
+  final VoidCallback onRefreshPlannings;
+  final VoidCallback onRefreshBatches;
 
   const BatchSelectionPanel({
     super.key,
@@ -24,6 +26,8 @@ class BatchSelectionPanel extends StatefulWidget {
     required this.selectedBatchId,
     required this.onPlanningSelected,
     required this.onBatchSelected,
+    required this.onRefreshPlannings,
+    required this.onRefreshBatches,
     this.isDarkTheme,
     this.isLoading = false,
   });
@@ -89,13 +93,25 @@ class _BatchSelectionPanelState extends State<BatchSelectionPanel> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Kế hoạch sản xuất',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: effectiveDarkTheme ? Colors.white : Colors.black87,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Kế hoạch sản xuất',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: effectiveDarkTheme ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh, size: 20),
+                    splashRadius: 20,
+                    tooltip: 'Làm mới danh sách kế hoạch',
+                    onPressed: widget.isLoading ? null : widget.onRefreshPlannings,
+                    color: widget.isLoading ? Colors.grey : AppColors.primary,
+                  ),
+                ],
               ),
               const SizedBox(height: 4),
               DropdownButtonFormField<String?>(
@@ -168,13 +184,25 @@ class _BatchSelectionPanelState extends State<BatchSelectionPanel> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Lô sản xuất',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: effectiveDarkTheme ? Colors.white : Colors.black87,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Lô sản xuất',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: effectiveDarkTheme ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh, size: 20),
+                    splashRadius: 20,
+                    tooltip: 'Làm mới danh sách lô sản xuất',
+                    onPressed: widget.isLoading ? null : widget.onRefreshBatches,
+                    color: widget.isLoading ? Colors.grey : AppColors.primary,
+                  ),
+                ],
               ),
               const SizedBox(height: 4),
               DropdownButtonFormField<String?>(

@@ -62,6 +62,8 @@ class UpdateDeviceStatusEvent extends HomeEvent {
 
 class FlashFirmwareEvent extends HomeEvent {}
 
+class FetchPlanningsEvent extends HomeEvent {}
+
 class FetchBatchesEvent extends HomeEvent {}
 
 class StatusUpdateEvent extends HomeEvent {
@@ -183,6 +185,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<StartQrScanEvent>(_onStartQrScan);
     on<UpdateDeviceStatusEvent>(_onUpdateDeviceStatus);
     on<FlashFirmwareEvent>(_onFlashFirmware);
+    on<FetchPlanningsEvent>(_onFetchPlannings);
     on<FetchBatchesEvent>(_onFetchBatches);
     on<StatusUpdateEvent>(_onStatusUpdate);
     on<CloseStatusDialogEvent>(_onCloseStatusDialog);
@@ -542,6 +545,30 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           deviceId: state.selectedSerial!,
         );
       }
+    }
+  }
+
+  Future<void> _onFetchPlannings(
+    FetchPlanningsEvent event,
+    Emitter<HomeState> emit,
+  ) async {
+    try {
+      emit(state.copyWith(isLoading: true));
+
+      print('Fetching plannings...');
+      final plannings = await _apiService.fetchPlannings();
+      print('Fetched ${plannings.length} plannings');
+
+      emit(state.copyWith(
+        plannings: plannings,
+        isLoading: false,
+      ));
+    } catch (e) {
+      print('Error fetching plannings: $e');
+      emit(state.copyWith(
+        plannings: [],
+        isLoading: false,
+      ));
     }
   }
 

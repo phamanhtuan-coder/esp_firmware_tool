@@ -708,6 +708,12 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                   onBatchSelected: _handleBatchSelected,
                                   isDarkTheme: _isDarkTheme,
                                   isLoading: state.isLoading,
+                                  onRefreshPlannings: () {
+                                    context.read<HomeBloc>().add(FetchPlanningsEvent());
+                                  },
+                                  onRefreshBatches: () {
+                                    context.read<HomeBloc>().add(FetchBatchesEvent());
+                                  },
                                 ),
                                 if (state.devices.isNotEmpty)
                                   Expanded(
