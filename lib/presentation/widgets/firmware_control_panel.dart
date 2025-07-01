@@ -184,88 +184,9 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
       _serialSuccessText = null;
     });
 
-    final snackBar = SnackBar(
-      content: Row(
-        children: [
-          const CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-            strokeWidth: 2,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              'Đã bật chế độ nhận thông tin. Hãy dùng app mobile và quét mã sản phẩm muốn nạp firmware trong lô ${state.selectedBatchId}',
-              style: const TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-      duration: const Duration(days: 1),
-      backgroundColor: AppColors.scanQr,
-    );
-
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    scaffoldMessenger.hideCurrentSnackBar();
-    scaffoldMessenger.showSnackBar(snackBar);
-
-    final previousValue = widget.serialController.text;
-    final startTime = DateTime.now();
-    const timeoutDuration = Duration(seconds: 62);
-
+    // Trigger QR scan through the parent widget (HomeView)
+    // which will handle Bluetooth connection and show the modern overlay
     widget.onQrCodeScan();
-
-    Timer.periodic(const Duration(milliseconds: 200), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        scaffoldMessenger.hideCurrentSnackBar();
-        return;
-      }
-
-      final newValue = widget.serialController.text;
-
-      if (newValue != previousValue && newValue.isNotEmpty) {
-        timer.cancel();
-
-        context.read<LoggingBloc>().add(
-          AddLogEvent(
-            LogEntry(
-              message: 'Đang làm mới dữ liệu thiết bị từ server...',
-              timestamp: DateTime.now(),
-              level: LogLevel.info,
-              step: ProcessStep.deviceSelection,
-              origin: 'system',
-            ),
-          ),
-        );
-
-        if (state.selectedBatchId != null) {
-          context.read<HomeBloc>().add(
-            RefreshBatchDevicesEvent(state.selectedBatchId!),
-          );
-
-          Future.delayed(const Duration(milliseconds: 800), () {
-            if (!mounted) return;
-
-            _validateSerial(newValue);
-
-            setState(() {});
-            scaffoldMessenger.hideCurrentSnackBar();
-          });
-        } else {
-          _validateSerial(newValue);
-          setState(() {});
-          scaffoldMessenger.hideCurrentSnackBar();
-        }
-      }
-
-      if (DateTime.now().difference(startTime) > timeoutDuration) {
-        timer.cancel();
-        if (mounted) {
-          setState(() {});
-          scaffoldMessenger.hideCurrentSnackBar();
-        }
-      }
-    });
   }
 
 

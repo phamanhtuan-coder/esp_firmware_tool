@@ -17,6 +17,8 @@ dependencies:
   shared_preferences: ^2.5.3
   flutter_libserialport: ^0.3.0
   libserialport: ^0.3.0+1
+  win32: ^5.5.0
+  ffi: ^2.1.0
   path_provider: ^2.1.2
   intl: ^0.18.1
   uuid: ^4.0.0

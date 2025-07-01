@@ -25,6 +25,8 @@ import 'package:smart_net_firmware_loader/presentation/widgets/warning_dialog.da
 import 'package:get_it/get_it.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/batch_devices_list_view.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/loading_overlay.dart';
+import 'package:smart_net_firmware_loader/presentation/widgets/bluetooth_connection_dialog.dart';
+import 'package:smart_net_firmware_loader/presentation/widgets/qr_scanning_overlay.dart';
 
 
 class HomeView extends StatefulWidget {
@@ -54,6 +56,8 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   String _warningType = '';
   bool _canFlash = false;
   bool _isFlashing = false;
+  bool _isBluetoothConnected = false;
+  bool _isQrScanning = false;
 
   @override
   void initState() {
@@ -120,33 +124,13 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         origin: 'system',
       );
 
-      // Initialize BluetoothService with proper error handling
-      try {
-        await _bluetoothService.start(
-          onSerialReceived: (serial) {
-            if (mounted) {
-              setState(() {
-                _serialController.text = serial;
-              });
-              context.read<HomeBloc>().add(SubmitSerialEvent(serial));
-            }
-          },
-        );
-        _logService.addLog(
-          message: 'Bluetooth service started successfully',
-          level: LogLevel.success,
-          step: ProcessStep.systemStart,
-          origin: 'system',
-        );
-      } catch (e) {
-        _logService.addLog(
-          message: 'Warning: Bluetooth service failed to start: $e',
-          level: LogLevel.warning,
-          step: ProcessStep.systemStart,
-          origin: 'system',
-        );
-        // Continue execution since Bluetooth is not critical
-      }
+      // Initialize Bluetooth service without auto-starting
+      _logService.addLog(
+        message: 'Bluetooth service ready for connection',
+        level: LogLevel.success,
+        step: ProcessStep.systemStart,
+        origin: 'system',
+      );
 
       if (mounted) {
         context.read<HomeBloc>().add(LoadInitialDataEvent());
@@ -167,6 +151,106 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
       );
       rethrow;
     }
+  }
+
+  Future<void> _showBluetoothConnectionDialog() async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => BluetoothConnectionDialog(
+        bluetoothService: _bluetoothService,
+        isDarkTheme: _isDarkTheme,
+        onConnected: () {
+          setState(() {
+            _isBluetoothConnected = true;
+          });
+        },
+        onCancelled: () {
+          setState(() {
+            _isBluetoothConnected = false;
+          });
+        },
+      ),
+    );
+
+    if (result == true) {
+      setState(() {
+        _isBluetoothConnected = true;
+      });
+    }
+  }
+
+  void _handleQrScan() async {
+    final state = context.read<HomeBloc>().state;
+
+    // Check if Bluetooth is connected
+    if (!_bluetoothService.isConnected) {
+      // Show connection dialog
+      await _showBluetoothConnectionDialog();
+
+      // If still not connected after dialog, return
+      if (!_bluetoothService.isConnected) {
+        return;
+      }
+    }
+
+    if (state.selectedBatchId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Vui lòng chọn lô sản xuất trước khi quét QR'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
+    // Start QR scanning with overlay
+    setState(() {
+      _isQrScanning = true;
+    });
+
+    try {
+      await _bluetoothService.startScanning(
+        onSerialReceived: (serial) {
+          if (mounted) {
+            setState(() {
+              _serialController.text = serial;
+              _isQrScanning = false;
+            });
+            context.read<HomeBloc>().add(SubmitSerialEvent(serial));
+          }
+        },
+        onConnectionStatusChanged: (connected) {
+          if (mounted) {
+            setState(() {
+              _isBluetoothConnected = connected;
+              if (!connected) {
+                _isQrScanning = false;
+              }
+            });
+          }
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isQrScanning = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi khi quét QR: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  void _cancelQrScanning() {
+    _bluetoothService.stopScanning();
+    setState(() {
+      _isQrScanning = false;
+    });
   }
 
   @override
@@ -694,6 +778,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
             body: SafeArea(
               child: Stack(
                 children: [
+                  // ...existing main content...
                   Container(
                     color: _isDarkTheme ? AppColors.darkBackground : AppColors.background,
                     child: Row(
@@ -757,38 +842,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                                   onLocalFileSearch: () => _handleWarningAction('select_local_file'),
                                   onUsbPortRefresh: () => context.read<HomeBloc>().add(RefreshPortsEvent()),
                                   onSerialSubmitted: (value) => _handleWarningAction('manual_serial'),
-                                  onQrCodeScan: () {
-                                    // Store current value for comparison to detect changes
-                                    final currentSerialValue = _serialController.text;
-
-                                    // Start QR scan via Bloc
-                                    context.read<HomeBloc>().add(
-                                      StartQrScanEvent(
-                                        onSerialReceived: (receivedSerial) {
-                                          // This callback will be called when a serial is received
-                                          if (mounted) {
-                                            setState(() {
-                                              _serialController.text = receivedSerial;
-                                              print("DEBUG: Serial controller updated in HomeView: $receivedSerial");
-                                            });
-
-                                            // Find FirmwareControlPanel widget and set QR flag
-                                            final FirmwareControlPanel controlPanel =
-                                                context.findAncestorWidgetOfExactType<FirmwareControlPanel>()!;
-
-                                            // Instead of trying to access the private state directly,
-                                            // let's pass a flag to the validateSerial function
-                                            // This is done indirectly through our QR scan callback
-                                            Future.microtask(() {
-                                              // Add a small delay to ensure textfield update happens first
-                                              // then trigger validation with QR flag
-                                              controlPanel.serialController.notifyListeners();
-                                            });
-                                          }
-                                        }
-                                      )
-                                    );
-                                  },
+                                  onQrCodeScan: _handleQrScan,
                                   onQrCodeAvailabilityChanged: (_) {},
                                   onWarningRequested: (type, {value}) {
                                     if (type == 'flash_firmware') {
@@ -870,6 +924,14 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                       ],
                     ),
                   ),
+                  // QR Scanning Overlay
+                  QrScanningOverlay(
+                    isVisible: _isQrScanning,
+                    connectedDeviceName: _bluetoothService.connectedDeviceName,
+                    batchId: state.selectedBatchId,
+                    onCancel: _cancelQrScanning,
+                    isDarkTheme: _isDarkTheme,
+                  ),
                   // Overlay warning dialog in the center of the screen
                   if (_showWarningDialog)
                     Positioned.fill(
@@ -889,7 +951,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                 ],
               ),
             ),
-
           ),
         );
       },
