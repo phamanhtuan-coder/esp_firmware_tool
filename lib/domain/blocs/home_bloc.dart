@@ -451,15 +451,21 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     emit(state.copyWith(selectedPort: event.port));
   }
 
-  Future<void> _onStartQrScan(
-    StartQrScanEvent event,
-    Emitter<HomeState> emit,
-  ) async {
+  Future<void> _onStartQrScan(StartQrScanEvent event, Emitter<HomeState> emit) async {
     if (state.selectedBatchId != null) {
-      await _bluetoothService.start(
+      await _bluetoothService.startScanning(
         onSerialReceived: (serial) {
           add(SubmitSerialEvent(serial));
-          event.onSerialReceived?.call(serial); // Call the provided callback
+          event.onSerialReceived?.call(serial);
+        },
+        onConnectionStatusChanged: (status) {
+          if (!status) {
+            emit(state.copyWith(
+              showStatusDialog: true,
+              statusDialogType: 'error',
+              statusDialogMessage: 'Bluetooth connection lost',
+            ));
+          }
         },
       );
     }

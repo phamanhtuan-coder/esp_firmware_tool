@@ -28,42 +28,19 @@ final GlobalKey<AppState> appKey = GlobalKey<AppState>();
 
 Future<void> setupServiceLocator() async {
   final getIt = GetIt.instance;
-
-  // Initialize SharedPreferences first
   final prefs = await SharedPreferences.getInstance();
   getIt.registerSingleton<SharedPreferences>(prefs);
-
-  // Register core services first
   getIt.registerSingleton<LogService>(LogService());
   getIt.registerSingleton<ThemeService>(ThemeService(prefs));
   getIt.registerSingleton<AuthService>(AuthService(prefs));
-
-  // Register API and communication services
   getIt.registerSingleton<ApiService>(ApiService());
   getIt.registerSingleton<ArduinoService>(ArduinoService());
-  getIt.registerSingleton<BluetoothService>(BluetoothService());
+  getIt.registerSingleton<BluetoothService>(BluetoothService()); // Updated service
   getIt.registerSingleton<SerialMonitorService>(SerialMonitorService());
-
-  // Register services that depend on other services
-  getIt.registerSingleton<TemplateService>(
-    TemplateService(logService: getIt<LogService>()),
-  );
-
-  // Register LoggingBloc as singleton to ensure same instance throughout the app
+  getIt.registerSingleton<TemplateService>(TemplateService(logService: getIt<LogService>()));
   getIt.registerSingleton<LoggingBloc>(LoggingBloc());
-
-  // Register app lifecycle manager
-  getIt.registerSingleton<AppLifecycleService>(
-    AppLifecycleService(getIt),
-  );
-
-  // Register HomeBloc as factory since it needs new instance on logout/login
   getIt.registerFactory<HomeBloc>(() => HomeBloc());
-
-  // Initialize AuthGuardService last since it depends on AuthService
-  getIt.registerSingleton<AuthGuardService>(
-    AuthGuardService(getIt<AuthService>()),
-  );
+  getIt.registerSingleton<AuthGuardService>(AuthGuardService(getIt<AuthService>()));
 }
 
 void setupDependencies() {
