@@ -148,12 +148,6 @@ class ApiService implements ApiRepository {
   @override
   Future<List<Device>> fetchDevices(String batchId) async {
     try {
-      // // DebugLogger.d(
-      //   'Fetching devices for batch ID: $batchId',
-      //   className: 'ApiService',
-      //   methodName: 'fetchDevices',
-      // );
-
       _logService.addLog(
         message: 'Đang tải danh sách thiết bị cho lô $batchId...',
         level: LogLevel.info,
@@ -161,12 +155,15 @@ class ApiService implements ApiRepository {
         origin: 'system',
       );
 
+      // Fixed URL to use correct endpoint pattern
       final response = await _httpClient.get(
         Uri.parse('$baseUrl/production-tracking/info-need-upload-firmware/tracking/null/$batchId'),
         headers: _headers,
       );
 
-      // // DebugLogger.http('GET', '/tracking/null/$batchId', response: response.body);
+      // Add debug logging to show the actual URL and response
+      DebugLogger.d('🔄 Fetching devices URL: $baseUrl/production-tracking/info-need-upload-firmware/tracking/null/$batchId',
+          className: 'ApiService', methodName: 'fetchDevices');
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final responseData = jsonDecode(response.body);
@@ -187,19 +184,12 @@ class ApiService implements ApiRepository {
             origin: 'system',
           );
 
-          // // DebugLogger.d(
-          //   'Successfully fetched ${uniqueDevices.length} devices for batch $batchId',
-          //   className: 'ApiService',
-          //   methodName: 'fetchDevices',
-          // );
-
           return uniqueDevices.values.toList();
         }
 
         final errorMessage = responseData['message'] ?? 'Unknown error occurred';
-        // DebugLogger.e('Error fetching devices: $errorMessage');
         _logService.addLog(
-          message: 'Lỗi khi tải danh s��ch thiết bị: $errorMessage',
+          message: 'Lỗi khi tải danh sách thiết bị: $errorMessage',
           level: LogLevel.error,
           step: ProcessStep.deviceRefresh,
           origin: 'system',
@@ -207,7 +197,6 @@ class ApiService implements ApiRepository {
         return [];
       } else {
         final errorMessage = 'HTTP Error: ${response.statusCode}';
-        // DebugLogger.e('Error fetching devices: $errorMessage');
         _logService.addLog(
           message: 'Lỗi khi tải danh sách thiết bị: $errorMessage',
           level: LogLevel.error,
@@ -217,11 +206,6 @@ class ApiService implements ApiRepository {
         return [];
       }
     } catch (e) {
-      // DebugLogger.e(
-      //   'Exception in fetchDevices',
-      //   error: e,
-      //   stackTrace: stackTrace,
-      // );
       _logService.addLog(
         message: 'Lỗi khi tải danh sách thiết bị: $e',
         level: LogLevel.error,

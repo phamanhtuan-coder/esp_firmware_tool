@@ -5,7 +5,7 @@ import 'package:smart_net_firmware_loader/data/models/firmware.dart';
 import 'package:smart_net_firmware_loader/data/models/planning.dart';
 import 'package:smart_net_firmware_loader/data/services/api_client.dart';
 import 'package:smart_net_firmware_loader/data/services/arduino_service.dart';
-import 'package:smart_net_firmware_loader/data/services/bluetooth_service.dart';
+import 'package:smart_net_firmware_loader/data/services/qr_scanner_service.dart'; // Added import for QrScannerService
 import 'package:get_it/get_it.dart';
 
 abstract class HomeEvent {}
@@ -169,7 +169,6 @@ class HomeState {
 class HomeBloc extends Bloc<HomeEvent, HomeState> {
   final ApiService _apiService = GetIt.instance<ApiService>();
   final ArduinoService _arduinoService = GetIt.instance<ArduinoService>();
-  final BluetoothService _bluetoothService = GetIt.instance<BluetoothService>();
   bool _disposed = false;
 
   HomeBloc() : super(HomeState()) {
@@ -194,7 +193,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   @override
   Future<void> close() async {
     _disposed = true;
-    _bluetoothService.stop();
     await super.close();
   }
 
@@ -453,21 +451,27 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
   Future<void> _onStartQrScan(StartQrScanEvent event, Emitter<HomeState> emit) async {
     if (state.selectedBatchId != null) {
-      await _bluetoothService.startScanning(
-        onSerialReceived: (serial) {
-          add(SubmitSerialEvent(serial));
-          event.onSerialReceived?.call(serial);
-        },
-        onConnectionStatusChanged: (status) {
-          if (!status) {
-            emit(state.copyWith(
-              showStatusDialog: true,
-              statusDialogType: 'error',
-              statusDialogMessage: 'Bluetooth connection lost',
-            ));
-          }
-        },
-      );
+      // Using QrScannerService instead of BluetoothService
+      final qrScannerService = GetIt.instance<QrScannerService>();
+
+      try {
+        // Show QR scanner dialog using the context from the UI
+        // This will be handled directly in the UI layer now
+        if (event.onSerialReceived != null) {
+          // This callback will be used in the UI when QR code is scanned
+          emit(state.copyWith(
+            showStatusDialog: true,
+            statusDialogType: 'info',
+            statusDialogMessage: 'Vui lòng quét mã QR từ thiết bị',
+          ));
+        }
+      } catch (e) {
+        emit(state.copyWith(
+          showStatusDialog: true,
+          statusDialogType: 'error',
+          statusDialogMessage: 'Lỗi khi quét mã QR: $e',
+        ));
+      }
     }
   }
 

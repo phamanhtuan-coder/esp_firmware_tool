@@ -3,11 +3,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smart_net_firmware_loader/core/config/app_routes.dart';
 import 'package:smart_net_firmware_loader/core/config/app_theme.dart';
+import 'package:smart_net_firmware_loader/core/di/service_locator.dart';
 import 'package:smart_net_firmware_loader/data/services/api_client.dart';
 import 'package:smart_net_firmware_loader/data/services/app_lifecycle_service.dart';
 import 'package:smart_net_firmware_loader/data/services/arduino_service.dart';
-import 'package:smart_net_firmware_loader/data/services/bluetooth_service.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
+import 'package:smart_net_firmware_loader/data/services/qr_scanner_service.dart'; // Import the new QR scanner service
 import 'package:smart_net_firmware_loader/data/services/serial_monitor_service.dart';
 import 'package:smart_net_firmware_loader/data/services/template_service.dart';
 import 'package:smart_net_firmware_loader/data/services/theme_service.dart';
@@ -23,11 +24,11 @@ import 'data/services/auth_service.dart';
 
 
 
+final getIt = GetIt.instance;
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final GlobalKey<AppState> appKey = GlobalKey<AppState>();
 
 Future<void> setupServiceLocator() async {
-  final getIt = GetIt.instance;
   final prefs = await SharedPreferences.getInstance();
   getIt.registerSingleton<SharedPreferences>(prefs);
   getIt.registerSingleton<LogService>(LogService());
@@ -35,22 +36,15 @@ Future<void> setupServiceLocator() async {
   getIt.registerSingleton<AuthService>(AuthService(prefs));
   getIt.registerSingleton<ApiService>(ApiService());
   getIt.registerSingleton<ArduinoService>(ArduinoService());
-  getIt.registerSingleton<BluetoothService>(BluetoothService()); // Updated service
+  getIt.registerSingleton<QrScannerService>(QrScannerService()); // Replace BluetoothService with QrScannerService
   getIt.registerSingleton<SerialMonitorService>(SerialMonitorService());
   getIt.registerSingleton<TemplateService>(TemplateService(logService: getIt<LogService>()));
   getIt.registerSingleton<LoggingBloc>(LoggingBloc());
   getIt.registerFactory<HomeBloc>(() => HomeBloc());
   getIt.registerSingleton<AuthGuardService>(AuthGuardService(getIt<AuthService>()));
-}
 
-void setupDependencies() {
-  // Add AuthGuardService
-  final authService = GetIt.instance<AuthService>();
-  final authGuard = AuthGuardService(authService);
-  GetIt.instance.registerSingleton<AuthGuardService>(authGuard);
-
-  // Register HomeBloc as factory, but LoggingBloc is already registered as singleton
-  GetIt.instance.registerFactory<HomeBloc>(() => HomeBloc());
+  // Register AppLifecycleService for authentication and login flow
+  getIt.registerSingleton<AppLifecycleService>(AppLifecycleService(getIt));
 }
 
 Future<void> setupWindow() async {
@@ -283,14 +277,14 @@ class CloseWindowListener extends WindowListener {
             }
           }
 
-          if (getIt.isRegistered<BluetoothService>()) {
+          if (getIt.isRegistered<QrScannerService>()) {
             try {
-              final service = getIt<BluetoothService>();
+              final service = getIt<QrScannerService>();
               if (service.toString().contains('dispose')) {
                 (service as dynamic).dispose();
               }
             } catch (e) {
-              debugPrint('Error disposing BluetoothService: $e');
+              debugPrint('Error disposing QrScannerService: $e');
             }
           }
 

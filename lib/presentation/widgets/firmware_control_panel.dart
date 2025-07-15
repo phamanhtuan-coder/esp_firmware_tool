@@ -10,6 +10,7 @@ import 'package:smart_net_firmware_loader/data/models/firmware.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/logging_bloc.dart';
+import 'package:smart_net_firmware_loader/presentation/widgets/manual_serial_input_dialog.dart';
 
 class FirmwareControlPanel extends StatefulWidget {
   final List<Firmware> firmwares;
@@ -184,9 +185,39 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
       _serialSuccessText = null;
     });
 
-    // Trigger QR scan through the parent widget (HomeView)
-    // which will handle Bluetooth connection and show the modern overlay
-    widget.onQrCodeScan();
+    // Hiển thị dialog mới với 3 tùy chọn nhập liệu
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return ManualSerialInputDialog(
+          isDarkTheme: widget.isDarkTheme,
+          onDataReceived: (String serialNumber) {
+            // Cập nhật serial number vào text field
+            widget.serialController.text = serialNumber;
+
+            // Log thành công
+            context.read<LoggingBloc>().add(
+              AddLogEvent(
+                LogEntry(
+                  message: 'QR Code đã được quét thành công: $serialNumber',
+                  timestamp: DateTime.now(),
+                  level: LogLevel.success,
+                  step: ProcessStep.scanQrCode,
+                  origin: 'system',
+                ),
+              ),
+            );
+
+            // Đánh dấu là từ QR scan để không hiển thị warning
+            _isFromQrScan = true;
+
+            // Validate serial number
+            _validateSerial(serialNumber);
+          },
+        );
+      },
+    );
   }
 
 
@@ -730,8 +761,8 @@ class _FirmwareControlPanelState extends State<FirmwareControlPanel> {
                                     children: [
                                       ElevatedButton.icon(
                                         onPressed: _handleQrScan,
-                                        icon: const Icon(Icons.qr_code_scanner),
-                                        label: const Text('Quét QR Code'),
+                                        icon: const Icon(Icons.edit),
+                                        label: const Text('Nhập Serial'),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: AppColors.scanQr,
                                           foregroundColor: Colors.white,

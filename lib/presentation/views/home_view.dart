@@ -10,8 +10,8 @@ import 'package:smart_net_firmware_loader/core/utils/string_extensions.dart';
 import 'package:smart_net_firmware_loader/data/models/device.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/data/services/arduino_service.dart';
-import 'package:smart_net_firmware_loader/data/services/bluetooth_service.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
+import 'package:smart_net_firmware_loader/data/services/qr_scanner_service.dart';
 import 'package:smart_net_firmware_loader/data/services/serial_monitor_service.dart';
 import 'package:smart_net_firmware_loader/data/services/template_service.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
@@ -25,8 +25,7 @@ import 'package:smart_net_firmware_loader/presentation/widgets/warning_dialog.da
 import 'package:get_it/get_it.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/batch_devices_list_view.dart';
 import 'package:smart_net_firmware_loader/presentation/widgets/loading_overlay.dart';
-import 'package:smart_net_firmware_loader/presentation/widgets/bluetooth_connection_dialog.dart';
-import 'package:smart_net_firmware_loader/presentation/widgets/qr_scanning_overlay.dart';
+// Removed bluetooth connection dialog import
 
 
 class HomeView extends StatefulWidget {
@@ -46,7 +45,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
 
   final LogService _logService = GetIt.instance<LogService>();
   final ArduinoService _arduinoService = GetIt.instance<ArduinoService>();
-  final BluetoothService _bluetoothService = GetIt.instance<BluetoothService>();
   final SerialMonitorService _serialMonitorService = GetIt.instance<SerialMonitorService>();
   final TemplateService _templateService;
 
@@ -56,7 +54,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   String _warningType = '';
   bool _canFlash = false;
   bool _isFlashing = false;
-  bool _isBluetoothConnected = false;
   bool _isQrScanning = false;
 
   @override
@@ -124,14 +121,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
         origin: 'system',
       );
 
-      // Initialize Bluetooth service without auto-starting
-      _logService.addLog(
-        message: 'Bluetooth service ready for connection',
-        level: LogLevel.success,
-        step: ProcessStep.systemStart,
-        origin: 'system',
-      );
-
       if (mounted) {
         context.read<HomeBloc>().add(LoadInitialDataEvent());
       }
@@ -153,93 +142,79 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
     }
   }
 
-  Future<void> _showBluetoothConnectionDialog() async {
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => BluetoothConnectionDialog(
-        bluetoothService: _bluetoothService,
-        isDarkTheme: _isDarkTheme,
-        onConnected: () {
-          setState(() {
-            _isBluetoothConnected = true;
-          });
-        },
-        onCancelled: () {
-          setState(() {
-            _isBluetoothConnected = false;
-          });
-        },
-      ),
-    );
-
-    if (result == true) {
-      setState(() {
-        _isBluetoothConnected = true;
-      });
-    }
-  }
-
   void _handleQrScan() async {
     final state = context.read<HomeBloc>().state;
-
-    // Check if Bluetooth is connected
-    if (!_bluetoothService.isConnected) {
-      // Show connection dialog
-      await _showBluetoothConnectionDialog();
-
-      // If still not connected after dialog, return
-      if (!_bluetoothService.isConnected) {
-        return;
-      }
-    }
+    final qrScannerService = GetIt.instance<QrScannerService>();
 
     if (state.selectedBatchId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Vui lòng chọn lô sản xuất trước khi quét QR'),
+        const SnackBar(
+          content: Text('Vui lòng chọn lô sản xuất trước khi quét QR'),
           backgroundColor: AppColors.warning,
         ),
       );
       return;
     }
 
-    // Start QR scanning with overlay
-    setState(() {
-      _isQrScanning = true;
-    });
-
     try {
-      await _bluetoothService.startScanning(
-        onSerialReceived: (serial) {
-          if (mounted) {
-            setState(() {
-              _serialController.text = serial;
-              _isQrScanning = false;
-            });
-            context.read<HomeBloc>().add(SubmitSerialEvent(serial));
-          }
-        },
-        onConnectionStatusChanged: (connected) {
-          if (mounted) {
-            setState(() {
-              _isBluetoothConnected = connected;
-              if (!connected) {
-                _isQrScanning = false;
-              }
-            });
-          }
-        },
-      );
+      // Show QR scanner dialog
+      final qrData = await qrScannerService.showQrScannerDialog(context);
+
+      if (qrData != null && qrData.serialNumber.isNotEmpty) {
+        if (mounted) {
+          // Update UI and submit serial to HomeBloc
+          setState(() {
+            _serialController.text = qrData.serialNumber;
+          });
+
+          // Add log entry
+          context.read<LoggingBloc>().add(
+            AddLogEvent(
+              LogEntry(
+                message: 'Đã quét được mã QR với số serial: ${qrData.serialNumber}',
+                timestamp: DateTime.now(),
+                level: LogLevel.success,
+                step: ProcessStep.scanQrCode,
+                origin: 'system',
+              ),
+            ),
+          );
+
+          context.read<HomeBloc>().add(SubmitSerialEvent(qrData.serialNumber));
+        }
+      } else {
+        // QR code scanning was cancelled or returned empty data
+        context.read<LoggingBloc>().add(
+          AddLogEvent(
+            LogEntry(
+              message: 'Quét mã QR bị hủy hoặc không có dữ liệu',
+              timestamp: DateTime.now(),
+              level: LogLevel.warning,
+              step: ProcessStep.scanQrCode,
+              origin: 'system',
+            ),
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _isQrScanning = false;
-        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Lỗi khi quét QR: $e'),
             backgroundColor: AppColors.error,
+          ),
+        );
+
+        // Log error
+        context.read<LoggingBloc>().add(
+          AddLogEvent(
+            LogEntry(
+              message: 'Lỗi khi quét mã QR: $e',
+              timestamp: DateTime.now(),
+              level: LogLevel.error,
+              step: ProcessStep.scanQrCode,
+              origin: 'system',
+            ),
           ),
         );
       }
@@ -247,7 +222,7 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   }
 
   void _cancelQrScanning() {
-    _bluetoothService.stopScanning();
+    _serialMonitorService.stopMonitor();
     setState(() {
       _isQrScanning = false;
     });
@@ -255,7 +230,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
 
   @override
   void dispose() {
-    _bluetoothService.stop();
     _serialController.dispose();
     _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
@@ -621,11 +595,11 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
   String _getWarningMessage() {
     switch (_warningType) {
       case 'switch_to_local':
-        return 'Bạn đang chuyển sang chế độ upload file firmware cục bộ. Việc này có thể gây ra rủi ro nếu file không được kiểm tra. Bạn ch���u hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
+        return 'Bạn đang chuyển sang chế độ upload file firmware cục bộ. Việc này có thể gây ra rủi ro nếu file không được kiểm tra. Bạn ch����u hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       case 'switch_to_version':
         return 'Bạn đang chuyển sang chế độ chọn version từ server. Mọi file firmware cục bộ sẽ được xóa bỏ. Tiếp tục?';
       case 'select_local_file':
-        return 'Bạn đang sử dụng file firmware cục bộ. Việc này có thể gây ra rủi ro nếu file không được kiểm tra. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
+        return 'Bạn đang sử dụng file firmware cục bộ. Việc này c���� thể gây ra rủi ro nếu file không được kiểm tra. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       case 'version_change':
         return 'Bạn đang thay đổi phiên bản firmware so với mặc định. Việc này có thể gây ra rủi ro nếu phiên bản không tương thích. Bạn chịu hoàn toàn trách nhiệm với mọi vấn đề phát sinh. Tiếp tục?';
       case 'manual_serial':
@@ -923,14 +897,6 @@ class _HomeViewState extends State<HomeView> with SingleTickerProviderStateMixin
                         ),
                       ],
                     ),
-                  ),
-                  // QR Scanning Overlay
-                  QrScanningOverlay(
-                    isVisible: _isQrScanning,
-                    connectedDeviceName: _bluetoothService.connectedDeviceName,
-                    batchId: state.selectedBatchId,
-                    onCancel: _cancelQrScanning,
-                    isDarkTheme: _isDarkTheme,
                   ),
                   // Overlay warning dialog in the center of the screen
                   if (_showWarningDialog)

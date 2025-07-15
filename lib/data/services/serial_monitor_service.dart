@@ -13,6 +13,10 @@ class SerialMonitorService {
   Timer? _reconnectTimer;
   bool _isReconnecting = false;
   bool _isDisposed = false;
+  String? _connectedPort; // Added to track the connected port name
+
+  // Add the missing property to fix the error
+  String? get connectedDeviceName => _connectedPort;
 
   // Buffer để tích lũy dữ liệu chưa hoàn chỉnh
   StringBuffer _dataBuffer = StringBuffer();
@@ -115,6 +119,7 @@ class SerialMonitorService {
 
         // Update status
         _safeAddStatus(true);
+        _connectedPort = port; // Update the connected port
         return true;
 
       } catch (e) {
@@ -124,7 +129,7 @@ class SerialMonitorService {
       }
 
     } catch (e) {
-      DebugLogger.e('❌ Lỗi trong startMonitor: $e', className: 'SerialMonitorService', methodName: 'startMonitor');
+      DebugLogger.e('�� Lỗi trong startMonitor: $e', className: 'SerialMonitorService', methodName: 'startMonitor');
       return false;
     }
   }

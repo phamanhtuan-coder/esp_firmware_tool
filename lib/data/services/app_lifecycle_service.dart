@@ -2,7 +2,6 @@ import 'package:get_it/get_it.dart';
 import 'package:smart_net_firmware_loader/core/utils/debug_logger.dart';
 import 'package:smart_net_firmware_loader/data/models/log_entry.dart';
 import 'package:smart_net_firmware_loader/data/services/auth_service.dart';
-import 'package:smart_net_firmware_loader/data/services/bluetooth_service.dart';
 import 'package:smart_net_firmware_loader/data/services/log_service.dart';
 import 'package:smart_net_firmware_loader/data/services/serial_monitor_service.dart';
 import 'package:smart_net_firmware_loader/domain/blocs/home_bloc.dart';
@@ -27,17 +26,6 @@ class AppLifecycleService {
           print('Stopped serial monitor service');
         } catch (e) {
           print('Error stopping serial monitor service: $e');
-        }
-      }
-
-      // Stop bluetooth service
-      if (_getIt.isRegistered<BluetoothService>()) {
-        try {
-          final bluetoothService = _getIt<BluetoothService>();
-          await bluetoothService.stop();
-          print('Stopped bluetooth service');
-        } catch (e) {
-          print('Error stopping bluetooth service: $e');
         }
       }
 
@@ -94,16 +82,6 @@ class AppLifecycleService {
           print('Disposed serial monitor service');
         } catch (e) {
           print('Error disposing serial monitor service: $e');
-        }
-      }
-
-      if (_getIt.isRegistered<BluetoothService>()) {
-        try {
-          final bluetoothService = _getIt<BluetoothService>();
-          await bluetoothService.stop();
-          print('Stopped bluetooth service');
-        } catch (e) {
-          print('Error stopping bluetooth service: $e');
         }
       }
 
