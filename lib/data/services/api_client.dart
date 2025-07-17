@@ -280,23 +280,47 @@ class ApiService implements ApiRepository {
   Future<Firmware?> getDefaultFirmware(String templateId, String? batchFirmwareId) async {
     final firmwares = await fetchFirmwares(templateId);
 
+    // Check if firmwares list is empty
+    if (firmwares.isEmpty) {
+      DebugLogger.w('⚠️ Không có firmware nào cho template $templateId');
+      return null;
+    }
+
     // First try to find firmware specified in batch
     if (batchFirmwareId != null) {
-      final batchFirmware = firmwares.firstWhere(
-        (fw) => fw.firmwareId.toString() == batchFirmwareId,
-        orElse: () => firmwares.first,
-      );
-      return batchFirmware;
+      try {
+        final batchFirmware = firmwares.firstWhere(
+          (fw) => fw.firmwareId.toString() == batchFirmwareId,
+          orElse: () => firmwares.first,
+        );
+        return batchFirmware;
+      } catch (e) {
+        DebugLogger.e(
+          '❌ Lỗi khi tìm firmware cho batch: $e',
+          className: 'ApiService',
+          methodName: 'getDefaultFirmware',
+        );
+        return firmwares.isNotEmpty ? firmwares.first : null;
+      }
     }
 
     // If no batch firmware, try to find mandatory approved firmware
-    return firmwares.firstWhere(
-      (fw) => fw.isMandatory && fw.isApproved,
-      orElse: () => firmwares.firstWhere(
-        (fw) => fw.isApproved,
-        orElse: () => firmwares.first,
-      ),
-    );
+    try {
+      return firmwares.firstWhere(
+        (fw) => fw.isMandatory && fw.isApproved,
+        orElse: () => firmwares.firstWhere(
+          (fw) => fw.isApproved,
+          orElse: () => firmwares.first,
+        ),
+      );
+    } catch (e) {
+      DebugLogger.e(
+        '❌ Lỗi khi tìm firmware mặc định: $e',
+        className: 'ApiService',
+        methodName: 'getDefaultFirmware',
+      );
+      return firmwares.isNotEmpty ? firmwares.first : null;
+    }
   }
 
   @override
